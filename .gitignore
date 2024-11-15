@@ -1,6 +1,6 @@
-/model
-/data
+model/
+data/
 *.log
 *.pth
 *.zip
-/__pycache__
+__pycache__/
