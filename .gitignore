@@ -1,0 +1,6 @@
+/model
+/data
+*.log
+*.pth
+*.zip
+/__pycache__
