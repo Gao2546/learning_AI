@@ -91,8 +91,6 @@ class C2F(nn.Module):
         x_split = torch.split(x1, [x1.size(1)//2, x1.size(1)//2], dim=1)
         x1_1 = x_split[0]
         x1_2 = x_split[1]
-        print(x1_1.size())
-        print(x1_2.size())
         list_of_cat.append(x1_1)
         list_of_cat.append(x1_2)
         for block in self.blocks:
@@ -214,7 +212,8 @@ class YOLOv8HeadFull(nn.Module):
             scaled_channels(512)), scaled_ratio(scaled_channels(512)))
         self.concat_p2_1 = ConvBlock(scaled_ratio(scaled_channels(512), plus=1), scaled_ratio(
             scaled_channels(512), plus=1), kernel_size=1, stride=1, padding=0)
-        self.c2f_p2_1 = C2F(scaled_ratio(scaled_channels(512), plus=1), scaled_channels(512), num_blocks=scaled_depth(3))
+        self.c2f_p2_1 = C2F(scaled_ratio(scaled_channels(
+            512), plus=1), scaled_channels(512), num_blocks=scaled_depth(3))
 
         self.upsample_p2_2 = Upsampling(
             scaled_channels(512), scaled_channels(256))
@@ -264,9 +263,9 @@ class YOLOv8HeadFull(nn.Module):
         p5_4 = self.c2f_p5(p5_3)  # -->detect p5
 
         # Detect layers
-        detect_p2 = self.detect_p2(p2_8)  # Small objects
-        detect_p3 = self.detect_p3(p3_4)  # Medium objects
-        detect_p5 = self.detect_p5(p5_4)  # Large objects
+        detect_p2 = self.detect_p2(p2_8).permute(0, 2, 3, 1)  # Small objects
+        detect_p3 = self.detect_p3(p3_4).permute(0, 2, 3, 1)  # Medium objects
+        detect_p5 = self.detect_p5(p5_4).permute(0, 2, 3, 1)  # Large objects
 
         return detect_p2, detect_p3, detect_p5
 
@@ -294,15 +293,21 @@ class YOLOLoss(nn.Module):
         super(YOLOLoss, self).__init__()
         self.bce = nn.BCEWithLogitsLoss()
         self.mse = nn.MSELoss()
+        self.loss_factor_obj = 1.0
+        self.loss_factor_cls = 0.5
+        self.loss_factor_bbox = 7.5
 
     def forward(self, preds, targets):
         # Placeholder for loss implementation
         # Objectness score loss
-        obj_loss = self.bce(preds[..., 4], targets[..., 4])
+        obj_loss = self.bce(
+            preds[..., 4], targets[..., 4])*self.loss_factor_obj
         # Classification loss
-        cls_loss = self.bce(preds[..., 5:], targets[..., 5:])
+        cls_loss = self.bce(
+            preds[..., 5:], targets[..., 5:])*self.loss_factor_cls
         # Bounding box loss
-        box_loss = self.mse(preds[..., :4], targets[..., :4])
+        box_loss = self.mse(
+            preds[..., :4], targets[..., :4])*self.loss_factor_bbox
         return obj_loss + cls_loss + box_loss
 
 
@@ -321,7 +326,7 @@ def perform_nms(predictions, conf_thresh=0.5, iou_thresh=0.4):
 
 # Optimizer Setup
 def setup_optimizer(model):
-    return optim.Adam(model.parameters(), lr=1e-3)
+    return optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.0005)
 
 
 # Example Usage
