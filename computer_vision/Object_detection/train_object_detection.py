@@ -5,33 +5,11 @@ from torch.utils.data import DataLoader, Dataset
 import numpy as np
 from utils.node import *
 import os
-
-# Sample Dataset class
-
-
-class YOLODataset(Dataset):
-    def __init__(self, images, targets):
-        """
-        :param images: List of image tensors (C, H, W).
-        :param targets: List of target tensors (bounding boxes + classes).
-        """
-        self.images = images
-        self.targets = targets
-
-    def __len__(self):
-        return len(self.images)
-
-    def __getitem__(self, idx):
-        return self.images[idx], self.targets[0][idx], self.targets[1][idx], self.targets[2][idx]
+from utils.loaddata import YOLODataset_xml
 
 
-# Dummy data (replace with real images and annotations)
-images = [torch.rand(3, 640//2, 640//2) for _ in range(100)]  # 100 random images
-targets = [[torch.rand(sizess, sizess, (2+4)*3)
-           for _ in range(100)] for sizess in [80//2,40//2,20//2]]  # Example target tensors
-
-# Dataset and DataLoader
-dataset = YOLODataset(images, targets)
+path_data = "/home/athip/psu/learning_AI/computer_vision/Object_detection/images/CatVsDog"
+dataset = YOLODataset_xml(path=path_data, class_name=["cat", "dog"], width=640, height=640)
 dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
 
 # Model, Loss, Optimizer
@@ -50,7 +28,7 @@ for epoch in range(num_epochs):
     model.train()
     epoch_loss = 0.0
 
-    for batch_idx, (inputs, targets80, targets40, targets20) in enumerate(dataloader):
+    for batch_idx, (inputs, (targets80, targets40, targets20), real_size) in enumerate(dataloader):
         inputs = inputs.to(device)
         # targets = targets.to(device)
         # print(targets.size())

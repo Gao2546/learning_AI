@@ -228,11 +228,11 @@ class YOLOv8HeadFull(nn.Module):
 
         # Final Detect layers
         self.detect_p2 = nn.Conv2d(scaled_channels(
-            256), (num_classes + 4) * 3, kernel_size=1, stride=1, padding=0)
+            256), (num_classes + 4 + 1) * 1, kernel_size=1, stride=1, padding=0) #(*1 is free anchor box)
         self.detect_p3 = nn.Conv2d(scaled_channels(
-            512), (num_classes + 4) * 3, kernel_size=1, stride=1, padding=0)
+            512), (num_classes + 4 + 1) * 1, kernel_size=1, stride=1, padding=0) #(*1 is free anchor box)
         self.detect_p5 = nn.Conv2d(scaled_channels(
-            512), (num_classes + 4) * 3, kernel_size=1, stride=1, padding=0)
+            512), (num_classes + 4 + 1) * 1, kernel_size=1, stride=1, padding=0) #(*1 is free anchor box)
 
     def forward(self, p5, p3, p2):
 
