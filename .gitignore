@@ -1,5 +1,14 @@
 model/
 data/
+images/
+image/
+*.png
+*.jpg
+*.jpeg
+*.xml
+*.json
+*.pkl
+*.pt
 *.log
 *.pth
 *.zip
