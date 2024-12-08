@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchvision.ops import nms
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 # Convolutional block with BatchNorm and LeakyReLU
 
@@ -228,11 +229,14 @@ class YOLOv8HeadFull(nn.Module):
 
         # Final Detect layers
         self.detect_p2 = nn.Conv2d(scaled_channels(
-            256), (num_classes + 4 + 1) * 1, kernel_size=1, stride=1, padding=0) #(*1 is free anchor box)
+            # (*1 is free anchor box)
+            256), (num_classes + 4 + 1) * 1, kernel_size=1, stride=1, padding=0)
         self.detect_p3 = nn.Conv2d(scaled_channels(
-            512), (num_classes + 4 + 1) * 1, kernel_size=1, stride=1, padding=0) #(*1 is free anchor box)
+            # (*1 is free anchor box)
+            512), (num_classes + 4 + 1) * 1, kernel_size=1, stride=1, padding=0)
         self.detect_p5 = nn.Conv2d(scaled_channels(
-            512), (num_classes + 4 + 1) * 1, kernel_size=1, stride=1, padding=0) #(*1 is free anchor box)
+            # (*1 is free anchor box)
+            512), (num_classes + 4 + 1) * 1, kernel_size=1, stride=1, padding=0)
 
     def forward(self, p5, p3, p2):
 
@@ -327,6 +331,69 @@ def perform_nms(predictions, conf_thresh=0.5, iou_thresh=0.4):
 # Optimizer Setup
 def setup_optimizer(model):
     return optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.0005)
+
+
+def save_model_and_optimizer(model, optimizer, lr_schdule,filepath):
+    """
+    Saves the state dictionaries of a model and its optimizer to a file.
+
+    Parameters:
+    model (torch.nn.Module): The PyTorch model.
+    optimizer (torch.optim.Optimizer): The optimizer for the model.
+    filepath (str): The file path to save the state dictionaries.
+    """
+    checkpoint = {
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'lr_schdule_step': lr_schdule.current_step
+    }
+    torch.save(checkpoint, filepath)
+    print(f"Model and optimizer state dictionaries saved to {filepath}")
+
+
+def load_model_and_optimizer(model, optimizer, lr_schdule, filepath, device='cpu'):
+    """
+    Loads the state dictionaries of a model and its optimizer from a file.
+
+    Parameters:
+    model (torch.nn.Module): The PyTorch model instance.
+    optimizer (torch.optim.Optimizer): The optimizer for the model.
+    filepath (str): The file path to load the state dictionaries from.
+    device (str): The device to map the state dictionaries to ('cpu' or 'cuda').
+
+    Returns:
+    tuple: The model and optimizer with loaded states.
+    """
+    checkpoint = torch.load(filepath, map_location=device)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    lr_schdule.current_step = checkpoint['lr_schdule_step']
+    print(f"Model and optimizer state dictionaries loaded from {filepath}")
+    return model, optimizer, lr_schdule
+
+class WarmupCosineScheduler:
+    def __init__(self, optimizer, warmup_steps, max_steps, base_lr, start_step):
+        self.optimizer = optimizer
+        self.warmup_steps = warmup_steps
+        self.max_steps = max_steps
+        self.base_lr = base_lr
+        self.cosine_scheduler = CosineAnnealingLR(optimizer, T_max=(max_steps - warmup_steps))
+        self.current_step = 0
+        if start_step != None:
+            self.current_step = start_step
+            self.cosine_scheduler.step(start_step)
+
+    def step(self):
+        if self.current_step < self.warmup_steps:
+            # Linear warmup
+            lr = self.base_lr * (self.current_step / self.warmup_steps)
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = lr
+        else:
+            # Cosine annealing
+            self.cosine_scheduler.step()
+        
+        self.current_step += 1
 
 
 # Example Usage

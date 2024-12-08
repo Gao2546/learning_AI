@@ -23,6 +23,16 @@ optimizer = setup_optimizer(model=model)
 num_epochs = 100
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model.to(device)
+# Learning rate scheduler
+warmup_steps = num_epochs*0.05*4 #5%
+max_steps = num_epochs*0.5*4 #50%
+scheduler = WarmupCosineScheduler(optimizer, warmup_steps, max_steps, base_lr=0.0005, start_step=0)
+
+load_path = None
+save_path = "/home/athip/psu/learning_AI/computer_vision/Object_detection/models/CatVsDog"
+if load_path != None:
+    model, optimizer, scheduler = load_model_and_optimizer(model=model, optimizer=optimizer, lr_schdule=scheduler, filepath=load_path, device=device)
+
 
 for epoch in range(num_epochs):
     model.train()
@@ -44,11 +54,15 @@ for epoch in range(num_epochs):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        scheduler.step()
 
         # Update loss
         epoch_loss += loss.item()
         print(f"Epoch [{epoch+1}/{num_epochs}], Batch [{batch_idx +
               1}/{len(dataloader)}], Loss: {loss.item():.4f}")
+    if epoch % 10 == 0:
+        file_name = f"CatVsDog1_epoch{epoch}"
+        save_model_and_optimizer(model=model, optimizer=optimizer, lr_schdule=scheduler, filepath=os.path.join(save_path, file_name))
         
     print(f"Epoch [{
           epoch+1}/{num_epochs}] Completed. Average Loss: {epoch_loss / len(dataloader):.4f}")
