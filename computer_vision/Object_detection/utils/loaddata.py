@@ -45,6 +45,15 @@ class YOLODataset_xml(Dataset):
 
     def __len__(self):
         return len(self.annotation_files)
+    
+    def map_size_object(self,Rwidth,Rheight):
+        object_ratio = max(Rwidth,Rheight)
+        if object_ratio < 0.2:
+            return 80
+        elif 0.2 <= object_ratio <= 0.35:
+            return 40
+        else:
+            return 20
 
     def __getitem__(self, idx):
         tree = ET.parse(os.path.join(
@@ -59,8 +68,9 @@ class YOLODataset_xml(Dataset):
         class_idx = self.class_map[tree.find("object/name").text]
         xmin, ymin, xmax, ymax = [float(tree.find("object/bndbox/xmin").text), float(tree.find("object/bndbox/ymin").text),
                                   float(tree.find("object/bndbox/xmax").text), float(tree.find("object/bndbox/ymax").text)]
-        cx, cy, w, h = [(xmin + xmax)/2, (ymin + ymax) /
-                        2, xmax - xmin, ymin - ymax]
+        # print(f"{xmin} {ymin} {xmax} {ymax}")
+        cx, cy, w, h = [(xmin + xmax)/2, (ymin + ymax) /2, xmax - xmin, ymax - ymin]
+        # print(f"{cx} {cy} {w} {h}")
         xratio, yratio = (self.width/width,self.height/height)
         invxratio, invyration = (1/xratio, 1/yratio)
         image = Image.open(image_file).convert("RGB")
@@ -68,9 +78,42 @@ class YOLODataset_xml(Dataset):
         target = []
         for size in self.target_size:
             T = torch.zeros((size, size, 4 + 1 + len(self.class_map)))
-            x_posi_ratio, y_posi_ratio = (size/width, size/height)
-            T[math.ceil(cx*x_posi_ratio), math.ceil(cy*y_posi_ratio), :4] = torch.tensor([cx/width, cy/height, w/width, h/height])
-            T[math.ceil(cx*x_posi_ratio), math.ceil(cy*y_posi_ratio), 4] = 1
-            T[math.ceil(cx*x_posi_ratio), math.ceil(cy*y_posi_ratio), 5 + class_idx] = 1
+            if self.map_size_object(w/width,h/height) == size:
+                x_posi_ratio, y_posi_ratio = (size/width, size/height)
+                T[math.ceil(cy*y_posi_ratio), math.ceil(cx*x_posi_ratio), :4] = torch.tensor([cx/width, cy/height, w/width, h/height])
+                T[math.ceil(cy*y_posi_ratio), math.ceil(cx*x_posi_ratio), 4] = 1
+                T[math.ceil(cy*y_posi_ratio), math.ceil(cx*x_posi_ratio), 5 + class_idx] = 1
             target.append(T)
         return image_transform, target, [width, height]
+    
+class load_test_images(Dataset):
+    def __init__(self, path = None, width = 640, height = 640):
+        """
+        :param images: List of image tensors (C, H, W).
+        :param targets: List of target tensors (bounding boxes + classes).
+        """
+        self.width = width
+        self.height = height
+        self.target_size = [80, 40, 20]
+        self.images_floder = path
+
+        self.images_files = os.listdir(self.images_floder)
+        self.transform = transforms.Compose([
+            # Resize to the desired dimensions
+            transforms.Resize((height, width)),
+            # Convert PIL image or numpy array to a tensor
+            transforms.ToTensor(),
+            # transforms.Lambda(lambda x:x/255.0),
+            transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(
+                0.5, 0.5, 0.5))  # Normalize to [-1, 1]
+        ])
+
+    def __len__(self):
+        return len(self.images_files)
+
+    def __getitem__(self, idx):
+        image_file = os.path.join(self.images_floder, self.images_files[idx])
+        image = Image.open(image_file).convert("RGB")
+        width,height = image.size
+        image_transform = self.transform(image)
+        return image_transform, [width, height]

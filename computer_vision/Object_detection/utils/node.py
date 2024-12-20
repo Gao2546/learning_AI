@@ -4,6 +4,11 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision.ops import nms
 from torch.optim.lr_scheduler import CosineAnnealingLR
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from torchvision import transforms
+import time
+from torch.nn.functional import sigmoid , softmax
 
 # Convolutional block with BatchNorm and LeakyReLU
 
@@ -296,44 +301,114 @@ class YOLOLoss(nn.Module):
     def __init__(self):
         super(YOLOLoss, self).__init__()
         self.bce = nn.BCEWithLogitsLoss()
+        self.focal_loss = FocalLoss()
         self.mse = nn.MSELoss()
-        self.loss_factor_obj = 1.0
-        self.loss_factor_cls = 0.5
+        self.loss_factor_obj = 2.5 #2.5**
+        self.loss_factor_cls = 1.5
         self.loss_factor_bbox = 7.5
 
     def forward(self, preds, targets):
         # Placeholder for loss implementation
         # Objectness score loss
-        obj_loss = self.bce(
+        obj_loss = self.focal_loss(
             preds[..., 4], targets[..., 4])*self.loss_factor_obj
         # Classification loss
-        cls_loss = self.bce(
-            preds[..., 5:], targets[..., 5:])*self.loss_factor_cls
-        # Bounding box loss
-        box_loss = self.mse(
-            preds[..., :4], targets[..., :4])*self.loss_factor_bbox
+        if torch.sum(targets) != 0:
+            cls_loss = self.bce(
+                preds[..., 5:][targets[..., 4].bool()], targets[..., 5:][targets[..., 4].bool()])*self.loss_factor_cls
+            # Bounding box loss
+            box_loss = self.mse(
+                preds[..., :4][targets[..., 4].bool()], targets[..., :4][targets[..., 4].bool()])*self.loss_factor_bbox
+        else:
+            cls_loss = 0
+            box_loss = 0
+        print(obj_loss)
+        print(cls_loss)
+        print(box_loss)
+        print("--------------------------------")
         return obj_loss + cls_loss + box_loss
 
 
+# class FocalLoss(nn.Module):
+#     def __init__(self, gamma=2.0, alpha=0.0025):  # 3/((80*80) + (40*40) + (20*20))*10
+#         super(FocalLoss, self).__init__()
+#         self.gamma = gamma
+#         self.alpha = alpha
+
+#     def forward(self, inputs, targets):
+#         BCE_loss = nn.BCEWithLogitsLoss(reduction='none')(inputs, targets)
+#         pt = torch.exp(-BCE_loss)
+#         focal_loss = self.alpha * (1 - pt) ** self.gamma * BCE_loss
+#         return focal_loss.mean()
+
+class FocalLoss(nn.Module):
+    def __init__(self, gamma=2, alpha=1-(0.005)): #0.000025* 0.00025 0.0005** 0.001 0.005** 0.01 0.05 0.25
+        """
+        Focal Loss for classification tasks with imbalanced datasets.
+
+        Args:
+            gamma (float): Focusing parameter to reduce the loss for well-classified examples.
+            alpha (float): Scaling factor for balancing positive and negative examples.
+        """
+        super(FocalLoss, self).__init__()
+        self.gamma = gamma
+        self.alpha = alpha
+
+    def forward(self, inputs, targets):
+        """
+        Args:
+            inputs (torch.Tensor): Predicted logits from the model, expected shape (N, *).
+            targets (torch.Tensor): Ground truth labels, same shape as inputs.
+
+        Returns:
+            torch.Tensor: Scalar focal loss value.
+        """
+        # self.alpha = 1 - (torch.sum(targets) / (targets.size(1) * targets.size(1)))
+        # BCE with logits computes logits internally; reduction is set to 'none' to compute manually.
+        bce_loss = nn.BCEWithLogitsLoss(reduction='none')(inputs, targets)
+
+        # Compute the probability of the predictions
+        probs = torch.sigmoid(inputs)
+
+        # Define pt for positive and negative cases
+        pt = torch.where(targets == 1, probs, 1 - probs)
+
+        # Apply Focal Loss formula
+        focal_loss = ((targets*self.alpha) + ((1 - targets)*(1-self.alpha))) * (((1 - pt) ** self.gamma) * bce_loss)
+
+        # Return the mean loss
+        return focal_loss.sum() #/ (targets.sum() if targets.sum() != 0 else 1)
+
+
 # Non-Maximum Suppression (NMS)
-def perform_nms(predictions, conf_thresh=0.5, iou_thresh=0.4):
+def perform_nms(predictions, conf_thresh=0.7, iou_thresh=0.7):
     """
     :param predictions: Tensor of shape [N, 7] -> [x1, y1, x2, y2, conf, class_score, class_id]
     :param conf_thresh: Confidence threshold for filtering
     :param iou_thresh: IoU threshold for NMS
     """
-    boxes = predictions[:, :4]
-    scores = predictions[:, 4] * predictions[:, 5]
-    keep = nms(boxes, scores, iou_thresh)
-    return predictions[keep]
+    boxes = torch.tensor(
+        list(map(cxcywh2xy1xy2, predictions[:, :4].detach().tolist())), device=0)
+    # print(torch.tensor(softmax(predictions[:, 4].clone(), dim = 0).tolist()))
+    predictions = predictions.clone()
+    predictions[:, 4] = torch.clamp(predictions[:, 4].clone(),0,100)/(predictions[:, 4].max())
+    scores = predictions[:, 4]
+    # print(predictions[:, 4].max())
+    # scores = torch.where(
+        # predictions[:, 4] > conf_thresh, predictions[:, 4], 0.0)  # * \
+    # torch.max(predictions[:, 5:], dim=1).values
+    # scores = predictions[:, 4]
+    keep = nms(boxes, scores, iou_thresh)[:]
+    predictions = predictions[keep]
+    return predictions[predictions[:, 4] > conf_thresh]
 
 
 # Optimizer Setup
 def setup_optimizer(model):
-    return optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.0005)
+    return optim.AdamW(model.parameters(), lr=0.0005, weight_decay=0.0005)
 
 
-def save_model_and_optimizer(model, optimizer, lr_schdule,filepath):
+def save_model_and_optimizer(model, optimizer, lr_schdule, filepath):
     """
     Saves the state dictionaries of a model and its optimizer to a file.
 
@@ -365,11 +440,15 @@ def load_model_and_optimizer(model, optimizer, lr_schdule, filepath, device='cpu
     tuple: The model and optimizer with loaded states.
     """
     checkpoint = torch.load(filepath, map_location=device)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    lr_schdule.current_step = checkpoint['lr_schdule_step']
+    if optimizer == None or lr_schdule == None:
+        model.load_state_dict(checkpoint['model_state_dict'])
+    else:
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        lr_schdule.current_step = checkpoint['lr_schdule_step']
     print(f"Model and optimizer state dictionaries loaded from {filepath}")
     return model, optimizer, lr_schdule
+
 
 class WarmupCosineScheduler:
     def __init__(self, optimizer, warmup_steps, max_steps, base_lr, start_step):
@@ -377,7 +456,8 @@ class WarmupCosineScheduler:
         self.warmup_steps = warmup_steps
         self.max_steps = max_steps
         self.base_lr = base_lr
-        self.cosine_scheduler = CosineAnnealingLR(optimizer, T_max=(max_steps - warmup_steps))
+        self.cosine_scheduler = CosineAnnealingLR(
+            optimizer, T_max=(max_steps - warmup_steps))
         self.current_step = 0
         if start_step != None:
             self.current_step = start_step
@@ -392,8 +472,98 @@ class WarmupCosineScheduler:
         else:
             # Cosine annealing
             self.cosine_scheduler.step()
-        
+
         self.current_step += 1
+
+
+def cxcywh2xy1xy2(bbox):
+    cx, cy, width, height = bbox
+    x_min, y_min, x_max, y_max = [cx - width/2,
+                                  cy - height/2, cx + width/2, cy + height/2]
+    return x_min, y_min, x_max, y_max
+
+
+def cxcywh2xywh(bbox):
+    cx, cy, width, height = bbox
+    x_min, y_min = [cx - (width/2), cy - (height/2)]
+    return x_min, y_min, width, height
+
+
+def plot_bbox(image, predict, size, class_name=None, colors=None, linewidth=2, show=False):
+    predict = predict.cpu().detach()
+    fig, ax = plt.subplots(1)
+    ax.imshow(image)
+    bboxes = predict[:, :4]
+    # Plot each bounding box
+    for i, bbox in enumerate(bboxes):
+        # print(bbox)
+        x_min, y_min, width, height = cxcywh2xywh(bbox=bbox)
+        # x_min, y_min = [cx - width/2, cy - height/2]
+        x_min = x_min*size[0]
+        y_min = y_min*size[1]
+        # cx = cx*size[0]
+        # cy = cy*size[1]
+        width = width*size[0]
+        height = height*size[1]
+        # Default to red if no color specified
+        color = colors[i] if colors and i < len(colors) else 'red'
+        rect = patches.Rectangle(
+            (x_min, y_min), width, height, linewidth=linewidth, edgecolor=color, facecolor='none'
+        )
+        ax.add_patch(rect)
+        class_idx = torch.argmax(predict[i, 5:], dim=-1)
+        # print(x_min)
+        # print(y_min)
+        # print(width)
+        # print(height)
+        # print("-----------------")
+        # Add label if provided
+        if class_name and class_idx < len(class_name):
+            ax.text(
+                x_min, y_min - 5, class_name[class_idx], color=color, fontsize=12,
+                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none')
+            )
+
+    plt.axis('off')
+    if show:
+        plt.show()
+    else:
+        plt.savefig(
+            f"/home/athip/psu/learning_AI/computer_vision/Object_detection/output/CatVsDog/CatVsDog{time.time()}.png")
+
+
+def postprocess(image, out_pre, size):
+    transform = transforms.Compose([
+        # Resize to the desired dimensions
+        transforms.Resize((int(size[1]), int(size[0]))),
+        # Convert PIL image or numpy array to a tensor
+        transforms.Normalize(mean=[-0.5 / 0.5, -0.5 / 0.5, -0.5 / 0.5],
+                             std=[1 / 0.5, 1 / 0.5, 1 / 0.5]),
+        transforms.ToPILImage(),
+    ])
+    image = transform(image)
+    # temp_x = out_pre[:, :4:2] * size[0]
+    # temp_y = out_pre[:, 1:4:2] * size[1]
+    # out_pre[:, :4:2] = temp_x
+    # out_pre[:, 1:4:2] = temp_y
+    return [image, out_pre, size]
+
+
+def out2bbox(predict):
+    size = predict.size(2)
+    batch = predict.size(0)
+    tlcorner = torch.tensor([[[[i] for i in range(size)]
+                            for j in range(size)] for k in range(batch)], device=0)
+    x_tlcorner = tlcorner
+    y_tlcorner = tlcorner.permute(0, 2, 1, 3)
+    predict[:, :, :, 0:1] = (
+        sigmoid(predict[:, :, :, 0:1].clone()) + x_tlcorner)/size
+    predict[:, :, :, 1:2] = (
+        sigmoid(predict[:, :, :, 1:2].clone()) + y_tlcorner)/size
+    predict[:, :, :, 2:3] = torch.exp(predict[:, :, :, 2:3].clone())
+    predict[:, :, :, 3:4] = torch.exp(predict[:, :, :, 3:4].clone())
+    return predict
+
 
 
 # Example Usage
