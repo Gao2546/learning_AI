@@ -6,6 +6,7 @@ import numpy as np
 from utils.node import *
 import os
 from utils.loaddata import YOLODataset_xml
+import gc
 
 
 path_data = "/home/athip/psu/learning_AI/computer_vision/Object_detection/images/CatVsDog"
@@ -43,3 +44,12 @@ for batch_idx, (inputs, (targets80, targets40, targets20), real_size) in enumera
     for image, cls_bbox, size in out_pos:
        plot_bbox(image=image, predict=cls_bbox, size=size, class_name=class_name, colors=['green','red'], show=True, linewidth=2)
     # print("/////////////////////////////////////////")
+    del inputs
+    del outputs
+    del outputsR
+    del all_output
+    del all_target
+    del exp_output
+    del out_pos
+    gc.collect
+    torch.cuda.empty_cache()
