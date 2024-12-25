@@ -10,6 +10,7 @@ import pandas as pd
 import torch
 import random
 import os
+import time
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
@@ -135,7 +136,7 @@ class BPE:
         self.vocab = new_vocabs + self.vocab
 
 
-class dataloadercustom(Dataset):
+class dataloadercustom_Transformers(Dataset):
 
     def __init__(self,
                  token_size: int = 1024*5,
@@ -200,6 +201,164 @@ class dataloadercustom(Dataset):
 
     def get_vocab(self):
         return self.tokenizer.vocab
+    
+class dataloadercustom_Bert(Dataset):
+
+    def __init__(self,
+                 token_size: int = 1024*5,
+                 window_size: int = 64*2,
+                 pretrain_model_tokenizer_path: str = "./model/BPE_model/BPE_model_code_python03.pkl",
+                #  data_path: str = "./data/question_and_answer_no_code01/Dataset_Python_Question_Answer.csv",
+                 data_path: str = "data/WikiQACorpus/WikiQA-train.tsv",
+                 tokenizer_model: str = "bpe",
+                 device: int = 0,
+                 qaaidx_path: str = "./data/question_and_answer_no_code01/BPE_model_code_python01/qaaidx_token03.pkl",
+                 qaaidx_save: str = True):
+        self.device = device
+        self.data_path = data_path
+        self.window_size = window_size
+        self.qaaidx_path = qaaidx_path
+        self.question = []
+        self.answer = []
+        self.question_train = []
+        self.answer_train = []
+        # data = pd.read_csv("./data/question_and_answer_no_code01/Dataset_Python_Question_Answer.csv", chunksize=10000)
+        data = pd.read_csv("data/WikiQACorpus/WikiQA-train.tsv", chunksize=10000,sep="\t")
+        if os.path.isfile(self.qaaidx_path):
+            if tokenizer_model == "bpe":
+                self.tokenizer = BPE()
+                self.tokenizer.load_pretrain(pretrain_model_tokenizer_path)
+                with open(self.qaaidx_path,"rb") as f:
+                    self.question_train,self.answer_train = pickle.load(f)
+        else:
+            for d in tqdm(data):
+                # self.question += d["Question"].tolist()
+                # ans = d["Answer"].map(lambda x: "\n".join(eval(x))).tolist()
+                # self.answer += ans
+                self.question += d["Question"].tolist()
+                self.answer += d["Sentence"].tolist()
+            del data
+            if tokenizer_model == "bpe":
+                self.tokenizer = BPE()
+                self.tokenizer.load_pretrain(pretrain_model_tokenizer_path)
+                for q,a in tqdm(zip(self.question,self.answer)):
+                    self.question_train.append([1, ] + self.tokenizer.token2idx(self.tokenizer.tokenize(q)) + [2, ])
+                    self.answer_train.append([1, ] + self.tokenizer.token2idx(self.tokenizer.tokenize(a)) + [2, ])
+                if (self.qaaidx_path != None) and (self.qaaidx_path[-4:] == ".pkl") and qaaidx_save:
+                    with open(self.qaaidx_path,"wb") as f:
+                        pickle.dump([self.question_train,self.answer_train],f)
+        self.token_size = len(self.tokenizer.vocab)
+
+
+    def __len__(self):
+        #return sum([len(data) for data in pd.read_csv(self.data_path,chunksize=10)])
+        return len(self.question_train)
+
+    def __getitem__(self, index):
+        question_train = torch.tensor(self.question_train[index],device=self.device)
+        question_train = torch.nn.functional.pad(question_train,(0,self.window_size - len(question_train)),"constant",0)
+        answer_train = self.answer_train[index]
+        r_posi = random.randrange(1,len(answer_train) - 1,1)
+        answer_train_in = torch.tensor(answer_train[0:r_posi],device=self.device)
+        answer_train_out = torch.tensor(answer_train[0:r_posi+1],device=self.device)
+        answer_train_in = torch.nn.functional.pad(answer_train_in,(0,self.window_size - len(answer_train_in)),"constant",0)
+        answer_train_out = torch.nn.functional.pad(answer_train_out,(0,self.window_size - len(answer_train_out)),"constant",0)
+        return question_train,answer_train_in,answer_train_out
+
+    def get_vocab(self):
+        return self.tokenizer.vocab
+    
+class dataloadercustom_Transformer(Dataset):
+
+    def __init__(self,
+                 token_size: int = 1024*2,
+                 window_size: int = 64*2,
+                 pretrain_model_tokenizer_path: str = "./model/BPE_model/BPE_model_code_python_small_text03.pkl",
+                #  data_path: str = "./data/question_and_answer_no_code01/Dataset_Python_Question_Answer.csv",
+                 data_path: str = "/home/athip/psu/learning_AI/Text_Gen/data/PythonCodeDataSmall_TextOnly/Python_code_data.txt",
+                 tokenizer_model: str = "bpe",
+                 device: int = 0,
+                 qaaidx_path: str = "/home/athip/psu/learning_AI/Text_Gen/data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx03.pkl",
+                 qaaidx_save: str = True):
+        self.device = device
+        self.data_path = data_path
+        self.window_size = window_size
+        self.qaaidx_path = qaaidx_path
+        self.question = []
+        self.answer = []
+        self.question_train = []
+        self.answer_train = []
+        # data = pd.read_csv("./data/question_and_answer_no_code01/Dataset_Python_Question_Answer.csv", chunksize=10000)
+        # data = pd.read_csv("data/WikiQACorpus/WikiQA-train.tsv", chunksize=10000,sep="\t")
+        with open("/home/athip/psu/learning_AI/Text_Gen/data/PythonCodeDataSmall_TextOnly/Python_code_data.txt","r") as f:
+            data = f.read(-1)
+            data = data.split("\n# ")
+            data = [data[0].strip("\n")] + [("# " + c).strip("\n") for c in data[1:] if len(c) >= 150]
+        if os.path.isfile(self.qaaidx_path):
+            if tokenizer_model == "bpe":
+                self.tokenizer = BPE()
+                self.tokenizer.load_pretrain(pretrain_model_tokenizer_path)
+                with open(self.qaaidx_path,"rb") as f:
+                    self.answer_train = pickle.load(f)
+        else:
+            # for d in tqdm(data):
+                # self.question += d["Question"].tolist()
+                # ans = d["Answer"].map(lambda x: "\n".join(eval(x))).tolist()
+                # self.answer += ans
+                # self.question += d["Question"].tolist()
+                # self.answer += d["Sentence"].tolist()
+                # self.answer += 
+            self.answer = data
+            del data
+            if tokenizer_model == "bpe":
+                self.tokenizer = BPE()
+                self.tokenizer.load_pretrain(pretrain_model_tokenizer_path)
+                for a in tqdm(self.answer):
+                    self.answer_train.append([1, ] + self.tokenizer.token2idx(self.tokenizer.tokenize(a)) + [2, ])
+                    # self.answer_train.append(self.tokenizer.token2idx(self.tokenizer.tokenize(a)) + [2, ])
+                if (self.qaaidx_path != None) and (self.qaaidx_path[-4:] == ".pkl") and qaaidx_save:
+                    with open(self.qaaidx_path,"wb") as f:
+                        pickle.dump(self.answer_train,f)
+        self.token_size = len(self.tokenizer.vocab)
+
+
+    def __len__(self):
+        #return sum([len(data) for data in pd.read_csv(self.data_path,chunksize=10)])
+        return len(self.answer_train)
+
+    def __getitem__(self, index):
+        # question_train = torch.tensor(self.question_train[index],device=self.device)
+        # question_train = torch.nn.functional.pad(question_train,(0,self.window_size - len(question_train)),"constant",0)
+        answer_train = self.answer_train[index]
+        s_posi = random.randrange(0, len(answer_train) - 2, 1)
+        r_posi = random.randrange(s_posi + 1, len(answer_train) - 1, 1)
+        answer_train_in = torch.tensor(answer_train[s_posi:r_posi],device=self.device)
+        answer_train_out = torch.tensor(answer_train[s_posi:r_posi+1],device=self.device)
+        answer_train_in = torch.nn.functional.pad(answer_train_in,(0,self.window_size - len(answer_train_in)),"constant",0)
+        answer_train_out = torch.nn.functional.pad(answer_train_out,(0,self.window_size - len(answer_train_out)),"constant",0)
+        # print(answer_train_in)
+        # print(answer_train_out)
+        return answer_train_in,answer_train_out
+
+    def get_vocab(self):
+        return self.tokenizer.vocab
+    def get_weight(self):
+        self.answer_feq = Counter([t for a in self.answer_train for t in a])
+        all_value = sum([len(Tvalues) for Tvalues in self.answer_train])
+        min_value = min(self.answer_feq.values())
+        max_ratio = all_value/min_value
+        sum_value = sum(self.answer_feq.values())
+        self.weight = torch.tensor([((all_value/(self.answer_feq[t] + 1))/max_ratio)**(1/1.25) for t in range(len(self.tokenizer.vocab))]) #2.71828182846
+        # print(self.weight.max())
+        # time.sleep(100)
+        # print(self.answer_feq)
+        # print(self.weight)
+        # print(self.weight.min())
+        # print(all_value/(self.answer_feq[103] + 1))
+        # print(all_value)
+        # print(self.tokenizer.vocab)
+        # time.sleep(100)
+        return self.weight
     
 
 class WarmupCosineScheduler:

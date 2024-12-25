@@ -27,7 +27,7 @@
 #         else:
 #             # Cosine annealing
 #             self.cosine_scheduler.step()
-        
+
 #         self.current_step += 1
 
 # # data loader
@@ -78,7 +78,7 @@
 #         scheduler.step()
 #         print(f"Epoch: {epoch+1}, Loss: {loss.item()}")
 
-from util.model import transformer
+from util.model import Transformers, Transformer
 import torch
 
 # question = ["HOW AFRICAN AMERICANS WERE IMMIGRATED TO THE US",
@@ -90,8 +90,14 @@ import torch
 #             "how can i open a usda slaughterhouse",
 #             "how deadly are brain tumors"]
 # a = torch.zero((1,10))
-model = transformer()
+# model = Transformers()
+# model.train()
+
+# import os
+# os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+
+model = Transformer()
 model.train()
 # output = model.eval_model(question)
 # for o in output:
-    # print(o)
+# print(o)
