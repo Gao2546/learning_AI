@@ -89,6 +89,11 @@ import torch
 #             "how old is alicia in 2009",
 #             "how can i open a usda slaughterhouse",
 #             "how deadly are brain tumors"]
+question = ["# Write a program to check whether a number is prime or not",
+            "# Write a program to find the factorial of a number",
+            "# Write a program to check whether a number is positive, negative or zero",
+            "# Write a python function to print whether a number is negative, positive or zero",
+            "# write a program to find and print the largest among three numbers"]
 # a = torch.zero((1,10))
 # model = Transformers()
 # model.train()
@@ -97,7 +102,7 @@ import torch
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 model = Transformer()
-model.train()
-# output = model.eval_model(question)
-# for o in output:
-# print(o)
+# model.train()
+output = model.eval_model(question)
+for o in output:
+    print(o)

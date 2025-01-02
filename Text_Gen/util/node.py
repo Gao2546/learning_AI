@@ -49,7 +49,7 @@ class PositionWiseFeedForward(nn.Module):
         super(PositionWiseFeedForward, self).__init__()
         self.fc1 = nn.Linear(d_model, d_ff)
         self.fc2 = nn.Linear(d_ff, d_model)
-        self.relu = nn.ReLU()
+        self.relu = nn.GELU()
 
     def forward(self, x):
         return self.fc2(self.relu(self.fc1(x)))
@@ -115,20 +115,22 @@ class DecoderLayer(nn.Module):
     def __init__(self, d_model, num_heads, d_ff, dropout):
         super(DecoderLayer, self).__init__()
         self.self_attn = MultiHeadAttention(d_model, num_heads)
-        self.cross_attn = MultiHeadAttention(d_model, num_heads)
+        # self.cross_attn = MultiHeadAttention(d_model, num_heads)
         self.feed_forward = PositionWiseFeedForward(d_model, d_ff)
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
-        self.norm3 = nn.LayerNorm(d_model)
+        # self.norm3 = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, enc_output, src_mask, tgt_mask):
-        attn_output = self.self_attn(x, x, x, tgt_mask)
-        x = self.norm1(x + self.dropout(attn_output))
-        attn_output = self.cross_attn(x, x, x, src_mask)
+    def forward(self, x, tgt_mask):
+        lx = self.norm1(x)
+        attn_output = self.self_attn(lx, lx, lx, tgt_mask)
         x = self.norm2(x + self.dropout(attn_output))
+        # attn_output = self.cross_attn(x, x, x, tgt_mask)
+        # x = self.norm2(x + self.dropout(attn_output))
         ff_output = self.feed_forward(x)
-        x = self.norm3(x + self.dropout(ff_output))
+        x = self.dropout(ff_output) + x
+        # x = self.norm3(x + self.dropout(ff_output))
         return x
 
 
@@ -191,8 +193,10 @@ class TransformerM(nn.Module):
         self.decoder_layers = nn.ModuleList(
             [DecoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
 
+        self.layer_norm = nn.LayerNorm(d_model)
         self.fc = nn.Linear(d_model, tgt_vocab_size)
         self.dropout = nn.Dropout(dropout)
+        # self.softmax = nn.Softmax(dim=-1)
         if device is not None:
             self.device = device
         else:
@@ -220,9 +224,9 @@ class TransformerM(nn.Module):
 
         dec_output = tgt_embedded
         for dec_layer in self.decoder_layers:
-            dec_output = dec_layer(dec_output, dec_output, tgt_mask, tgt_mask)
+            dec_output = dec_layer(dec_output, tgt_mask)
 
-        output = self.fc(dec_output)
+        output = self.fc(self.layer_norm(dec_output))
         return output
 
 

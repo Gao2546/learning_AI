@@ -10,8 +10,12 @@ from util.node import TransformerM , TransformersM , BertM
 from torch.optim.lr_scheduler import StepLR,CosineAnnealingLR
 import logging
 import time
+import math
+import signal
+import sys
+import os
 
-logging.basicConfig(filename="output_PythonSmall_01.log", level=logging.INFO)
+logging.basicConfig(filename="output_PythonSmall_02.log", level=logging.INFO)
 
 class Transformers:
     def __init__(self):
@@ -331,25 +335,31 @@ class Transformer:
     def __init__(self):
         self.save_model = True
         self.save_dir = "./model/Transformer/"
-        self.load_path = None#"/home/athip/psu/learning_AI/Text_Gen/model/Transformer/Transformer_N01_10K.pth"
-        self.start_epoch = 0
+        self.load_path = "/home/athip/psu/learning_AI/Text_Gen/model/Transformer/Transformer_N06_10KA.pth"
+        self.save_file = "Transformer_N06_10KB.pth"
+        self.start_epoch = 146
         self.save_every_epoch = 1
         self.epochs = 1000
-        self.batch_size = 64//8
-        self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_N01_10K.pkl",qaaidx_path="/home/athip/psu/learning_AI/Text_Gen/data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_N01_10K.pkl")
+        self.batch_size = 64//4
+        self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_N01_10K.pkl",qaaidx_path="/home/athip/psu/learning_AI/Text_Gen/data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_N03_10K.pkl",amount_data=100)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)
         self.pretrain_model_tokenizer_path = "./model/BPE_model/BPE_model_code_python_small_text_N01_10K.pkl"
         self.device = 0
-        self.sample_question = [
-                                "num1 = 1.5\n",
-                                "def add_two_numbers(num1, num2):\n",
-                                "# write a program to find and print the largest among three numbers\n",
-                                "if (num1 >= num2) and (num1 >= num3):\n",
-                                "import os\n",
-                                "def two_power(terms):\n",
-                                "my_list = [1, 2, 3, 4, 5, 6]\n",
-                                "# Write a python function that returns the sum of n natural numbers\n"
-                                ]
+        self.sample_question = ["# Write a program to check whether a number is prime or not",
+                                "# Write a program to find the factorial of a number",
+                                "# Write a program to check whether a number is positive, negative or zero",
+                                "# Write a python function to print whether a number is negative, positive or zero",
+                                "# write a program to find and print the largest among three numbers"]
+        # self.sample_question = [
+        #                         "num1 = 1.5\n",
+        #                         "def add_two_numbers(num1, num2):\n",
+        #                         "# write a program to find and print the largest among three numbers\n",
+        #                         "if (num1 >= num2) and (num1 >= num3):\n",
+        #                         "import os\n",
+        #                         "def two_power(terms):\n",
+        #                         "my_list = [1, 2, 3, 4, 5, 6]\n",
+        #                         "# Write a python function that returns the sum of n natural numbers\n"
+        #                         ]
         # self.sample_question = ["What are the differences between int, float, string, and bool in Python?",
         #                         "How do you check the data type of a variable?",
         #                         "Write a Python program to swap two variables.",
@@ -380,24 +390,46 @@ class Transformer:
         # self.class_weights = torch.tensor([0, 1/5000, 1/5000] + [1/self.tokenizer.word_freqs[i] if self.tokenizer.word_freqs[i] != 0 else 0 for i in self.tokenizer.vocab[3:]],device=0)
         self.class_weights = self.train_data.get_weight().to(device=0)
         self.criterion = nn.CrossEntropyLoss(ignore_index=0,weight=self.class_weights).to(device=0)
+        # self.criterion = nn.CrossEntropyLoss(ignore_index=0).to(device=0)
         self.optimizer = optim.AdamW(self.Transformer.parameters(),
-                               lr=0.00005, betas=(0.9, 0.95), eps=1e-9)
+                               lr=2e-5, betas=(0.9, 0.95), eps=1e-9) #lr is max learning rate lr=5e-5 //1e-5
                                
 
         # Learning rate scheduler
-        self.warmup_steps = 0.05*self.epochs #5%
-        self.max_steps = 0.5*self.epochs #50%
-        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=0.0005, start_step=self.start_epoch)
+        self.warmup_steps = self.epochs*0.02*(math.ceil(len(self.train_data)/self.batch_size)) #5%
+        self.max_steps = self.epochs*0.10*(math.ceil(len(self.train_data)/self.batch_size)) #50%
+        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=2e-5, start_step=None) #lr is max learning rate lr=5e-5 //1e-5
 
         if self.load_path:
             # self.load(self.load_path)
-            self.start_epoch = self.load_model_and_optimizer(self.load_path,device=0)
+            self.load_model_and_optimizer(self.load_path, only_model=False, device=0)
+            self.scheduler.cosine_scheduler.step(self.scheduler.current_step)
+
+        # Count total parameters
+        total_params = sum(p.numel() for p in self.Transformer.parameters())
+
+        # Count trainable parameters
+        trainable_params = sum(p.numel() for p in self.Transformer.parameters() if p.requires_grad)
+        # self.start_epoch = 146
+
+        print(f"Total parameters: {total_params}")
+        print(f"Trainable parameters: {trainable_params}")
+
+        print("Train data size: ", len(self.train_data))
+        print("Batch size: ", self.batch_size)
+        print("Total steps: ", math.ceil(len(self.train_data)/self.batch_size))
+        print("Warmup steps: ", self.warmup_steps)
+        print("Epochs: ", self.epochs)
+        print("Example data: ")
+        for dd in self.train_data.get_sample():
+            print(dd)
 
     def train(self):
         self.Transformer.train()
         for epoch in tqdm(range(self.start_epoch,self.epochs)):
             self.loss_epoch = []
             for answer_in, answer_out in tqdm(self.train_dataloader):
+                signal.signal(signal.SIGINT, signal_handler)
                 self.optimizer.zero_grad()
                 output = self.Transformer(answer_in)
                 # print(answer_in[0])
@@ -411,19 +443,19 @@ class Transformer:
                 self.loss_epoch.append(loss.item())
                 torch.nn.utils.clip_grad_norm_(self.Transformer.parameters(), max_norm=self.max_norm)
                 self.optimizer.step()
-            self.scheduler.step()
+                self.scheduler.step()
             if self.save and (((epoch + 1) % self.save_every_epoch) == 0):
                 # self.save(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
                 # self.save_model_and_optimizer(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
-                self.save_model_and_optimizer(self.save_dir + f"Transformer_N01_10K.pth")
+                self.save_model_and_optimizer(self.save_dir + f"{self.save_file}", epoch = epoch)
                 # output_eval = self.eval_model(self.sample_question)
                 logging.info(f"batch_eval : epoch {epoch}")
                 # for o in output_eval:
                 #     print(o)
                 #     logging.info(o)
                 # self.Transformer.train()
-            print(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}")
-            logging.info(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}")
+            print(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")
+            logging.info(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")    
 
             if (epoch + 1) % 5 == 0:
                 output_eval = self.eval_model(self.sample_question)
@@ -439,7 +471,7 @@ class Transformer:
         state_dict = torch.load(path)
         self.Transformer.load_state_dict(state_dict=state_dict)
 
-    def save_model_and_optimizer(self, filepath):
+    def save_model_and_optimizer(self, filepath, epoch):
         """
         Saves the state dictionaries of a model and its optimizer to a file.
 
@@ -451,13 +483,14 @@ class Transformer:
         checkpoint = {
             'model_state_dict': self.Transformer.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
-            'lr_schdule_step': self.scheduler.current_step
+            'lr_schdule_step': self.scheduler.current_step,
+            'current_epoch': epoch
         }
         torch.save(checkpoint, filepath)
         print(f"Model and optimizer state dictionaries saved to {filepath}")
 
 
-    def load_model_and_optimizer(self, filepath, device='cpu'):
+    def load_model_and_optimizer(self, filepath, only_model, device='cpu'):
         """
         Loads the state dictionaries of a model and its optimizer from a file.
 
@@ -470,15 +503,22 @@ class Transformer:
         Returns:
         tuple: The model and optimizer with loaded states.
         """
-        checkpoint = torch.load(filepath)
-        if self.optimizer == None or self.scheduler == None:
+        if only_model:
+            checkpoint = torch.load(filepath)
             self.Transformer.load_state_dict(checkpoint['model_state_dict'])
+            print(f"Model state dictionary loaded from {filepath}")
+            return 0
         else:
-            self.Transformer.load_state_dict(checkpoint['model_state_dict'])
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            self.scheduler.current_step = checkpoint['lr_schdule_step']
-        print(f"Model and optimizer state dictionaries loaded from {filepath}")
-        return self.scheduler.current_step
+            checkpoint = torch.load(filepath)
+            if self.optimizer == None or self.scheduler == None:
+                self.Transformer.load_state_dict(checkpoint['model_state_dict'])
+            else:
+                self.Transformer.load_state_dict(checkpoint['model_state_dict'])
+                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                self.scheduler.current_step = checkpoint['lr_schdule_step']
+                self.start_epoch = checkpoint['current_epoch']
+            print(f"Model and optimizer state dictionaries loaded from {filepath}")
+            # return self.start_epoch
 
 
     def eval_model(self, questions):
@@ -532,3 +572,9 @@ class Transformer:
 
     #         output_list.append(question + " :\n" + "".join(self.tokenizer.idx2token(answer_output[0, 1:seq_idx].cpu().tolist())).replace("Ġ", " ").replace("Ċ", "\n"))
     #     return output_list
+def signal_handler(sig, frame):
+    print("Training interrupted by user")
+    # Clear all data in GPU
+    torch.cuda.empty_cache()
+    torch.cuda.synchronize()
+    sys.exit(0)
