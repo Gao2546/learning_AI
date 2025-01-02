@@ -335,13 +335,13 @@ class Transformer:
     def __init__(self):
         self.save_model = True
         self.save_dir = "./model/Transformer/"
-        self.load_path = "/home/athip/psu/learning_AI/Text_Gen/model/Transformer/Transformer_N06_10KA.pth"
+        self.load_path = "./model/Transformer/Transformer_N06_10KA.pth"
         self.save_file = "Transformer_N06_10KB.pth"
         self.start_epoch = 146
         self.save_every_epoch = 1
         self.epochs = 1000
         self.batch_size = 64//4
-        self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_N01_10K.pkl",qaaidx_path="/home/athip/psu/learning_AI/Text_Gen/data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_N03_10K.pkl",amount_data=100)
+        self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_N01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_N03_10K.pkl",amount_data=100)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)
         self.pretrain_model_tokenizer_path = "./model/BPE_model/BPE_model_code_python_small_text_N01_10K.pkl"
         self.device = 0
