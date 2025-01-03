@@ -458,6 +458,7 @@ class Transformer:
             logging.info(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")    
 
             if (epoch + 1) % 5 == 0:
+                self.save_model_and_optimizer(self.save_dir + "cpk/" + f"epoch_{epoch}_{self.save_file}", epoch = epoch)
                 output_eval = self.eval_model(self.sample_question)
                 for o in output_eval:
                     print(o)
@@ -517,7 +518,7 @@ class Transformer:
                 self.Transformer.load_state_dict(checkpoint['model_state_dict'])
                 self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
                 self.scheduler.current_step = checkpoint['lr_schdule_step']
-                self.start_epoch = checkpoint['current_epoch']
+                self.start_epoch = checkpoint['current_epoch'] + 1
             print(f"Model and optimizer state dictionaries loaded from {filepath}")
             # return self.start_epoch
 
