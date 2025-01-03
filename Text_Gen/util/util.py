@@ -388,7 +388,7 @@ class dataloadercustom_Transformer(Dataset):
         self.amount_seq = 0
         # data = pd.read_csv("./data/question_and_answer_no_code01/Dataset_Python_Question_Answer.csv", chunksize=10000)
         # data = pd.read_csv("data/WikiQACorpus/WikiQA-train.tsv", chunksize=10000,sep="\t")
-        with open("/home/athip/psu/learning_AI/Text_Gen/data/PythonCodeDataSmall_TextOnly/Python_code_data.txt","r") as f:
+        with open("./data/PythonCodeDataSmall_TextOnly/Python_code_data.txt","r") as f:
             data = f.read(-1)
             data = data.split("\n# ")
             data = [data[0].strip("\n")] + [("# " + c).strip("\n") for c in data[1:] if len(c) >= 80]
