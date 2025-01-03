@@ -391,7 +391,7 @@ class dataloadercustom_Transformer(Dataset):
         with open("/home/athip/psu/learning_AI/Text_Gen/data/PythonCodeDataSmall_TextOnly/Python_code_data.txt","r") as f:
             data = f.read(-1)
             data = data.split("\n# ")
-            data = [data[0].strip("\n")] + [("# " + c).strip("\n") for c in data[1:] if len(c) >= 150]
+            data = [data[0].strip("\n")] + [("# " + c).strip("\n") for c in data[1:] if len(c) >= 80]
         if os.path.isfile(self.qaaidx_path):
             if tokenizer_model == "bpe":
                 self.tokenizer = BPE()
@@ -414,7 +414,7 @@ class dataloadercustom_Transformer(Dataset):
                 for a in tqdm(self.answer):
                     answer_all = [1, ] + self.tokenizer.token2idx(self.tokenizer.tokenize(a)) + [2, ]
                     self.answer_all.append(answer_all)
-                    for i in range(2,len(answer_all)-1):
+                    for i in range(2,len(answer_all)):
                         self.answer_train_in.append(answer_all[0:i])
                         self.answer_train_out.append(answer_all[0:i+1])
                     # self.answer_train.append(self.tokenizer.token2idx(self.tokenizer.tokenize(a)) + [2, ])

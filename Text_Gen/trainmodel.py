@@ -93,7 +93,11 @@ question = ["# Write a program to check whether a number is prime or not",
             "# Write a program to find the factorial of a number",
             "# Write a program to check whether a number is positive, negative or zero",
             "# Write a python function to print whether a number is negative, positive or zero",
-            "# write a program to find and print the largest among three numbers"]
+            "# write a program to find and print the largest among three numbers",
+            "# Write a functin that returns the LCM of two input numbers",
+            "# Write a function that returns the GCD of two input numbers",
+            "# Write a program to check whether a number is a palindrome or not",
+            "# Write a program to find the sum of natural numbers",]
 # a = torch.zero((1,10))
 # model = Transformers()
 # model.train()

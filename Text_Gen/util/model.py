@@ -335,13 +335,13 @@ class Transformer:
     def __init__(self):
         self.save_model = True
         self.save_dir = "./model/Transformer/"
-        self.load_path = "./model/Transformer/Transformer_N06_10KA.pth"
-        self.save_file = "Transformer_N06_10KB.pth"
+        self.load_path = "./model/Transformer/Transformer_N06_10KD.pth" #DGood For Traning set
+        self.save_file = "Transformer_N06_10KE.pth"
         self.start_epoch = 146
         self.save_every_epoch = 1
         self.epochs = 1000
         self.batch_size = 64//4
-        self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_N01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_N03_10K.pkl",amount_data=100)
+        self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_N01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_N05_10K.pkl",amount_data=1000)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)
         self.pretrain_model_tokenizer_path = "./model/BPE_model/BPE_model_code_python_small_text_N01_10K.pkl"
         self.device = 0
@@ -421,7 +421,7 @@ class Transformer:
         print("Warmup steps: ", self.warmup_steps)
         print("Epochs: ", self.epochs)
         print("Example data: ")
-        for dd in self.train_data.get_sample():
+        for dd in self.train_data.get_sample()[0:self.train_data.amount_data:self.train_data.amount_data//10]: #get 10 sample data
             print(dd)
 
     def train(self):
@@ -462,6 +462,7 @@ class Transformer:
                 for o in output_eval:
                     print(o)
                     logging.info(o)
+                    print("\n=====================================\n")
                 self.Transformer.train()
 
     def save(self,path):
