@@ -106,7 +106,7 @@ question = ["# Write a program to check whether a number is prime or not",
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 model = Transformer()
-# model.train()
-output = model.eval_model(question)
-for o in output:
-    print(o)
+model.train()
+# output = model.eval_model(question)
+# for o in output:
+    # print(o)

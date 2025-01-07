@@ -11,7 +11,7 @@ import torch
 import random
 import os
 import time
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
 
@@ -475,7 +475,8 @@ class WarmupCosineScheduler:
         self.start_max_steps = max_steps
         self.current_max_steps = max_steps
         self.base_lr = base_lr
-        self.cosine_scheduler = CosineAnnealingLR(optimizer, T_max=(max_steps - warmup_steps), last_epoch=-1, eta_min=5e-6) #lr=5e-6
+        # self.cosine_scheduler = CosineAnnealingLR(optimizer, T_max=max_steps, last_epoch=-1, eta_min=5e-6) #lr=5e-6 1e-6 5e-7
+        self.cosine_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=max_steps, T_mult=1, last_epoch=-1, eta_min=1e-6) 
         self.current_step = 0
         if start_step != None:
             self.current_step = start_step
