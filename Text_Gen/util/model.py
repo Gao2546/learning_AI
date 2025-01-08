@@ -15,7 +15,7 @@ import signal
 import sys
 import os
 
-logging.basicConfig(filename="output_PythonSmall_03.log", level=logging.INFO)
+logging.basicConfig(filename="output_PythonSmall_04_3873data.log", level=logging.INFO)
 
 class Transformers:
     def __init__(self):
@@ -335,8 +335,8 @@ class Transformer:
     def __init__(self):
         self.save_model = True
         self.save_dir = "./model/Transformer/"
-        self.load_path = "./model/Transformer/Transformer_V01_10KD.pth" #DGood For Traning set
-        self.save_file = "Transformer_V02_10KE.pth"
+        self.load_path = None#"./model/Transformer/Transformer_V03_10KA.pth" #DGood For Traning set
+        self.save_file = "Transformer_V03_10KA.pth"
         #======================================================================================
         # self.load_path = None#"./model/Transformer/Transformer_V01_10KC.pth" #DGood For Traning set
         # self.save_file = "Transformer_VT01_10KA.pth"
@@ -345,7 +345,7 @@ class Transformer:
         self.save_every_epoch = 1
         self.epochs = 1000
         self.batch_size = 64
-        self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=1000)
+        self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=3873)
         #========================================================================================
         # self.train_data =  dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=10)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)
@@ -355,7 +355,13 @@ class Transformer:
                                 "# Write a program to find the factorial of a number",
                                 "# Write a program to check whether a number is positive, negative or zero",
                                 "# Write a python function to print whether a number is negative, positive or zero",
-                                "# write a program to find and print the largest among three numbers"]
+                                "# write a program to find and print the largest among three numbers",
+                                "# Write a functin that returns the LCM of two input numbers",
+                                "# Write a function that returns the GCD of two input numbers",
+                                "# Write a program to check whether a number is a palindrome or not",
+                                "# Write a program to find the sum of natural numbers",
+                                "# Write a Python Program to print the Sum of First N Natural Numbers",
+                                "# Write a python program to print sum of number digits in List"]
         # self.sample_question = [
         #                         "num1 = 1.5\n",
         #                         "def add_two_numbers(num1, num2):\n",
@@ -398,13 +404,13 @@ class Transformer:
         # self.criterion = nn.CrossEntropyLoss(ignore_index=0,weight=self.class_weights).to(device=0)
         self.criterion = nn.CrossEntropyLoss(ignore_index=0).to(device=0)
         self.optimizer = optim.AdamW(self.Transformer.parameters(),
-                               lr=1e-5, betas=(0.9, 0.95), eps=1e-9) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
+                               lr=5e-5, betas=(0.9, 0.95), eps=1e-9) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
                                
 
         # Learning rate scheduler
         self.warmup_steps = int(self.epochs*0.02*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
         self.max_steps = int(self.epochs*0.1*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025
-        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=1e-5, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
+        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=5e-5, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
 
         if self.load_path:
             # self.load(self.load_path)
@@ -550,7 +556,7 @@ class Transformer:
                 else:
                     break
             answer_input[0,seq_idx] = answer_output.clone()[0,seq_idx]
-            output_list.append(question+ " :\n" + "".join(self.tokenizer.idx2token(answer_input[0,1:seq_idx].cpu().tolist())).replace("Ġ"," ").replace("Ċ","\n"))
+            output_list.append("\n" + question+ " :\n" + "".join(self.tokenizer.idx2token(answer_input[0,1:seq_idx].cpu().tolist())).replace("Ġ"," ").replace("Ċ","\n"))
         return output_list
     
     # def eval_model(self, questions):
