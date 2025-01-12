@@ -61,17 +61,58 @@ class Attention(nn.Module):
         self.num_heads = num_heads
         self.dropout_prob = dropout_prob
 
+    # def forward(self, x):
+    #     h, w = x.shape[2:]
+    #     x = rearrange(x, 'b c h w -> b (h w) c')
+    #     x = self.proj1(x)
+    #     x = rearrange(x, 'b L (C H K) -> K b H L C', K=3, H=self.num_heads)
+    #     q, k, v = x[0], x[1], x[2]
+    #     x = F.scaled_dot_product_attention(
+    #         q, k, v, is_causal=False, dropout_p=self.dropout_prob)
+    #     x = rearrange(x, 'b H (h w) C -> b h w (C H)', h=h, w=w)
+    #     x = self.proj2(x)
+    #     return rearrange(x, 'b h w C -> b C h w')
+
+class Attention(nn.Module):
+    def __init__(self, C: int, num_heads: int, dropout_prob: float):
+        super().__init__()
+        self.Q = nn.Linear(C, C)
+        self.K = nn.Linear(C, C)
+        self.V = nn.Linear(C, C)
+        self.num_heads = num_heads
+        self.dropout_prob = dropout_prob
+        self.softmax = nn.Softmax(dim=-1)
+        # self.dropout = nn.Dropout(p=dropout_prob, inplace=True)
+        self.proj = nn.Linear(C, C)
+
+    def scaled_dot_product_attention(self, q, k, v):
+        dk = q.size(-1)
+        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(dk)
+        scores = self.softmax(scores)
+        # scores = self.dropout(scores)
+        output = torch.matmul(scores, v)
+        return output
+
+    def rearray(self, x):
+        B, HxW, C = x.size()
+        return x.view(B, HxW, self.num_heads, -1).transpose(1, 2) #(B, HxW, C) -> (B, h, HxW, C/h)
+
+    def reverse_rearray(self, x):
+        B, h, HxW, _ = x.size()
+        return x.transpose(1, 2).contiguous().view(B, HxW, -1) #(B, h, HxW, C/h) -> (B, HxW, C)
+
     def forward(self, x):
-        h, w = x.shape[2:]
-        x = rearrange(x, 'b c h w -> b (h w) c')
-        x = self.proj1(x)
-        x = rearrange(x, 'b L (C H K) -> K b H L C', K=3, H=self.num_heads)
-        q, k, v = x[0], x[1], x[2]
-        x = F.scaled_dot_product_attention(
-            q, k, v, is_causal=False, dropout_p=self.dropout_prob)
-        x = rearrange(x, 'b H (h w) C -> b h w (C H)', h=h, w=w)
-        x = self.proj2(x)
-        return rearrange(x, 'b h w C -> b C h w')
+        B, C, H, W = x.size()
+        x = x.permute(0, 2, 3, 1).view(B,-1,C) # (B, (HxW), C)
+        q = self.rearray(self.Q(x)) # (B, HxW, C)
+        k = self.rearray(self.K(x)) # (B, HxW, C)
+        v = self.rearray(self.V(x)) # (B, HxW, C)
+        x = self.scaled_dot_product_attention(q, k, v)
+        x = self.reverse_rearray(x) # (B, HxW, C)
+        x = self.proj(x) # (B, HxW, C)
+        x = x.view(B, H, W, C).permute(0, 3, 1, 2) # (B, C, H, W)
+
+        return x
 
 
 class UnetLayer(nn.Module):
