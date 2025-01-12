@@ -13,6 +13,7 @@ from tqdm import tqdm  # pip install tqdm
 import matplotlib.pyplot as plt  # pip install matplotlib
 import torch.optim as optim
 import numpy as np
+from utils import YOLODataset_xml , postprocess
 
 plt.switch_backend("TKAgg")
 
@@ -221,11 +222,13 @@ def train(batch_size: int = 64,
           seed: int = -1,
           ema_decay: float = 0.9999,
           lr=2e-5,
-          checkpoint_path: str = None):
+          checkpoint_path: str = None,
+          path_to_data: str = '../data/CatVsDog'):
     set_seed(random.randint(0, 2**32-1)) if seed == -1 else set_seed(seed)
 
-    train_dataset = datasets.MNIST(
-        root='./data', train=True, download=True, transform=transforms.ToTensor())
+    # train_dataset = datasets.MNIST(
+    #     root='./data', train=True, download=True, transform=transforms.ToTensor())
+    train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=640, height=640)
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
 
@@ -242,7 +245,7 @@ def train(batch_size: int = 64,
 
     for i in range(num_epochs):
         total_loss = 0
-        for bidx, (x, _) in enumerate(tqdm(train_loader, desc=f"Epoch {i+1}/{num_epochs}")):
+        for bidx, (x, Class, Size) in enumerate(tqdm(train_loader, desc=f"Epoch {i+1}/{num_epochs}")):
             x = x.cuda()
             x = F.pad(x, (2, 2, 2, 2))
             t = torch.randint(0, num_time_steps, (batch_size,))
