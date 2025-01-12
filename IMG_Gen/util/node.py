@@ -154,8 +154,8 @@ class UNET(nn.Module):
                  num_groups: int = 32,
                  dropout_prob: float = 0.1,
                  num_heads: int = 8,
-                 input_channels: int = 1,
-                 output_channels: int = 1,
+                 input_channels: int = 3,
+                 output_channels: int = 3,
                  time_steps: int = 1000):
         super().__init__()
         self.num_layers = len(Channels)
@@ -216,14 +216,14 @@ def set_seed(seed: int = 42):
     random.seed(seed)
 
 
-def train(batch_size: int = 64,
+def train(batch_size: int = 2,
           num_time_steps: int = 1000,
           num_epochs: int = 15,
           seed: int = -1,
           ema_decay: float = 0.9999,
           lr=2e-5,
           checkpoint_path: str = None,
-          path_to_data: str = '../data/CatVsDog'):
+          path_to_data: str = './data/CatVsDog'):
     set_seed(random.randint(0, 2**32-1)) if seed == -1 else set_seed(seed)
 
     # train_dataset = datasets.MNIST(
