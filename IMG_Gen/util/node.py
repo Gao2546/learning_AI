@@ -263,7 +263,7 @@ def train(batch_size: int = 64,
         'optimizer': optimizer.state_dict(),
         'ema': ema.state_dict()
     }
-    torch.save(checkpoint, 'model/checkpoint/DDPM_05.pth')
+    torch.save(checkpoint, 'model/checkpoint/DDPM_T01.pth')
 
 
 def display_reverse(images: List):
