@@ -1,5 +1,4 @@
 asttokens==3.0.0
-attrs==23.2.1
 autocommand==2.2.2
 build==1.2.2
 certifi==2024.12.14
