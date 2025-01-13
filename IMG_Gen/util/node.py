@@ -228,7 +228,7 @@ def train(batch_size: int = 2,
 
     # train_dataset = datasets.MNIST(
     #     root='./data', train=True, download=True, transform=transforms.ToTensor())
-    train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=640, height=640)
+    train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=28*5, height=28*5)
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
 
@@ -252,7 +252,7 @@ def train(batch_size: int = 2,
             e = torch.randn_like(x, requires_grad=False)
             a = scheduler.alpha[t].view(batch_size, 1, 1, 1).cuda()
             x = (torch.sqrt(a)*x) + (torch.sqrt(1-a)*e)
-            output = model(x, t)
+            output = F.sigmoid(model(x, t))
             optimizer.zero_grad()
             loss = criterion(output, e)
             total_loss += loss.item()
@@ -267,6 +267,9 @@ def train(batch_size: int = 2,
         'ema': ema.state_dict()
     }
     torch.save(checkpoint, 'model/checkpoint/DDPM_T01.pth')
+    model.eval()
+    inference(model=model)
+    model.train()
 
 
 def display_reverse(images: List):
@@ -283,12 +286,14 @@ def display_reverse(images: List):
 
 def inference(checkpoint_path: str = None,
               num_time_steps: int = 1000,
-              ema_decay: float = 0.9999, ):
-    checkpoint = torch.load(checkpoint_path)
-    model = UNET().cuda()
-    model.load_state_dict(checkpoint['weights'])
-    ema = ModelEmaV3(model, decay=ema_decay)
-    ema.load_state_dict(checkpoint['ema'])
+              ema_decay: float = 0.9999,
+              model: UNET = None):
+    if model is None:
+        checkpoint = torch.load(checkpoint_path)
+        model = UNET().cuda()
+        model.load_state_dict(checkpoint['weights'])
+        ema = ModelEmaV3(model, decay=ema_decay)
+        ema.load_state_dict(checkpoint['ema'])
     scheduler = DDPM_Scheduler(num_time_steps=num_time_steps)
     times = [0, 15, 50, 100, 200, 300, 400, 550, 700, 999]
     images = []
@@ -296,7 +301,7 @@ def inference(checkpoint_path: str = None,
     with torch.no_grad():
         model = ema.module.eval()
         for i in range(10):
-            z = torch.randn(1, 1, 32, 32)
+            z = torch.randn(1, 3, 28*5, 28*5)
             for t in reversed(range(1, num_time_steps)):
                 t = [t]
                 temp = (
@@ -305,17 +310,20 @@ def inference(checkpoint_path: str = None,
                     1/(torch.sqrt(1-scheduler.beta[t])))*z - (temp*model(z.cuda(), t).cpu())
                 if t[0] in times:
                     images.append(z)
-                e = torch.randn(1, 1, 32, 32)
+                e = torch.randn(1, 3, 28*5, 28*5)
                 z = z + (e*torch.sqrt(scheduler.beta[t]))
             temp = scheduler.beta[0]/((torch.sqrt(1-scheduler.alpha[0]))
                                       * (torch.sqrt(1-scheduler.beta[0])))
             x = (1/(torch.sqrt(1-scheduler.beta[0]))) * \
-                z - (temp*model(z.cuda(), [0]).cpu())
+                z - (temp*F.sigmoid(model(z.cuda(), [0])).cpu())
 
             images.append(x)
             x = rearrange(x.squeeze(0), 'c h w -> h w c').detach()
-            x = x.numpy()
-            plt.imshow(x)
-            plt.show()
-            display_reverse(images)
+            x = x.numpy() + float(x.min()*(-1))
+            x = x / float(x.max())
+            print(x.min(), x.max())
+            plt.imsave("output/{}.png".format(i), x)
+            # plt.imshow(x)
+            # plt.show()
+            # display_reverse(images)
             images = []
