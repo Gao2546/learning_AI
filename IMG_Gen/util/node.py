@@ -154,8 +154,8 @@ class UNET(nn.Module):
                  num_groups: int = 32,
                  dropout_prob: float = 0.1,
                  num_heads: int = 8,
-                 input_channels: int = 3,
-                 output_channels: int = 3,
+                 input_channels: int = 1,
+                 output_channels: int = 1,
                  time_steps: int = 1000):
         super().__init__()
         self.num_layers = len(Channels)
@@ -187,6 +187,7 @@ class UNET(nn.Module):
             layer = getattr(self, f'Layer{i+1}')
             embeddings = self.embeddings(x, t)
             x, r = layer(x, embeddings)
+            print(r.size())
             residuals.append(r)
         for i in range(self.num_layers//2, self.num_layers):
             layer = getattr(self, f'Layer{i+1}')
@@ -225,10 +226,11 @@ def train(batch_size: int = 2,
           checkpoint_path: str = None,
           path_to_data: str = './data/CatVsDog'):
     set_seed(random.randint(0, 2**32-1)) if seed == -1 else set_seed(seed)
+    size = 16*4
 
     # train_dataset = datasets.MNIST(
     #     root='./data', train=True, download=True, transform=transforms.ToTensor())
-    train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=28*4, height=28*4)
+    train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
 
@@ -268,7 +270,7 @@ def train(batch_size: int = 2,
         }
         torch.save(checkpoint, 'model/checkpoint/DDPM_T01.pth')
         model.eval()
-        inference(model=model)
+        inference(model=model,size=size)
         model.train()
 
 
@@ -287,7 +289,8 @@ def display_reverse(images: List):
 def inference(checkpoint_path: str = None,
               num_time_steps: int = 1000,
               ema_decay: float = 0.9999,
-              model: UNET = None):
+              model: UNET = None,
+              size: int = None):
     if model is None:
         checkpoint = torch.load(checkpoint_path)
         model = UNET().cuda()
