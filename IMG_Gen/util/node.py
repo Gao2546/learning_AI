@@ -228,7 +228,7 @@ def train(batch_size: int = 2,
 
     # train_dataset = datasets.MNIST(
     #     root='./data', train=True, download=True, transform=transforms.ToTensor())
-    train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=28*5, height=28*5)
+    train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=28*4, height=28*4)
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
 
@@ -301,7 +301,7 @@ def inference(checkpoint_path: str = None,
     with torch.no_grad():
         # model = ema.module.eval()
         for i in range(10):
-            z = torch.randn(1, 3, 28*5, 28*5)
+            z = torch.randn(1, 3, 28*4, 28*4)
             for t in reversed(range(1, num_time_steps)):
                 t = [t]
                 temp = (
@@ -310,7 +310,7 @@ def inference(checkpoint_path: str = None,
                     1/(torch.sqrt(1-scheduler.beta[t])))*z - (temp*model(z.cuda(), t).cpu())
                 if t[0] in times:
                     images.append(z)
-                e = torch.randn(1, 3, 28*5, 28*5)
+                e = torch.randn(1, 3, 28*4, 28*4)
                 z = z + (e*torch.sqrt(scheduler.beta[t]))
             temp = scheduler.beta[0]/((torch.sqrt(1-scheduler.alpha[0]))
                                       * (torch.sqrt(1-scheduler.beta[0])))
