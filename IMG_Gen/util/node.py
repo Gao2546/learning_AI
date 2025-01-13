@@ -226,7 +226,7 @@ def train(batch_size: int = 2,
           checkpoint_path: str = None,
           path_to_data: str = './data/CatVsDog'):
     set_seed(random.randint(0, 2**32-1)) if seed == -1 else set_seed(seed)
-    size = 16*4
+    size = 28#16*4
 
     # train_dataset = datasets.MNIST(
     #     root='./data', train=True, download=True, transform=transforms.ToTensor())
@@ -290,7 +290,8 @@ def inference(checkpoint_path: str = None,
               num_time_steps: int = 1000,
               ema_decay: float = 0.9999,
               model: UNET = None,
-              size: int = None):
+              size: int = None,
+              channel: int = None):
     if model is None:
         checkpoint = torch.load(checkpoint_path)
         model = UNET().cuda()
@@ -304,7 +305,7 @@ def inference(checkpoint_path: str = None,
     with torch.no_grad():
         # model = ema.module.eval()
         for i in range(10):
-            z = torch.randn(1, 3, 28*4, 28*4)
+            z = torch.randn(1, channel, size, size)
             for t in reversed(range(1, num_time_steps)):
                 t = [t]
                 temp = (
@@ -313,7 +314,7 @@ def inference(checkpoint_path: str = None,
                     1/(torch.sqrt(1-scheduler.beta[t])))*z - (temp*F.sigmoid(model(z.cuda(), t)).cpu())
                 if t[0] in times:
                     images.append(z)
-                e = torch.randn(1, 3, 28*4, 28*4)
+                e = torch.randn(1, channel, size, size)
                 z = z + (e*torch.sqrt(scheduler.beta[t]))
             temp = scheduler.beta[0]/((torch.sqrt(1-scheduler.alpha[0]))
                                       * (torch.sqrt(1-scheduler.beta[0])))
