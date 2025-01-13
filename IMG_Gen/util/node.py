@@ -299,7 +299,7 @@ def inference(checkpoint_path: str = None,
     images = []
 
     with torch.no_grad():
-        model = ema.module.eval()
+        # model = ema.module.eval()
         for i in range(10):
             z = torch.randn(1, 3, 28*5, 28*5)
             for t in reversed(range(1, num_time_steps)):
