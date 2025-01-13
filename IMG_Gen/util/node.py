@@ -261,15 +261,15 @@ def train(batch_size: int = 2,
             ema.update(model)
         print(f'Epoch {i+1} | Loss {total_loss / (60000/batch_size):.5f}')
 
-    checkpoint = {
-        'weights': model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'ema': ema.state_dict()
-    }
-    torch.save(checkpoint, 'model/checkpoint/DDPM_T01.pth')
-    model.eval()
-    inference(model=model)
-    model.train()
+        checkpoint = {
+            'weights': model.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'ema': ema.state_dict()
+        }
+        torch.save(checkpoint, 'model/checkpoint/DDPM_T01.pth')
+        model.eval()
+        inference(model=model)
+        model.train()
 
 
 def display_reverse(images: List):
