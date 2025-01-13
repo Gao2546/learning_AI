@@ -187,7 +187,6 @@ class UNET(nn.Module):
             layer = getattr(self, f'Layer{i+1}')
             embeddings = self.embeddings(x, t)
             x, r = layer(x, embeddings)
-            print(r.size())
             residuals.append(r)
         for i in range(self.num_layers//2, self.num_layers):
             layer = getattr(self, f'Layer{i+1}')
@@ -325,7 +324,6 @@ def inference(checkpoint_path: str = None,
             x = rearrange(x.squeeze(0), 'c h w -> h w c').detach()
             x = x.numpy() + float(x.min()*(-1))
             x = x / float(x.max())
-            print(x.min(), x.max())
             plt.imsave("output/{}.png".format(i), x)
             # plt.imshow(x)
             # plt.show()
