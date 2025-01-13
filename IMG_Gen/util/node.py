@@ -15,7 +15,7 @@ import torch.optim as optim
 import numpy as np
 from utils import YOLODataset_xml , postprocess
 
-plt.switch_backend("TKAgg")
+plt.switch_backend("Agg") # TKAgg
 
 
 class SinusoidalEmbeddings(nn.Module):
