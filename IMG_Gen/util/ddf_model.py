@@ -9,10 +9,10 @@ def signal_handler(sig, frame):
     torch.cuda.synchronize()
     sys.exit(0)
 def main():
-    model_ckp = None#'model/checkpoint/DDPM_T01.pth'
+    model_ckp = 'model/checkpoint/DDPM_T01.pth'
     signal.signal(signal.SIGINT, signal_handler)
-    train(checkpoint_path=model_ckp, lr=2e-5, batch_size=8, num_epochs=100)
-    # inference(model_ckp)
+    # train(checkpoint_path=model_ckp, lr=2e-5, batch_size=8, num_epochs=100)
+    inference(model_ckp,size=28+4,channel=1)
 
 
 if __name__ == '__main__':

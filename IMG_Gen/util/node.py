@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt  # pip install matplotlib
 import torch.optim as optim
 import numpy as np
 from utils import YOLODataset_xml , postprocess
+from PIL import Image
 
 plt.switch_backend("Agg") # TKAgg
 
@@ -225,11 +226,12 @@ def train(batch_size: int = 2,
           checkpoint_path: str = None,
           path_to_data: str = './data/CatVsDog'):
     set_seed(random.randint(0, 2**32-1)) if seed == -1 else set_seed(seed)
-    size = 28#16*4
+    size = 28+4#16*4
+    channel = 1
 
-    # train_dataset = datasets.MNIST(
-    #     root='./data', train=True, download=True, transform=transforms.ToTensor())
-    train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
+    train_dataset = datasets.MNIST(
+        root='./data', train=True, download=True, transform=transforms.ToTensor())
+    # train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
 
@@ -246,7 +248,7 @@ def train(batch_size: int = 2,
 
     for i in range(num_epochs):
         total_loss = 0
-        for bidx, (x, Class, Size) in enumerate(tqdm(train_loader, desc=f"Epoch {i+1}/{num_epochs}")):
+        for bidx, (x, _) in enumerate(tqdm(train_loader, desc=f"Epoch {i+1}/{num_epochs}")):
             x = x.cuda()
             x = F.pad(x, (2, 2, 2, 2))
             t = torch.randint(0, num_time_steps, (batch_size,))
@@ -260,7 +262,7 @@ def train(batch_size: int = 2,
             loss.backward()
             optimizer.step()
             ema.update(model)
-        print(f'Epoch {i+1} | Loss {total_loss / (60000/batch_size):.5f}')
+        print(f'Epoch {i+1} | Loss {total_loss / (bidx):.5f}')
 
         checkpoint = {
             'weights': model.state_dict(),
@@ -269,7 +271,7 @@ def train(batch_size: int = 2,
         }
         torch.save(checkpoint, 'model/checkpoint/DDPM_T01.pth')
         model.eval()
-        inference(model=model,size=size)
+        inference(model=model,size=size,channel=channel)
         model.train()
 
 
@@ -303,7 +305,7 @@ def inference(checkpoint_path: str = None,
 
     with torch.no_grad():
         # model = ema.module.eval()
-        for i in range(10):
+        for i in range(1):
             z = torch.randn(1, channel, size, size)
             for t in reversed(range(1, num_time_steps)):
                 t = [t]
@@ -321,10 +323,13 @@ def inference(checkpoint_path: str = None,
                 z - (temp*F.sigmoid(model(z.cuda(), [0])).cpu())
 
             images.append(x)
-            x = rearrange(x.squeeze(0), 'c h w -> h w c').detach()
+            x = rearrange(x.squeeze(0), 'c h w -> h w c').detach().view(size,size)
             x = x.numpy() + float(x.min()*(-1))
-            x = x / float(x.max())
-            plt.imsave("output/{}.png".format(i), x)
+            x = ((x / float(x.max()))*255).astype(np.uint8)
+            print(type(x))
+            print(x.shape)
+            Image.fromarray(x,mode="L").save("output/{}.png".format(i))
+            # plt.imsave("output/{}.png".format(i), x,cmap='gray')
             # plt.imshow(x)
             # plt.show()
             # display_reverse(images)
