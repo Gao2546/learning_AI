@@ -226,12 +226,12 @@ def train(batch_size: int = 2,
           checkpoint_path: str = None,
           path_to_data: str = './data/CatVsDog'):
     set_seed(random.randint(0, 2**32-1)) if seed == -1 else set_seed(seed)
-    size = 28+4#16*4
-    channel = 1
+    size = 16*4
+    channel = 3
 
-    train_dataset = datasets.MNIST(
-        root='./data', train=True, download=True, transform=transforms.ToTensor())
-    # train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
+    # train_dataset = datasets.MNIST(
+    #     root='./data', train=True, download=True, transform=transforms.ToTensor())
+    train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
 
@@ -248,7 +248,7 @@ def train(batch_size: int = 2,
 
     for i in range(num_epochs):
         total_loss = 0
-        for bidx, (x, _) in enumerate(tqdm(train_loader, desc=f"Epoch {i+1}/{num_epochs}")):
+        for bidx, (x, _, _) in enumerate(tqdm(train_loader, desc=f"Epoch {i+1}/{num_epochs}")):
             x = x.cuda()
             x = F.pad(x, (2, 2, 2, 2))
             t = torch.randint(0, num_time_steps, (batch_size,))
@@ -312,7 +312,7 @@ def inference(checkpoint_path: str = None,
                 temp = (
                     scheduler.beta[t]/((torch.sqrt(1-scheduler.alpha[t]))*(torch.sqrt(1-scheduler.beta[t]))))
                 z = (
-                    1/(torch.sqrt(1-scheduler.beta[t])))*z - (temp*F.sigmoid(model(z.cuda(), t)).cpu())
+                    1/(torch.sqrt(1-scheduler.beta[t])))*z - (temp*model(z.cuda(), t).cpu())
                 if t[0] in times:
                     images.append(z)
                 e = torch.randn(1, channel, size, size)
@@ -320,15 +320,15 @@ def inference(checkpoint_path: str = None,
             temp = scheduler.beta[0]/((torch.sqrt(1-scheduler.alpha[0]))
                                       * (torch.sqrt(1-scheduler.beta[0])))
             x = (1/(torch.sqrt(1-scheduler.beta[0]))) * \
-                z - (temp*F.sigmoid(model(z.cuda(), [0])).cpu())
+                z - (temp*model(z.cuda(), [0]).cpu())
 
             images.append(x)
-            x = rearrange(x.squeeze(0), 'c h w -> h w c').detach().view(size,size)
+            # x = rearrange(x.squeeze(0), 'c h w -> h w c').detach().view(size,size)
+            x = rearrange(x.squeeze(0), 'c h w -> h w c').detach()
             x = x.numpy() + float(x.min()*(-1))
             x = ((x / float(x.max()))*255).astype(np.uint8)
-            print(type(x))
-            print(x.shape)
-            Image.fromarray(x,mode="L").save("output/{}.png".format(i))
+            # Image.fromarray(x,mode="L").save("output/{}.png".format(i))
+            Image.fromarray(x,mode="RGB").save("output/{}.png".format(i))
             # plt.imsave("output/{}.png".format(i), x,cmap='gray')
             # plt.imshow(x)
             # plt.show()
