@@ -307,7 +307,7 @@ def inference(checkpoint_path: str = None,
                 temp = (
                     scheduler.beta[t]/((torch.sqrt(1-scheduler.alpha[t]))*(torch.sqrt(1-scheduler.beta[t]))))
                 z = (
-                    1/(torch.sqrt(1-scheduler.beta[t])))*z - (temp*model(z.cuda(), t).cpu())
+                    1/(torch.sqrt(1-scheduler.beta[t])))*z - (temp*F.sigmoid(model(z.cuda(), t)).cpu())
                 if t[0] in times:
                     images.append(z)
                 e = torch.randn(1, 3, 28*4, 28*4)
