@@ -280,7 +280,7 @@ def train(batch_size: int = 2,
         }
         torch.save(checkpoint, 'model/checkpoint/DDPM_T01.pth')
         model.eval()
-        inference(model=model,size=size,channel=channel)
+        inference(model=model,size=size,channel=channel,epochs=i+1)
         model.train()
 
 
@@ -301,7 +301,8 @@ def inference(checkpoint_path: str = None,
               ema_decay: float = 0.9999,
               model: UNET = None,
               size: int = None,
-              channel: int = None):
+              channel: int = None,
+              epochs: int = None):
     if model is None:
         checkpoint = torch.load(checkpoint_path)
         model = UNET().cuda()
@@ -340,7 +341,7 @@ def inference(checkpoint_path: str = None,
             x = torch.clamp(x, -1, 1).numpy()
             x = (x + 1) / 2
             x = (x * 255).astype(np.uint8)
-            Image.fromarray(x,mode="RGB").save("output/{}.png".format(i))
+            Image.fromarray(x,mode="RGB").save("output/{}_{}.png".format(epochs,i))
             # plt.imsave("output/{}.png".format(i), x,cmap='gray')
             # plt.imshow(x)
             # plt.show()
