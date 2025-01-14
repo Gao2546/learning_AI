@@ -241,7 +241,7 @@ def train(batch_size: int = 2,
             transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(
                 0.5, 0.5, 0.5))  # Normalize to [-1, 1]
         ])
-    train_dataset = datasets.ImageFolder(root=path_to_data,transform=transform)
+    train_dataset = datasets.ImageFolder(root=path_to_data,transform=transform,)
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
 
