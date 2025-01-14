@@ -258,7 +258,7 @@ def train(batch_size: int = 2,
 
     for i in range(num_epochs):
         total_loss = 0
-        for bidx, (x, _, _) in enumerate(tqdm(train_loader, desc=f"Epoch {i+1}/{num_epochs}")):
+        for bidx, (x, _) in enumerate(tqdm(train_loader, desc=f"Epoch {i+1}/{num_epochs}")):
             x = x.cuda()
             t = torch.randint(0, num_time_steps, (batch_size,))
             e = torch.randn_like(x, requires_grad=False)
