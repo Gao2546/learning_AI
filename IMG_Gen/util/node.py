@@ -224,7 +224,7 @@ def train(batch_size: int = 2,
           ema_decay: float = 0.9999,
           lr=2e-5,
           checkpoint_path: str = None,
-          path_to_data: str = './data/CatVsDog'):
+          path_to_data: str = './data/104Flower_resized'):
     set_seed(random.randint(0, 2**32-1)) if seed == -1 else set_seed(seed)
     size = 16*4
     channel = 3
