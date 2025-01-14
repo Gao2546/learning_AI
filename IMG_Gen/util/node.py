@@ -231,7 +231,17 @@ def train(batch_size: int = 2,
 
     # train_dataset = datasets.MNIST(
     #     root='./data', train=True, download=True, transform=transforms.ToTensor())
-    train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
+    # train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
+    transform = transforms.Compose([
+            # Resize to the desired dimensions
+            transforms.Resize((size, size)),
+            # Convert PIL image or numpy array to a tensor
+            transforms.ToTensor(),
+            # transforms.Lambda(lambda x:x/255.0),
+            transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(
+                0.5, 0.5, 0.5))  # Normalize to [-1, 1]
+        ])
+    train_dataset = datasets.ImageFolder(root=path_to_data,transform=transform)
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
 
@@ -250,12 +260,11 @@ def train(batch_size: int = 2,
         total_loss = 0
         for bidx, (x, _, _) in enumerate(tqdm(train_loader, desc=f"Epoch {i+1}/{num_epochs}")):
             x = x.cuda()
-            x = F.pad(x, (2, 2, 2, 2))
             t = torch.randint(0, num_time_steps, (batch_size,))
             e = torch.randn_like(x, requires_grad=False)
             a = scheduler.alpha[t].view(batch_size, 1, 1, 1).cuda()
             x = (torch.sqrt(a)*x) + (torch.sqrt(1-a)*e)
-            output = F.sigmoid(model(x, t))
+            output = model(x, t)
             optimizer.zero_grad()
             loss = criterion(output, e)
             total_loss += loss.item()

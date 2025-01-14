@@ -11,7 +11,7 @@ def signal_handler(sig, frame):
 def main():
     model_ckp = 'model/checkpoint/DDPM_T01.pth'
     signal.signal(signal.SIGINT, signal_handler)
-    train(checkpoint_path=model_ckp, lr=2e-5, batch_size=16, num_epochs=100)
+    train(checkpoint_path=model_ckp, lr=1e-6, batch_size=16*2, num_epochs=100)
     # inference(model_ckp,size=28+4,channel=1)
 
 
