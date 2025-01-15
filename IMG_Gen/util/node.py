@@ -449,7 +449,7 @@ class diffusion_model_No_VQVAE:
         self.model.train()
         for epoch in tqdm.tqdm(range(num_epoch)):
             loss_es = []
-            for i, (x, _) in enumerate(train_loader):
+            for i, (x, _) in enumerate(tqdm.tqdm(train_loader)):
                 x = x.to(device)
                 t = torch.randint(0, 1000, (x.size(0),), device=device).long()
                 self.optim.zero_grad()
