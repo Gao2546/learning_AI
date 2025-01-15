@@ -1,349 +1,432 @@
-# Imports
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from einops import rearrange  # pip install einops
-from typing import List
-import random
-import math
-from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
-from timm.utils import ModelEmaV3  # pip install timm
-from tqdm import tqdm  # pip install tqdm
-import matplotlib.pyplot as plt  # pip install matplotlib
-import torch.optim as optim
+from torch import nn
+from torchvision import datasets,transforms
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+# from IPython.display import clear_output
+from torch import optim
+import math
+import tqdm
 import numpy as np
-from utils import YOLODataset_xml , postprocess
-from PIL import Image
-
-plt.switch_backend("Agg") # TKAgg
-
-
-class SinusoidalEmbeddings(nn.Module):
-    def __init__(self, time_steps: int, embed_dim: int):
-        super().__init__()
-        position = torch.arange(time_steps).unsqueeze(1).float()
-        div = torch.exp(torch.arange(0, embed_dim, 2).float()
-                        * -(math.log(10000.0) / embed_dim))
-        embeddings = torch.zeros(time_steps, embed_dim, requires_grad=False)
-        embeddings[:, 0::2] = torch.sin(position * div)
-        embeddings[:, 1::2] = torch.cos(position * div)
-        self.embeddings = embeddings
-
-    def forward(self, x, t):
-        embeds = self.embeddings[t].to(x.device)
-        return embeds[:, :, None, None]
-
-# Residual Blocks
-
-
-class ResBlock(nn.Module):
-    def __init__(self, C: int, num_groups: int, dropout_prob: float):
-        super().__init__()
-        self.relu = nn.ReLU(inplace=True)
-        self.gnorm1 = nn.GroupNorm(num_groups=num_groups, num_channels=C)
-        self.gnorm2 = nn.GroupNorm(num_groups=num_groups, num_channels=C)
-        self.conv1 = nn.Conv2d(C, C, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(C, C, kernel_size=3, padding=1)
-        self.dropout = nn.Dropout(p=dropout_prob, inplace=True)
-
-    def forward(self, x, embeddings):
-        x = x + embeddings[:, :x.shape[1], :, :]
-        r = self.conv1(self.relu(self.gnorm1(x)))
-        r = self.dropout(r)
-        r = self.conv2(self.relu(self.gnorm2(r)))
-        return r + x
-
+import gc
+from torch.cuda import amp
+from mpl_toolkits.axes_grid1 import ImageGrid
+from util.utils import *
+import random
+device = torch.device("cuda")
 
 class Attention(nn.Module):
-    def __init__(self, C: int, num_heads: int, dropout_prob: float):
+    def __init__(self,num_head, channels):
         super().__init__()
-        self.proj1 = nn.Linear(C, C*3)
-        self.proj2 = nn.Linear(C, C)
-        self.num_heads = num_heads
-        self.dropout_prob = dropout_prob
+        self.channels = channels
+        self.num_head = num_head
 
-    # def forward(self, x):
-    #     h, w = x.shape[2:]
-    #     x = rearrange(x, 'b c h w -> b (h w) c')
-    #     x = self.proj1(x)
-    #     x = rearrange(x, 'b L (C H K) -> K b H L C', K=3, H=self.num_heads)
-    #     q, k, v = x[0], x[1], x[2]
-    #     x = F.scaled_dot_product_attention(
-    #         q, k, v, is_causal=False, dropout_p=self.dropout_prob)
-    #     x = rearrange(x, 'b H (h w) C -> b h w (C H)', h=h, w=w)
-    #     x = self.proj2(x)
-    #     return rearrange(x, 'b h w C -> b C h w')
-
-class Attention(nn.Module):
-    def __init__(self, C: int, num_heads: int, dropout_prob: float):
-        super().__init__()
-        self.Q = nn.Linear(C, C)
-        self.K = nn.Linear(C, C)
-        self.V = nn.Linear(C, C)
-        self.num_heads = num_heads
-        self.dropout_prob = dropout_prob
-        self.softmax = nn.Softmax(dim=-1)
-        # self.dropout = nn.Dropout(p=dropout_prob, inplace=True)
-        self.proj = nn.Linear(C, C)
-
-    def scaled_dot_product_attention(self, q, k, v):
-        dk = q.size(-1)
-        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(dk)
-        scores = self.softmax(scores)
-        # scores = self.dropout(scores)
-        output = torch.matmul(scores, v)
-        return output
-
-    def rearray(self, x):
-        B, HxW, C = x.size()
-        return x.view(B, HxW, self.num_heads, -1).transpose(1, 2) #(B, HxW, C) -> (B, h, HxW, C/h)
-
-    def reverse_rearray(self, x):
-        B, h, HxW, _ = x.size()
-        return x.transpose(1, 2).contiguous().view(B, HxW, -1) #(B, h, HxW, C/h) -> (B, HxW, C)
+        self.group_norm = nn.GroupNorm(num_groups=8, num_channels=channels)
+        self.mhsa = nn.MultiheadAttention(embed_dim=self.channels, num_heads=num_head, batch_first=True)
 
     def forward(self, x):
-        B, C, H, W = x.size()
-        x = x.permute(0, 2, 3, 1).view(B,-1,C) # (B, (HxW), C)
-        q = self.rearray(self.Q(x)) # (B, HxW, C)
-        k = self.rearray(self.K(x)) # (B, HxW, C)
-        v = self.rearray(self.V(x)) # (B, HxW, C)
-        x = self.scaled_dot_product_attention(q, k, v)
-        x = self.reverse_rearray(x) # (B, HxW, C)
-        x = self.proj(x) # (B, HxW, C)
-        x = x.view(B, H, W, C).permute(0, 3, 1, 2) # (B, C, H, W)
+        B, _, H, W = x.shape
+        h = self.group_norm(x)
+        h = h.reshape(B, self.channels, H * W).swapaxes(1, 2)  # [B, C, H, W] --> [B, C, H * W] --> [B, H*W, C]
+        h, _ = self.mhsa(h, h, h)  # [B, H*W, C]
+        h = h.swapaxes(2, 1).view(B, self.channels, H, W)  # [B, C, H*W] --> [B, C, H, W]
+        return x + h
 
-        return x
-
-
-class UnetLayer(nn.Module):
-    def __init__(self,
-                 upscale: bool,
-                 attention: bool,
-                 num_groups: int,
-                 dropout_prob: float,
-                 num_heads: int,
-                 C: int):
-        super().__init__()
-        self.ResBlock1 = ResBlock(
-            C=C, num_groups=num_groups, dropout_prob=dropout_prob)
-        self.ResBlock2 = ResBlock(
-            C=C, num_groups=num_groups, dropout_prob=dropout_prob)
-        if upscale:
-            self.conv = nn.ConvTranspose2d(
-                C, C//2, kernel_size=4, stride=2, padding=1)
+class ResBlock(nn.Module):
+    def __init__(self,in_c,out_c,mlp_dim,num_head,d_model,allow_att=False) -> None:
+        super(ResBlock,self).__init__()
+        self.time_mlp = nn.Linear(mlp_dim,out_c)
+        self.conv2d1 = nn.Conv2d(in_c,out_c,3,1,padding="same")
+        if (in_c % 8) != 0:
+            self.groupnorm1 = nn.GroupNorm(num_groups=1,num_channels=in_c)
         else:
-            self.conv = nn.Conv2d(C, C*2, kernel_size=3, stride=2, padding=1)
-        if attention:
-            self.attention_layer = Attention(
-                C, num_heads=num_heads, dropout_prob=dropout_prob)
-
-    def forward(self, x, embeddings):
-        x = self.ResBlock1(x, embeddings)
-        if hasattr(self, 'attention_layer'):
-            x = self.attention_layer(x)
-        x = self.ResBlock2(x, embeddings)
-        return self.conv(x), x
-
-
-class UNET(nn.Module):
-    def __init__(self,
-                 Channels: List = [64, 128, 256, 512, 512, 384],
-                 Attentions: List = [False, True, False, False, False, True],
-                 Upscales: List = [False, False, False, True, True, True],
-                 num_groups: int = 32,
-                 dropout_prob: float = 0.1,
-                 num_heads: int = 8,
-                 input_channels: int = 1,
-                 output_channels: int = 1,
-                 time_steps: int = 1000):
+            self.groupnorm1 = nn.GroupNorm(num_groups=8,num_channels=in_c)
+        self.conv2d2 = nn.Conv2d(out_c,out_c,3,1,padding="same")
+        self.groupnorm2 = nn.GroupNorm(num_groups=8,num_channels=out_c)
+        # self.conv2d3 = nn.Conv2d(out_c,out_c,3,1,1)
+        if in_c != out_c:
+            self.match_input = nn.Conv2d(in_channels=in_c, out_channels=out_c, kernel_size=1, stride=1)
+        else:
+            self.match_input = nn.Identity()
+        self.silu = nn.SiLU()
+        self.drop = nn.Dropout2d(0.1)
+        if allow_att:
+            self.attention = Attention(num_head=num_head,channels=out_c)
+        else:
+            self.attention = nn.Identity()
+    def forward(self,x,t):
+        x_z = self.silu(self.groupnorm1(x))
+        x_z = self.conv2d1(x_z)
+        time_emb = self.time_mlp(t)
+        time_emb = time_emb[(..., ) + (None, ) * 2]
+        x_z = x_z + time_emb
+        x_z = self.silu(self.groupnorm2(x_z))
+        x_z = self.drop(x_z)
+        x_z = self.conv2d2(x_z)
+        x_z = x_z + self.match_input(x)
+        x_z = self.attention(x_z)
+        return x_z
+class DownSample(nn.Module):
+    def __init__(self, channels):
         super().__init__()
-        self.num_layers = len(Channels)
-        self.shallow_conv = nn.Conv2d(
-            input_channels, Channels[0], kernel_size=3, padding=1)
-        out_channels = (Channels[-1]//2)+Channels[0]
-        self.late_conv = nn.Conv2d(
-            out_channels, out_channels//2, kernel_size=3, padding=1)
-        self.output_conv = nn.Conv2d(
-            out_channels//2, output_channels, kernel_size=1)
-        self.relu = nn.ReLU(inplace=True)
-        self.embeddings = SinusoidalEmbeddings(
-            time_steps=time_steps, embed_dim=max(Channels))
-        for i in range(self.num_layers):
-            layer = UnetLayer(
-                upscale=Upscales[i],
-                attention=Attentions[i],
-                num_groups=num_groups,
-                dropout_prob=dropout_prob,
-                C=Channels[i],
-                num_heads=num_heads
-            )
-            setattr(self, f'Layer{i+1}', layer)
+        self.downsample = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, stride=2, padding=1)
 
-    def forward(self, x, t):
-        x = self.shallow_conv(x)
-        residuals = []
-        for i in range(self.num_layers//2):
-            layer = getattr(self, f'Layer{i+1}')
-            embeddings = self.embeddings(x, t)
-            x, r = layer(x, embeddings)
-            residuals.append(r)
-        for i in range(self.num_layers//2, self.num_layers):
-            layer = getattr(self, f'Layer{i+1}')
-            x = torch.concat(
-                (layer(x, embeddings)[0], residuals[self.num_layers-i-1]), dim=1)
-        return self.output_conv(self.relu(self.late_conv(x)))
+    def forward(self, x, *args):
+        return self.downsample(x)
 
 
-class DDPM_Scheduler(nn.Module):
-    def __init__(self, num_time_steps: int = 1000):
+class UpSample(nn.Module):
+    def __init__(self, channels):
         super().__init__()
-        self.beta = torch.linspace(
-            1e-4, 0.02, num_time_steps, requires_grad=False)
-        alpha = 1 - self.beta
-        self.alpha = torch.cumprod(alpha, dim=0).requires_grad_(False)
 
-    def forward(self, t):
-        return self.beta[t], self.alpha[t]
+        self.upsample = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode="nearest"),
+            nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, stride=1, padding=1),
+        )
 
+    def forward(self, x, *args):
+        return self.upsample(x)
+class SinusoidalPositionEmbeddings(nn.Module):
+    def __init__(self, total_time_steps=1000, time_emb_dims=128, time_emb_dims_exp=512):
+        super().__init__()
 
-def set_seed(seed: int = 42):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    np.random.seed(seed)
-    random.seed(seed)
+        half_dim = time_emb_dims // 2
 
+        emb = math.log(10000) / (half_dim - 1)
+        emb = torch.exp(torch.arange(half_dim, dtype=torch.float32) * -emb)
 
-def train(batch_size: int = 2,
-          num_time_steps: int = 1000,
-          num_epochs: int = 15,
-          seed: int = -1,
-          ema_decay: float = 0.9999,
-          lr=2e-5,
-          checkpoint_path: str = None,
-          path_to_data: str = './data/104Flower_resized'):
-    set_seed(random.randint(0, 2**32-1)) if seed == -1 else set_seed(seed)
-    size = 16*4
-    channel = 3
+        ts = torch.arange(total_time_steps, dtype=torch.float32)
 
-    # train_dataset = datasets.MNIST(
-    #     root='./data', train=True, download=True, transform=transforms.ToTensor())
-    # train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
-    transform = transforms.Compose([
-            # Resize to the desired dimensions
-            transforms.Resize((size, size)),
-            # Convert PIL image or numpy array to a tensor
-            transforms.ToTensor(),
-            # transforms.Lambda(lambda x:x/255.0),
-            transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(
-                0.5, 0.5, 0.5))  # Normalize to [-1, 1]
-        ])
-    train_dataset = datasets.ImageFolder(root=path_to_data,transform=transform,)
-    train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
+        emb = torch.unsqueeze(ts, dim=-1) * torch.unsqueeze(emb, dim=0)
+        emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
 
-    scheduler = DDPM_Scheduler(num_time_steps=num_time_steps)
-    model = UNET(input_channels=channel,output_channels=channel).cuda()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    ema = ModelEmaV3(model, decay=ema_decay)
-    if checkpoint_path is not None:
-        checkpoint = torch.load(checkpoint_path)
-        model.load_state_dict(checkpoint['weights'])
-        ema.load_state_dict(checkpoint['ema'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-    criterion = nn.MSELoss(reduction='mean')
+        self.time_blocks = nn.Sequential(
+            nn.Embedding.from_pretrained(emb),
+            nn.Linear(in_features=time_emb_dims, out_features=time_emb_dims_exp),
+            nn.SiLU(),
+            nn.Linear(in_features=time_emb_dims_exp, out_features=time_emb_dims_exp),
+        )
 
-    for i in range(num_epochs):
-        total_loss = 0
-        for bidx, (x, _) in enumerate(tqdm(train_loader, desc=f"Epoch {i+1}/{num_epochs}")):
-            x = x.cuda()
-            t = torch.randint(0, num_time_steps, (batch_size,))
-            e = torch.randn_like(x, requires_grad=False)
-            a = scheduler.alpha[t].view(batch_size, 1, 1, 1).cuda()
-            x = (torch.sqrt(a)*x) + (torch.sqrt(1-a)*e)
-            output = model(x, t)
-            optimizer.zero_grad()
-            loss = criterion(output, e)
-            total_loss += loss.item()
-            loss.backward()
-            optimizer.step()
-            ema.update(model)
-        print(f'Epoch {i+1} | Loss {total_loss / (bidx):.5f}')
+    def forward(self, time):
+        return self.time_blocks(time)
+class UNet(nn.Module):
+    def __init__(self,in_c,out_c,st_channel,channel_multi,att_channel,embedding_time_dim,time_exp,num_head,d_model,num_resbox,allow_att,concat_up_down,concat_all_resbox) -> None:
+        super(UNet,self).__init__()
+        self.in_c = in_c
+        self.out_c = out_c
+        self.st_channel = st_channel
+        self.channel_multi = channel_multi
+        self.att_channel = att_channel
+        self.embedding_time_dim = embedding_time_dim
+        self.num_resbox = num_resbox
+        self.allow_att = allow_att
+        self.concact_up_down = concat_up_down
+        self.concat_all_resbox = concat_all_resbox
 
-        checkpoint = {
-            'weights': model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'ema': ema.state_dict()
-        }
-        torch.save(checkpoint, 'model/checkpoint/DDPM_T01.pth')
-        model.eval()
-        inference(model=model,size=size,channel=channel,epochs=i+1)
-        model.train()
+        self.time_mlp = SinusoidalPositionEmbeddings(time_emb_dims=embedding_time_dim, time_emb_dims_exp=time_exp)
 
 
-def display_reverse(images: List):
-    fig, axes = plt.subplots(1, 10, figsize=(10, 1))
-    for i, ax in enumerate(axes.flat):
+        # self.frist = nn.Sequential(nn.ConvTranspose2d(in_c,in_c//2,4,2,1),nn.BatchNorm2d(in_c//2),nn.SiLU(),
+        #                            nn.ConvTranspose2d(in_c//2,st_channel,4,2,1),nn.BatchNorm2d(st_channel),nn.SiLU(),
+        #                            nn.Conv2d(in_channels=st_channel, out_channels=st_channel, kernel_size=4, stride=4, padding=0))
+
+        # self.first = nn.Conv2d(in_c,st_channel,3,1,1)
+
+        self.first = nn.Conv2d(in_c,st_channel,3,1,padding="same")
+
+        self.down_layer = nn.ModuleList()
+        if concat_up_down:
+            crr_channel = [st_channel]
+            res_up = 1
+        else:
+            res_up = 0
+            crr_channel = []
+        input_channel = self.st_channel
+        for i in range(len(self.channel_multi)):
+            output_channel = self.st_channel*self.channel_multi[i]
+            for _ in range(self.num_resbox):
+                self.down_layer.append(ResBlock(in_c=input_channel,out_c=output_channel,mlp_dim=time_exp,num_head=num_head,d_model=d_model,allow_att=allow_att[i]))
+                input_channel = output_channel
+                if concat_all_resbox:
+                    crr_channel.append(input_channel)
+            if not concat_all_resbox:
+                crr_channel.append(input_channel)
+
+            if i != (len(self.channel_multi)-1):
+                self.down_layer.append(DownSample(channels=input_channel))
+                if concat_up_down:
+                    crr_channel.append(input_channel)
+
+        self.mid_layer = nn.ModuleList([ResBlock(in_c=input_channel,out_c=input_channel,mlp_dim=time_exp,num_head=num_head,d_model=d_model,allow_att=True),
+                                       ResBlock(in_c=input_channel,out_c=input_channel,mlp_dim=time_exp,num_head=num_head,d_model=d_model,allow_att=False)])
+
+        self.up_layer = nn.ModuleList()
+        for i in reversed(range(len(self.channel_multi))):
+            output_channel = self.st_channel*self.channel_multi[i]
+            if (not concat_all_resbox) and (not concat_up_down):
+                concat_channel = crr_channel.pop()
+            for _ in range(self.num_resbox+res_up):
+                if (concat_all_resbox) or concat_up_down:
+                    concat_channel = crr_channel.pop()
+                self.up_layer.append(ResBlock(in_c=input_channel+concat_channel,out_c=output_channel,mlp_dim=time_exp,num_head=num_head,d_model=d_model,allow_att=allow_att[i]))
+                input_channel = output_channel
+                concat_channel = 0
+
+            if i != 0:
+                self.up_layer.append(UpSample(channels=input_channel))
+
+        self.out = nn.Sequential(
+            nn.GroupNorm(num_groups=8, num_channels=input_channel),
+            nn.SiLU(),
+            nn.Conv2d(in_channels=input_channel, out_channels=out_c, kernel_size=3, stride=1, padding="same"),
+        )
+        # self.tanh = nn.Tanh()
+
+    def forward(self,x,t):
+        t = self.time_mlp(t)
+        h = self.first(x)
+        b = 0
+        if self.concact_up_down:
+            reserve = [h]
+        else:
+            reserve = []
+        for down in self.down_layer:
+            h = down(h,t)
+            if isinstance(down,ResBlock):
+                b += 1
+            if (isinstance(down,ResBlock) and (b == self.num_resbox)) or (isinstance(down,ResBlock) and self.concat_all_resbox) or (self.concact_up_down) :
+                b = 0
+                reserve.append(h)
+        for mid in self.mid_layer:
+            h = mid(h,t)
+        b = 1
+        for up in self.up_layer:
+            if isinstance(up,ResBlock):
+                b += 1
+            if (isinstance(up,ResBlock) and (b == self.num_resbox)) or (self.concact_up_down and isinstance(up,ResBlock)):
+                h_0 = reserve.pop()
+                h = torch.concat([h,h_0],dim=1)
+                b = 0
+            h = up(h,t)
+        out = self.out(h)
+        return out
     
-        x = images[i].squeeze(0)
-        x = rearrange(x, 'c h w -> h w c')
-        x = x.numpy()
-        ax.imshow(x)
-        ax.axis('off')
-    plt.show()
+class VQVAE(nn.Module):
+    def __init__(self,in_c,out_c,st_c,input_shape,down_sampling_times,encode_laten_channel,Z_size) -> None:
+        super(VQVAE,self).__init__()
+        self.in_c = in_c
+        self.out_c = out_c
+        self.input_shape = input_shape
+        self.down_sampling_times = down_sampling_times
+        self.st_c = st_c
+
+        self.beta = 0.2
+
+        self.input_layer = nn.Sequential(nn.Conv2d(in_c,st_c,1,1,0),nn.BatchNorm2d(st_c),nn.SiLU())
+
+        self.encode = nn.ModuleList()
+        input_channel = st_c
+        for layer in range(down_sampling_times):
+            output_channel = input_channel*2
+            self.encode.append(nn.Conv2d(in_channels=input_channel,out_channels=output_channel,kernel_size=4,stride=2,padding=1))
+            self.encode.append(nn.BatchNorm2d(num_features=output_channel))
+            self.encode.append(nn.SiLU())
+            # self.encode.append(nn.Conv2d(in_channels=output_channel,out_channels=output_channel,kernel_size=1,stride=1,padding=0))
+            # self.encode.append(nn.BatchNorm2d(num_features=output_channel))
+            # self.encode.append(nn.SiLU())
+            input_channel = output_channel
+
+        # for layer in range(down_sampling_times):
+        #     output_channel = input_channel//2
+        #     self.encode.append(nn.Conv2d(in_channels=input_channel,out_channels=output_channel,kernel_size=3,stride=1,padding=1))
+        #     self.encode.append(nn.BatchNorm2d(num_features=output_channel))
+        #     self.encode.append(nn.SiLU())
+        #     input_channel = output_channel
+
+        self.pre_quant_conv = nn.Conv2d(input_channel, encode_laten_channel, kernel_size=1)
+        self.embedding = nn.Embedding(num_embeddings=Z_size, embedding_dim=encode_laten_channel)
+        self.post_quant_conv = nn.Conv2d(encode_laten_channel, input_channel, kernel_size=1)
+
+        self.decode = nn.ModuleList()
+        input_channel = output_channel
+        for layer in range(down_sampling_times):
+            output_channel = input_channel//2
+            self.decode.append(nn.ConvTranspose2d(in_channels=input_channel,out_channels=output_channel,kernel_size=4,stride=2,padding=1))
+            self.decode.append(nn.BatchNorm2d(num_features=output_channel))
+            self.decode.append(nn.SiLU())
+            # self.decode.append(nn.Conv2d(in_channels=output_channel,out_channels=output_channel,kernel_size=1,stride=1,padding=0))
+            # self.decode.append(nn.BatchNorm2d(num_features=output_channel))
+            # self.decode.append(nn.SiLU())
+            input_channel = output_channel
+
+        self.output_layer = nn.Sequential(#nn.Conv2d(output_channel,output_channel,3,1,padding="same"),
+                                        #   nn.BatchNorm2d(num_features=output_channel),
+                                        #   nn.SiLU(),
+                                        #   nn.Conv2d(output_channel,output_channel,3,1,padding="same"),
+                                        #   nn.BatchNorm2d(num_features=output_channel),
+                                        #   nn.SiLU(),
+                                        #   nn.Conv2d(output_channel,output_channel,3,1,padding="same"),
+                                        #   nn.BatchNorm2d(num_features=output_channel),
+                                        #   nn.SiLU(),
+                                        #   nn.Conv2d(output_channel,output_channel,3,1,padding="same"),
+                                        #   nn.BatchNorm2d(num_features=output_channel),
+                                        #   nn.SiLU(),
+                                          nn.Conv2d(output_channel,out_c,1,1,0),nn.Tanh())
+
+        # self.encode = Encode(in_c,st_c,down_sampling_times,encode_laten_channel)
+        # output_channel = st_c*(2**down_sampling_times)
+        # self.decode = Decode(out_c,output_channel,down_sampling_times,encode_laten_channel)
+    def forward(self,x):
+        x = self.input_layer(x)
+        for encode in self.encode:
+            x = encode(x)
+        quant_input = self.pre_quant_conv(x)
+
+        ## Quantization
+        B, C, H, W = quant_input.shape
+        quant_input = quant_input.permute(0, 2, 3, 1)
+        # print(quant_input.shape)
+        quant_input = quant_input.reshape((quant_input.size(0), -1, quant_input.size(-1)))
+        # print(quant_input.shape)
+
+        # Compute pairwise distances
+        dist = torch.cdist(quant_input, self.embedding.weight[None, :].repeat((quant_input.size(0), 1, 1)))
+        # print(self.embedding.weight[None, :].repeat((quant_input.size(0), 1, 1)).shape)
+        # print(dist.shape)
+
+        # Find index of nearest embedding
+        min_encoding_indices = torch.argmin(dist, dim=-1)
+        # print(min_encoding_indices.shape)
+
+        # Select the embedding weights
+        quant_out = torch.index_select(self.embedding.weight, 0, min_encoding_indices.view(-1))
+        quant_input = quant_input.reshape((-1, quant_input.size(-1)))
+        # print(quant_input.shape)
+        # print(quant_out.shape)
+
+        # Compute losses
+        commitment_loss = torch.mean((quant_out.detach() - quant_input)**2)
+        codebook_loss = torch.mean((quant_out - quant_input.detach())**2)
+        # print(commitment_loss)
+        # print(codebook_loss)
+        quantize_losses = codebook_loss + self.beta*commitment_loss
+
+        # Ensure straight through gradient
+        quant_out = quant_input + (quant_out - quant_input).detach()
+
+        # Reshaping back to original input shape
+        quant_out = quant_out.reshape((B, H, W, C)).permute(0, 3, 1, 2)
+        min_encoding_indices = min_encoding_indices.reshape((-1, quant_out.size(-2), quant_out.size(-1)))
+
+        decoder_input = self.post_quant_conv(quant_out)
+        for decode in self.decode:
+            decoder_input = decode(decoder_input)
+        output = self.output_layer(decoder_input)
+
+        # x = self.encode(x)
+        # x = self.decode(x)
+        return output,quantize_losses
+
+def codebook(quant_input,embedding):
+    B, C, H, W = quant_input.shape
+    quant_input = quant_input.permute(0, 2, 3, 1)
+    # print(quant_input.shape)
+    quant_input = quant_input.reshape((quant_input.size(0), -1, quant_input.size(-1)))
+    # print(quant_input.shape)
+
+    # Compute pairwise distances
+    dist = torch.cdist(quant_input, embedding.weight[None, :].repeat((quant_input.size(0), 1, 1)))
+    # print(self.embedding.weight[None, :].repeat((quant_input.size(0), 1, 1)).shape)
+    # print(dist.shape)
+
+    # Find index of nearest embedding
+    min_encoding_indices = torch.argmin(dist, dim=-1)
+    # print(min_encoding_indices.shape)
+
+    # Select the embedding weights
+    quant_out = torch.index_select(embedding.weight, 0, min_encoding_indices.view(-1))
+    quant_out = quant_out.reshape((B, H, W, C)).permute(0, 3, 1, 2)
+    return quant_out
+
+class diffusion_model:
+    def __init__(self,in_c,out_c,st_channel,channel_multi,att_channel,embedding_time_dim,time_exp,num_head,d_model,num_resbox,allow_att,concat_up_down,concat_all_resbox,down_sampling_times,encode_laten_channel,Z_size,load_model_path) -> None:
+        self.model = UNet(encode_laten_channel,encode_laten_channel,st_channel,channel_multi,att_channel,embedding_time_dim,time_exp,num_head,d_model,num_resbox,allow_att,concat_up_down,concat_all_resbox)
+        self.vqvae = VQVAE(in_c=in_c,out_c=out_c,st_c=128,input_shape=128,down_sampling_times=down_sampling_times,encode_laten_channel=encode_laten_channel,Z_size=Z_size)
+        self.model = self.model.to(device)
+        self.vqvae = self.vqvae.to(device)
+        self.optim = optim.Adam(self.model.parameters(),lr=1e-6)
+        self.vqvae_optim = optim.Adam(self.vqvae.parameters(),lr=1e-6)
+        self.scaler = amp.GradScaler()
+        self.vqvae_scaler = amp.GradScaler()
+        self.loss = nn.MSELoss()
+        self.vqvae_loss = nn.MSELoss()
+        self.embedding = self.vqvae.embedding
+        if torch.cuda.device_count() > 1:
+            self.model = nn.DataParallel(self.model)
+            self.vqvae = nn.DataParallel(self.vqvae)
+        if load_model_path:
+            self.load(load_model_path)
+
+    def train(self,train_loader,num_epoch):
+        self.model.train()
+        self.vqvae.train()
+        for epoch in tqdm.tqdm(range(num_epoch)):
+            loss_es = []
+            loss_vqvae = []
+            for i,(x,_) in enumerate(train_loader):
+                x = x.to(device)
+                t = torch.randint(0, 1000, (x.size(0),), device=device).long()
+                self.optim.zero_grad()
+                self.vqvae_optim.zero_grad()
+                with amp.autocast():
+                    output,quantize_losses = self.vqvae(x)
+                    xx = self.vqvae.input_layer(x)
+                    for enc in self.vqvae.encode:
+                        xx = enc(xx)
+                    xx = self.vqvae.pre_quant_conv(xx)
+                    quant_out = codebook(xx,self.vqvae.embedding)
+                    # quant_out = codebook(output,self.embedding)
+                    # loss = self.loss(self.model(quant_out,t),x)
+                    loss = get_loss(self.model,quant_out,t)
+                    vqvae_loss = self.vqvae_loss(output,x) + quantize_losses
+                self.scaler.scale(loss).backward()
+                self.vqvae_scaler.scale(vqvae_loss).backward()
+                self.scaler.step(self.optim)
+                self.vqvae_scaler.step(self.vqvae_optim)
+                self.scaler.update()
+                self.vqvae_scaler.update()
+                loss_es.append(loss.item())
+                loss_vqvae.append(vqvae_loss.item())
+                # if i % 100 == 0:
+            print(f"Epoch {epoch} Loss {sum(loss_es)/len(loss_es)} VQVAE Loss {sum(loss_vqvae)/len(loss_vqvae)}")
+            self.save(f"model/checkpoint/DDPM_T{epoch}.pth")
+            self.inference(epoch)
+
+    def save(self,path):
+        state_dict = {"model":self.model.state_dict(),
+                      "vqvae":self.vqvae.state_dict(),
+                      "optim":self.optim.state_dict(),
+                      "vqvae_optim":self.vqvae_optim.state_dict(),
+                      "embedding":self.embedding.state_dict(),
+                      "scaler":self.scaler.state_dict(),
+                      "vqvae_scaler":self.vqvae_scaler.state_dict(),
+                      "lr_rate":self.optim.param_groups[0]["lr"]}
+        torch.save(state_dict,path)
 
 
-def inference(checkpoint_path: str = None,
-              num_time_steps: int = 1000,
-              ema_decay: float = 0.9999,
-              model: UNET = None,
-              size: int = None,
-              channel: int = None,
-              epochs: int = None):
-    if model is None:
-        checkpoint = torch.load(checkpoint_path)
-        model = UNET().cuda()
-        model.load_state_dict(checkpoint['weights'])
-        ema = ModelEmaV3(model, decay=ema_decay)
-        ema.load_state_dict(checkpoint['ema'])
-    scheduler = DDPM_Scheduler(num_time_steps=num_time_steps)
-    times = [0, 15, 50, 100, 200, 300, 400, 550, 700, 999]
-    images = []
+    def load(self,path):
+        state_dict = torch.load(path)
+        self.model.load_state_dict(state_dict["model"])
+        self.vqvae.load_state_dict(state_dict["vqvae"])
+        self.optim.load_state_dict(state_dict["optim"])
+        self.vqvae_optim.load_state_dict(state_dict["vqvae_optim"])
+        self.embedding.load_state_dict(state_dict["embedding"])
+        self.scaler.load_state_dict(state_dict["scaler"])
+        self.vqvae_scaler.load_state_dict(state_dict["vqvae_scaler"])
+        for param_group in self.optim.param_groups:
+            param_group["lr"] = state_dict["lr_rate"]
 
-    with torch.no_grad():
-        # model = ema.module.eval()
-        for i in range(1):
-            z = torch.randn(1, channel, size, size)
-            for t in reversed(range(1, num_time_steps)):
-                t = [t]
-                temp = (
-                    scheduler.beta[t]/((torch.sqrt(1-scheduler.alpha[t]))*(torch.sqrt(1-scheduler.beta[t]))))
-                z = (
-                    1/(torch.sqrt(1-scheduler.beta[t])))*z - (temp*model(z.cuda(), t).cpu())
-                if t[0] in times:
-                    images.append(z)
-                e = torch.randn(1, channel, size, size)
-                z = z + (e*torch.sqrt(scheduler.beta[t]))
-            temp = scheduler.beta[0]/((torch.sqrt(1-scheduler.alpha[0]))
-                                      * (torch.sqrt(1-scheduler.beta[0])))
-            x = (1/(torch.sqrt(1-scheduler.beta[0]))) * \
-                z - (temp*model(z.cuda(), [0]).cpu())
-
-            images.append(x)
-            # x = rearrange(x.squeeze(0), 'c h w -> h w c').detach().view(size,size)
-            x = rearrange(x.squeeze(0), 'c h w -> h w c').detach()
-            # x = x.numpy() + float(x.min()*(-1))
-            # x = ((x / float(x.max()))*255).astype(np.uint8)
-            # Image.fromarray(x,mode="L").save("output/{}.png".format(i))
-            x = torch.clamp(x, -1, 1).numpy()
-            x = (x + 1) / 2
-            x = (x * 255).astype(np.uint8)
-            Image.fromarray(x,mode="RGB").save("output/{}_{}.png".format(epochs,i))
-            # plt.imsave("output/{}.png".format(i), x,cmap='gray')
-            # plt.imshow(x)
-            # plt.show()
-            # display_reverse(images)
-            images = []
+    def inference(self,names):
+        self.model.eval()
+        sample_plot_image(self.vqvae,self.model,names)

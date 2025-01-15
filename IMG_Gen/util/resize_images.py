@@ -4,7 +4,7 @@ import tqdm
 
 input_folder = './data/104Flower'
 output_folder = './data/104Flower_resized/0'
-new_size = (64, 64)  # Change this to the desired size
+new_size = (64*2, 64*2)  # Change this to the desired size
 
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
