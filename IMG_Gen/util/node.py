@@ -401,7 +401,7 @@ class diffusion_model:
                 # if i % 100 == 0:
             print(f"Epoch {epoch} Loss {sum(loss_es)/len(loss_es)} VQVAE Loss {sum(loss_vqvae)/len(loss_vqvae)}")
             self.save(f"model/checkpoint/DDPM_T{epoch}.pth")
-            self.inference(epoch)
+            self.inference(epoch,x.size(1))
 
     def save(self,path):
         state_dict = {"model":self.model.state_dict(),
@@ -427,9 +427,9 @@ class diffusion_model:
         for param_group in self.optim.param_groups:
             param_group["lr"] = state_dict["lr_rate"]
 
-    def inference(self,names):
+    def inference(self,names,size):
         self.model.eval()
-        sample_plot_image(self.vqvae,self.model,names)
+        sample_plot_image(self.vqvae,self.model,names,size)
 
 
 class diffusion_model_No_VQVAE:
@@ -461,7 +461,7 @@ class diffusion_model_No_VQVAE:
                 loss_es.append(loss.item())
             print(f"Epoch {epoch} Loss {sum(loss_es)/len(loss_es)}")
             self.save(f"model/checkpoint/DDPM_T{epoch}.pth")
-            self.inference(epoch)
+            self.inference(epoch,x.size(1))
 
     def save(self, path):
         state_dict = {
@@ -480,6 +480,7 @@ class diffusion_model_No_VQVAE:
         for param_group in self.optim.param_groups:
             param_group["lr"] = state_dict["lr_rate"]
             
-    def inference(self, names):
+    def inference(self, names, size):
         self.model.eval()
-        sample_plot_image(None, self.model, names)
+        # sample_plot_image(None, self.model, names)
+        sample_plot_image_no_VQVAE(self.model,names,size)

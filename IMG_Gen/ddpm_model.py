@@ -28,8 +28,8 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     seed = -1
     set_seed(random.randint(0, 2**32-1)) if seed == -1 else set_seed(seed)
-    size = 16*8
-    batch_size = 1
+    size = 16*2
+    batch_size = 16
     path_to_data = './data/104Flower_resized'
 
     # train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
