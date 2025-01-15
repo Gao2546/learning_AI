@@ -461,7 +461,7 @@ class diffusion_model_No_VQVAE:
                 loss_es.append(loss.item())
             print(f"Epoch {epoch} Loss {sum(loss_es)/len(loss_es)}")
             self.save(f"model/checkpoint/DDPM_T{epoch}.pth")
-            self.inference(epoch,x.size(1))
+            self.inference(epoch,32)
 
     def save(self, path):
         state_dict = {
