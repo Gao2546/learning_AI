@@ -430,3 +430,56 @@ class diffusion_model:
     def inference(self,names):
         self.model.eval()
         sample_plot_image(self.vqvae,self.model,names)
+
+
+class diffusion_model_No_VQVAE:
+
+    def __init__(self, in_c, out_c, st_channel, channel_multi, att_channel, embedding_time_dim, time_exp, num_head, d_model, num_resbox, allow_att, concat_up_down, concat_all_resbox, load_model_path):
+        self.model = UNet(in_c, out_c, st_channel, channel_multi, att_channel, embedding_time_dim, time_exp, num_head, d_model, num_resbox, allow_att, concat_up_down, concat_all_resbox)
+        self.model = self.model.to(device)
+        self.optim = optim.Adam(self.model.parameters(), lr=1e-6)
+        self.scaler = amp.GradScaler()
+        self.loss = nn.MSELoss()
+        if torch.cuda.device_count() > 1:
+            self.model = nn.DataParallel(self.model)
+        if load_model_path:
+            self.load(load_model_path)
+
+    def train(self, train_loader, num_epoch):
+        self.model.train()
+        for epoch in tqdm.tqdm(range(num_epoch)):
+            loss_es = []
+            for i, (x, _) in enumerate(train_loader):
+                x = x.to(device)
+                t = torch.randint(0, 1000, (x.size(0),), device=device).long()
+                self.optim.zero_grad()
+                with amp.autocast():
+                    loss = get_loss(self.model, x, t)
+                self.scaler.scale(loss).backward()
+                self.scaler.step(self.optim)
+                self.scaler.update()
+                loss_es.append(loss.item())
+            print(f"Epoch {epoch} Loss {sum(loss_es)/len(loss_es)}")
+            self.save(f"model/checkpoint/DDPM_T{epoch}.pth")
+            self.inference(epoch)
+
+    def save(self, path):
+        state_dict = {
+            "model": self.model.state_dict(),
+            "optim": self.optim.state_dict(),
+            "scaler": self.scaler.state_dict(),
+            "lr_rate": self.optim.param_groups[0]["lr"]
+        }
+        torch.save(state_dict, path)
+
+    def load(self, path):
+        state_dict = torch.load(path)
+        self.model.load_state_dict(state_dict["model"])
+        self.optim.load_state_dict(state_dict["optim"])
+        self.scaler.load_state_dict(state_dict["scaler"])
+        for param_group in self.optim.param_groups:
+            param_group["lr"] = state_dict["lr_rate"]
+            
+    def inference(self, names):
+        self.model.eval()
+        sample_plot_image(None, self.model, names)

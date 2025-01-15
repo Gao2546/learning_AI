@@ -48,7 +48,8 @@ def main():
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
     print("Data loaded")
-    model = diffusion_model(3, 3, 256, [1, 2, 4], 64, 64, 256, 1, 32, 2, [True, True, True], True, True, 2, 4, 16384, model_ckp )
+    # model = diffusion_model(3, 3, 256, [1, 2, 4], 64, 64, 256, 1, 32, 2, [True, True, True], True, True, 2, 4, 16384, model_ckp )
+    model = diffusion_model_No_VQVAE(3, 3, 256, [1, 2, 4], 64, 64, 256, 1, 32, 2, [True, True, True], True, True, model_ckp)
     print("Model loaded")
     model.train(train_loader=train_loader,num_epoch=100)
     print("Model train finished")
