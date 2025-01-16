@@ -121,7 +121,7 @@ def show_tensor_image(image):
         transforms.Lambda(lambda t: (t + 1) / 2),
         transforms.Lambda(lambda t: t.permute(1, 2, 0)), # CHW to HWC
         transforms.Lambda(lambda t: t * 255.),
-        transforms.Lambda(lambda t: t.numpy().astype(np.uint8)),
+        transforms.Lambda(lambda t: t.detach().numpy().astype(np.uint8)),
         transforms.ToPILImage(),
     ])
 
@@ -166,15 +166,15 @@ def sample_timestep(x, t, time_step, Denoise_models):
 @torch.no_grad()
 def sample_plot_image(Encode_Decode,Denoise_model,names,size):
     # Sample noise
-    img_size = size#IMG_SIZE
-    img = torch.randn((32//8, 4, img_size, img_size), device=device)
+    img_size = size//2#IMG_SIZE
+    img = torch.randn((5, 4, img_size, img_size), device=device)
     # plt.figure(figsize=(15,15))
     # plt.axis('off')
-    num_images = 10
-    stepsize = int(T/num_images)
+    # num_images = 10
+    # stepsize = int(T/num_images)
 
-    for time_step in range(1,T)[::-1]:
-        t = torch.ones(32//8,device=device, dtype=torch.long) * time_step
+    for time_step in range(1,1000)[::-1]:
+        t = torch.ones(5,device=device, dtype=torch.long) * time_step
         img = sample_timestep(img, t , time_step, Denoise_model)
         # Edit: This is to maintain the natural range of the distribution
     img = torch.clamp(img, -1.0, 1.0)
@@ -186,7 +186,7 @@ def sample_plot_image(Encode_Decode,Denoise_model,names,size):
         # img = decode(img)
     fig = plt.figure(1,clear=True)
     grid = ImageGrid(fig,rect=111 ,  # similar to subplot(111)
-                     nrows_ncols=(4//4, 8//2),  # creates 2x2 grid of axes
+                     nrows_ncols=(1, 5),  # creates 2x2 grid of axes
                      axes_pad=0.1,  # pad between axes in inch.
 
                      )
@@ -197,7 +197,7 @@ def sample_plot_image(Encode_Decode,Denoise_model,names,size):
     #     plt.subplot(4, 8, im+1)
     #     show_tensor_image(img[im].detach().cpu())
     # plt.show()
-    plt.savefig(f"sample_{names}.png")
+    plt.savefig(f"output/sample_{names}.png")
 
 @torch.no_grad()
 def sample_plot_image_no_VQVAE(Denoise_model, names, size):
@@ -216,9 +216,9 @@ def sample_plot_image_no_VQVAE(Denoise_model, names, size):
 
     for ax, im in zip(grid, img.to("cpu")):
         ax.imshow(show_tensor_image(im))
-    plt.savefig(f"sample_no_VQVAE_{names}.png")
+    plt.savefig(f"output/sample_no_VQVAE_{names}.png")
 
-def show_img_VAE(batch,recon):
+def show_img_VAE(batch,recon,names):
     fig = plt.figure(1,clear=True)
     grid = ImageGrid(fig,rect=111 ,  # similar to subplot(111)
                      nrows_ncols=(4,8 ),  # creates 2x2 grid of axes
@@ -238,7 +238,8 @@ def show_img_VAE(batch,recon):
     for ax, im in zip(grid, recon.to("cpu")):
         # Iterating over the grid returns the Axes.
         ax.imshow(show_tensor_image(im))
+    plt.savefig(f"output/VQVAE{names}.png")
     # for im in range(img.size(0)):
     #     plt.subplot(4, 8, im+1)
     #     show_tensor_image(img[im].detach().cpu())
-    plt.show()
+    # plt.show()
