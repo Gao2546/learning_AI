@@ -12,6 +12,7 @@ import numpy as np
 import gc
 from torch.cuda import amp
 from mpl_toolkits.axes_grid1 import ImageGrid
+import tqdm
 device = torch.device("cuda")
 
 import torch.nn.functional as F
@@ -163,30 +164,64 @@ def sample_timestep(x, t, time_step, Denoise_models):
     return model_mean + torch.sqrt(betas_t) * noise
     # return model_mean
 
+def codebook(quant_input,embedding):
+    B, C, H, W = quant_input.shape
+    quant_input = quant_input.permute(0, 2, 3, 1)
+    # print(quant_input.shape)
+    quant_input = quant_input.reshape((quant_input.size(0), -1, quant_input.size(-1)))
+    # print(quant_input.shape)
+
+    # Compute pairwise distances
+    dist = torch.cdist(quant_input, embedding.weight[None, :].repeat((quant_input.size(0), 1, 1)))
+    # print(self.embedding.weight[None, :].repeat((quant_input.size(0), 1, 1)).shape)
+    # print(dist.shape)
+
+    # Find index of nearest embedding
+    min_encoding_indices = torch.argmin(dist, dim=-1)
+    # print(min_encoding_indices.shape)
+
+    # Select the embedding weights
+    quant_out = torch.index_select(embedding.weight, 0, min_encoding_indices.view(-1))
+    quant_out = quant_out.reshape((B, H, W, C)).permute(0, 3, 1, 2)
+    return quant_out
+
 @torch.no_grad()
 def sample_plot_image(Encode_Decode,Denoise_model,names,size):
     # Sample noise
-    img_size = size//2#IMG_SIZE
-    img = torch.randn((5, 4, img_size, img_size), device=device)
+    img_size = size//(2**2)#IMG_SIZE
+    sample_batch = 32
+    img = torch.randn((sample_batch, 4, img_size, img_size), device=device)
+    
+    print(img.max(),img.min())
     # plt.figure(figsize=(15,15))
     # plt.axis('off')
     # num_images = 10
     # stepsize = int(T/num_images)
+    embedding_weights = Encode_Decode.embedding.weight.data
+    max_weight = torch.max(embedding_weights)
+    min_weight = torch.min(embedding_weights)
+    print(f"Max weight: {max_weight}, Min weight: {min_weight}")
+    # return 0
 
-    for time_step in range(1,1000)[::-1]:
-        t = torch.ones(5,device=device, dtype=torch.long) * time_step
+    for time_step in tqdm.tqdm(range(1,1000)[::-1]):
+        t = torch.ones(sample_batch,device=device, dtype=torch.long) * time_step
         img = sample_timestep(img, t , time_step, Denoise_model)
         # Edit: This is to maintain the natural range of the distribution
-    img = torch.clamp(img, -1.0, 1.0)
+    print(img.min(),img.max())
+    # img = torch.clamp(img, -1.0, 1.0)
+    img = codebook(img,Encode_Decode.embedding)
+    # print(img.min(),img.max())
     with torch.no_grad():
         img = Encode_Decode.post_quant_conv(img)
         for dec in Encode_Decode.decode:
             img = dec(img)
         img = Encode_Decode.output_layer(img)
         # img = decode(img)
+    img = torch.clamp(img, -1.0, 1.0)
+    print(img.min(),img.max())
     fig = plt.figure(1,clear=True)
     grid = ImageGrid(fig,rect=111 ,  # similar to subplot(111)
-                     nrows_ncols=(1, 5),  # creates 2x2 grid of axes
+                     nrows_ncols=(int(sample_batch**0.5), int(sample_batch**0.5)),  # creates 2x2 grid of axes
                      axes_pad=0.1,  # pad between axes in inch.
 
                      )

@@ -24,8 +24,8 @@ def signal_handler(sig, frame):
 
 
 def main():
-    model_ckp = None#'model/checkpoint/DDPM_T0.pth'
-    model_VQVAE = "model/checkpoint/VQVAE4.pth"
+    model_ckp = 'model/checkpoint/DDPM_T_VQVAE4.pth'
+    model_VQVAE = "model/checkpoint/VQVAE0.pth"
     signal.signal(signal.SIGINT, signal_handler)
     seed = -1
     set_seed(random.randint(0, 2**32-1)) if seed == -1 else set_seed(seed)
@@ -49,12 +49,17 @@ def main():
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
     print("Data loaded")
-    # model_VQVAE = VQVAETrainer(3, 3, 2, 4, 16384, 5e-4)
-    model = diffusion_model(3, 3, 64, [1, 2, 4], 64, 64, 256, 1, 32, 2, [True, True, True], True, True, 2, 4, 16384, model_ckp,model_VQVAE )
+    # model_VQVAE = VQVAETrainer(3, 3, 2, 4, 16384, model_VQVAE, 1e-3)
+    # embedding_weights = model_VQVAE.vqvae.embedding.weight.data
+    # print(f"Min weight: {embedding_weights.min().item()}")
+    # print(f"Max weight: {embedding_weights.max().item()}")
+    model = diffusion_model(3, 3, 64, [1, 2, 4], 64, 64, 256, 1, 32, 2, [True, True, True], True, True, 2, 4, 16384, model_ckp,model_VQVAE,1e-6 )
     # model = diffusion_model_No_VQVAE(3, 3, 64, [1, 2, 4], 64, 64, 256, 4, 32, 2, [True, True, True], True, True, model_ckp)
     print("Model loaded")
     # model_VQVAE.train(train_loader,100)
-    model.train(train_loader=train_loader,num_epoch=100)
+    # model_VQVAE.inference(train_loader,"test")
+    # model.train(train_loader=train_loader,num_epoch=100)
+    model.inference("test",32*2) #input size of images
     print("Model train finished")
     # train(checkpoint_path=model_ckp, lr=1e-6, batch_size=16*2, num_epochs=100)
     # inference(model_ckp,size=28+4,channel=1)

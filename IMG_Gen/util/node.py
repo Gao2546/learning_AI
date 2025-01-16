@@ -246,6 +246,8 @@ class VQVAE(nn.Module):
 
         self.pre_quant_conv = nn.Conv2d(input_channel, encode_laten_channel, kernel_size=1)
         self.embedding = nn.Embedding(num_embeddings=Z_size, embedding_dim=encode_laten_channel)
+        self.embedding.weight.data.uniform_(-1, 1)
+        self.embedding.weight.requires_grad = False
         self.post_quant_conv = nn.Conv2d(encode_laten_channel, input_channel, kernel_size=1)
 
         self.decode = nn.ModuleList()
@@ -301,6 +303,7 @@ class VQVAE(nn.Module):
 
         # Select the embedding weights
         quant_out = torch.index_select(self.embedding.weight, 0, min_encoding_indices.view(-1))
+        # print(quant_out.min(),quant_out.max())
         quant_input = quant_input.reshape((-1, quant_input.size(-1)))
         # print(quant_input.shape)
         # print(quant_out.shape)
@@ -314,10 +317,12 @@ class VQVAE(nn.Module):
 
         # Ensure straight through gradient
         quant_out = quant_input + (quant_out - quant_input).detach()
+        # print(quant_out.min(),quant_out.max())
 
         # Reshaping back to original input shape
         quant_out = quant_out.reshape((B, H, W, C)).permute(0, 3, 1, 2)
         min_encoding_indices = min_encoding_indices.reshape((-1, quant_out.size(-2), quant_out.size(-1)))
+        # print(quant_out.min(),quant_out.max())
 
         decoder_input = self.post_quant_conv(quant_out)
         for decode in self.decode:
@@ -350,12 +355,24 @@ def codebook(quant_input,embedding):
     return quant_out
 
 class VQVAETrainer:
-    def __init__(self, in_c, out_c, down_sampling_times, encode_laten_channel, Z_size, lr=1e-4):
+    def __init__(self, in_c, out_c, down_sampling_times, encode_laten_channel, Z_size, load_model_path, lr=1e-4):
         self.vqvae = VQVAE(in_c=in_c,out_c=out_c,st_c=128,input_shape=128,down_sampling_times=down_sampling_times,encode_laten_channel=encode_laten_channel,Z_size=Z_size)
         self.vqvae = self.vqvae.to(device)
+        embedding_weights = self.vqvae.embedding.weight.data
+        max_weight = torch.max(embedding_weights)
+        min_weight = torch.min(embedding_weights)
+        print(f"Max weight: {max_weight}, Min weight: {min_weight}")
         self.optim = optim.Adam(self.vqvae.parameters(), lr=lr)
         self.scaler = amp.GradScaler()
         self.loss_fn = nn.MSELoss()
+        if torch.cuda.device_count() > 1:
+            self.vqvae = nn.DataParallel(self.vqvae)
+        if load_model_path:
+            self.load(load_model_path)
+        embedding_weights = self.vqvae.embedding.weight.data
+        max_weight = torch.max(embedding_weights)
+        min_weight = torch.min(embedding_weights)
+        print(f"Max weight: {max_weight}, Min weight: {min_weight}")
 
     def train(self, train_loader, num_epochs):
         self.vqvae.train()
@@ -378,6 +395,7 @@ class VQVAETrainer:
     def save(self, path):
         state_dict = {
             "vqvae": self.vqvae.state_dict(),
+            "embedding":self.vqvae.embedding.state_dict(),
             "optim": self.optim.state_dict(),
             "scaler": self.scaler.state_dict(),
             "lr_rate": self.optim.param_groups[0]["lr"]
@@ -387,29 +405,53 @@ class VQVAETrainer:
     def load(self, path):
         state_dict = torch.load(path)
         self.vqvae.load_state_dict(state_dict["vqvae"])
+        self.vqvae.embedding.load_state_dict(state_dict["embedding"])
         self.optim.load_state_dict(state_dict["optim"])
         self.scaler.load_state_dict(state_dict["scaler"])
         for param_group in self.optim.param_groups:
             param_group["lr"] = state_dict["lr_rate"]
+    
+    def inference(self, train_loader, names):
+        self.vqvae.eval()
+        for x, _ in train_loader:
+            x = x.to(device)
+            output, _ = self.vqvae(x)
+            show_img_VAE(x, output, names)
+            break
+    
 
 class diffusion_model:
-    def __init__(self,in_c,out_c,st_channel,channel_multi,att_channel,embedding_time_dim,time_exp,num_head,d_model,num_resbox,allow_att,concat_up_down,concat_all_resbox,down_sampling_times,encode_laten_channel,Z_size,load_model_path,load_model_path_VQVAE) -> None:
+    def __init__(self,in_c,out_c,st_channel,channel_multi,att_channel,embedding_time_dim,time_exp,num_head,d_model,num_resbox,allow_att,concat_up_down,concat_all_resbox,down_sampling_times,encode_laten_channel,Z_size,load_model_path,load_model_path_VQVAE,lr) -> None:
         self.model = UNet(encode_laten_channel,encode_laten_channel,st_channel,channel_multi,att_channel,embedding_time_dim,time_exp,num_head,d_model,num_resbox,allow_att,concat_up_down,concat_all_resbox)
         self.vqvae = VQVAE(in_c=in_c,out_c=out_c,st_c=128,input_shape=128,down_sampling_times=down_sampling_times,encode_laten_channel=encode_laten_channel,Z_size=Z_size)
         self.model = self.model.to(device)
         self.vqvae = self.vqvae.to(device)
-        self.optim = optim.Adam(self.model.parameters(),lr=5e-4)
+        embedding_weights = self.vqvae.embedding.weight.data
+        max_weight = torch.max(embedding_weights)
+        min_weight = torch.min(embedding_weights)
+        print(f"Max weight: {max_weight}, Min weight: {min_weight}")
+        
+        self.optim = optim.Adam(self.model.parameters(),lr=lr)
         # self.vqvae_optim = optim.Adam(self.vqvae.parameters(),lr=1e-6)
         self.scaler = amp.GradScaler()
         # self.vqvae_scaler = amp.GradScaler()
         self.loss = nn.MSELoss()
         # self.vqvae_loss = nn.MSELoss()
-        self.embedding = self.vqvae.embedding
         if torch.cuda.device_count() > 1:
             self.model = nn.DataParallel(self.model)
             self.vqvae = nn.DataParallel(self.vqvae)
-        if load_model_path:
+        if load_model_path or load_model_path_VQVAE:
             self.load(load_model_path,load_model_path_VQVAE)
+            print("load")
+        self.embedding = self.vqvae.embedding
+        embedding_weights = self.vqvae.embedding.weight.data
+        max_weight = torch.max(embedding_weights)
+        min_weight = torch.min(embedding_weights)
+        print(f"Max weight: {max_weight}, Min weight: {min_weight}")
+        embedding_weights = self.embedding.weight.data
+        max_weight = torch.max(embedding_weights)
+        min_weight = torch.min(embedding_weights)
+        print(f"Max weight: {max_weight}, Min weight: {min_weight}")
 
     def train(self,train_loader,num_epoch):
         self.model.train()
@@ -432,7 +474,7 @@ class diffusion_model:
                     for enc in self.vqvae.encode:
                         xx = enc(xx)
                     xx = self.vqvae.pre_quant_conv(xx)
-                    quant_out = codebook(xx,self.vqvae.embedding)
+                    quant_out = codebook(xx,self.embedding)
                     # quant_out = codebook(output,self.embedding)
                     # loss = self.loss(self.model(quant_out,t),x)
                     loss = get_loss(self.model,quant_out,t)
@@ -448,7 +490,7 @@ class diffusion_model:
                 # if i % 100 == 0:
             print(f"Epoch {epoch} Loss {sum(loss_es)/len(loss_es)}")
             self.save(f"model/checkpoint/DDPM_T_VQVAE{epoch//20}.pth")
-            self.inference(epoch,x.size(1))
+            self.inference(epoch,x.size(1)//down_sampling_times)
 
     def save(self,path):
         state_dict = {"model":self.model.state_dict(),
@@ -463,22 +505,26 @@ class diffusion_model:
 
 
     def load(self,path,path_vqvae):
-        state_dict = torch.load(path)
-        state_dict_vqvae = torch.load(path_vqvae)
-        self.model.load_state_dict(state_dict["model"])
-        self.vqvae.load_state_dict(state_dict_vqvae["vqvae"])
-        # self.vqvae.load_state_dict(state_dict["vqvae"])
-        self.optim.load_state_dict(state_dict["optim"])
-        # self.vqvae_optim.load_state_dict(state_dict["vqvae_optim"])
-        # self.embedding.load_state_dict(state_dict["embedding"])
-        self.scaler.load_state_dict(state_dict["scaler"])
-        # self.vqvae_scaler.load_state_dict(state_dict["vqvae_scaler"])
-        for param_group in self.optim.param_groups:
-            param_group["lr"] = state_dict["lr_rate"]
+        if path:
+            state_dict = torch.load(path)
+            self.model.load_state_dict(state_dict["model"])
+            # self.vqvae.load_state_dict(state_dict["vqvae"])
+            self.optim.load_state_dict(state_dict["optim"])
+            # self.vqvae_optim.load_state_dict(state_dict["vqvae_optim"])
+            # self.embedding.load_state_dict(state_dict["embedding"])
+            self.scaler.load_state_dict(state_dict["scaler"])
+            # self.vqvae_scaler.load_state_dict(state_dict["vqvae_scaler"])
+            for param_group in self.optim.param_groups:
+                param_group["lr"] = state_dict["lr_rate"]
+        if path_vqvae:
+            state_dict_vqvae = torch.load(path_vqvae)
+            self.vqvae.load_state_dict(state_dict_vqvae["vqvae"])
+            # self.vqvae.embedding.load_state_dict(state_dict_vqvae["embedding"])
+            
 
     def inference(self,names,size):
         self.model.eval()
-        sample_plot_image(self.vqvae,self.model,names,16*2)
+        sample_plot_image(self.vqvae,self.model,names,size)
 
 
 class diffusion_model_No_VQVAE:
