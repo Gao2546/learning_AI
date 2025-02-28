@@ -491,7 +491,7 @@ class diffusion_model:
                 # if i % 100 == 0:
             print(f"Epoch {epoch} Loss {sum(loss_es)/len(loss_es)}")
             self.save(f"model/checkpoint/DDPM_T_VQVAE{epoch//20}.pth")
-            self.inference(epoch,x.size(1)//self.down_sampling_times)
+            self.inference(epoch,x.size(1)//(2**self.down_sampling_times))
 
     def save(self,path):
         state_dict = {"model":self.model.state_dict(),
