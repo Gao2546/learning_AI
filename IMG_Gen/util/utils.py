@@ -188,7 +188,7 @@ def codebook(quant_input,embedding):
 @torch.no_grad()
 def sample_plot_image(Encode_Decode,Denoise_model,names,size):
     # Sample noise
-    img_size = size//(2**2)#IMG_SIZE
+    img_size = size#//(2**2)#IMG_SIZE
     sample_batch = 32
     img = torch.randn((sample_batch, 4, img_size, img_size), device=device)
     
