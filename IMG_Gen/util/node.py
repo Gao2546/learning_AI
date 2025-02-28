@@ -426,6 +426,7 @@ class diffusion_model:
         self.vqvae = VQVAE(in_c=in_c,out_c=out_c,st_c=128,input_shape=128,down_sampling_times=down_sampling_times,encode_laten_channel=encode_laten_channel,Z_size=Z_size)
         self.model = self.model.to(device)
         self.vqvae = self.vqvae.to(device)
+        self.down_sampling_times =down_sampling_times
         embedding_weights = self.vqvae.embedding.weight.data
         max_weight = torch.max(embedding_weights)
         min_weight = torch.min(embedding_weights)
@@ -490,7 +491,7 @@ class diffusion_model:
                 # if i % 100 == 0:
             print(f"Epoch {epoch} Loss {sum(loss_es)/len(loss_es)}")
             self.save(f"model/checkpoint/DDPM_T_VQVAE{epoch//20}.pth")
-            self.inference(epoch,x.size(1)//down_sampling_times)
+            self.inference(epoch,x.size(1)//self.down_sampling_times)
 
     def save(self,path):
         state_dict = {"model":self.model.state_dict(),
