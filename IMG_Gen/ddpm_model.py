@@ -113,8 +113,6 @@ def main():
     #     load_model_path=model_ckp
     # )
     # model = diffusion_model_No_VQVAE(3, 3, 64, [1, 2, 4], 64, 64, 256, 4, 32, 2, [True, True, True], True, True, model_ckp)
-    model_size = sum(p.numel() for p in model_VQVAE.vqvae.parameters() if p.requires_grad)
-    print(f"Model size: {model_size} trainable parameters")
     print("Model loaded")
     # model_VQVAE.train(train_loader,100)
     mp.spawn(model_VQVAE.train, args=(world_size, size, path_to_data, batch_size, 100), nprocs=world_size, join=True)
