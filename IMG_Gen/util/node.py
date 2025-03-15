@@ -369,8 +369,8 @@ class VQVAETrainer:
         self.optim = optim.Adam(self.vqvae.parameters(), lr=lr)
         self.scaler = amp.GradScaler()
         self.loss_fn = nn.MSELoss()
-        if torch.cuda.device_count() > 1:
-            self.vqvae = nn.DataParallel(self.vqvae)
+        # if torch.cuda.device_count() > 1:
+        #     self.vqvae = nn.DataParallel(self.vqvae)
         if load_model_path:
             self.load(load_model_path)
         embedding_weights = self.vqvae.embedding.weight.data
