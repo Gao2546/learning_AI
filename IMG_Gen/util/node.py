@@ -463,9 +463,9 @@ class diffusion_model:
         # self.vqvae_scaler = amp.GradScaler()
         self.loss = nn.MSELoss()
         # self.vqvae_loss = nn.MSELoss()
-        if torch.cuda.device_count() > 1:
-            self.model = nn.DataParallel(self.model)
-            self.vqvae = nn.DataParallel(self.vqvae)
+        # if torch.cuda.device_count() > 1:
+        #     self.model = nn.DataParallel(self.model)
+        #     self.vqvae = nn.DataParallel(self.vqvae)
         if load_model_path or load_model_path_VQVAE:
             self.load(load_model_path,load_model_path_VQVAE)
             print("load")
