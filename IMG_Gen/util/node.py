@@ -421,7 +421,7 @@ class VQVAETrainer:
         train_dataset = datasets.ImageFolder(root=path_to_data,transform=transform)
         sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
         train_loader = DataLoader(
-            train_dataset, batch_size=batch_size, shuffle=True, sampler=sampler, drop_last=True, num_workers=4)
+            train_dataset, batch_size=batch_size, sampler=sampler, drop_last=True, num_workers=4)
         
         self.vqvae = DDP(self.vqvae, device_ids=[rank])
         for epoch in tqdm.tqdm(range(num_epochs)):
@@ -542,7 +542,7 @@ class diffusion_model:
         train_dataset = datasets.ImageFolder(root=path_to_data,transform=transform)
         sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
         train_loader = DataLoader(
-            train_dataset, batch_size=batch_size, shuffle=True, sampler=sampler, drop_last=True, num_workers=4)
+            train_dataset, batch_size=batch_size, sampler=sampler, drop_last=True, num_workers=4)
         
         self.model = DDP(self.model, device_ids=[rank])
         self.vqvae = DDP(self.vqvae, device_ids=[rank])
@@ -649,7 +649,7 @@ class diffusion_model_No_VQVAE:
         train_dataset = datasets.ImageFolder(root=path_to_data,transform=transform)
         sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
         train_loader = DataLoader(
-            train_dataset, batch_size=batch_size, shuffle=True, sampler=sampler, drop_last=True, num_workers=4)
+            train_dataset, batch_size=batch_size, sampler=sampler, drop_last=True, num_workers=4)
         
         self.model = DDP(self.model, device_ids=[rank])
     
