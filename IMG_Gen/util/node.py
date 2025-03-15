@@ -14,31 +14,6 @@ from torch.cuda import amp
 from mpl_toolkits.axes_grid1 import ImageGrid
 from util.utils import *
 import random
-
-import torch
-import torch.nn.functional as F
-# from utils import MyTrainDataset
-import torch.nn as nn
-import torch.optim as optim
-import torch.distributed as dist
-from torch.utils.data import DataLoader, Dataset
-
-import torch.multiprocessing as mp
-from torch.utils.data.distributed import DistributedSampler
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
-import os
-
-device = torch.device("cuda")
-world_size = torch.cuda.device_count()  # Number of GPUs
-
-def ddp_setup(rank: int, world_size: int):
-    """Setup Distributed Data Parallel (DDP) environment."""
-    os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = "12355"
-    torch.cuda.set_device(rank)
-    dist.init_process_group(backend="nccl", rank=rank, world_size=world_size)
-
 device = torch.device("cuda")
 
 class Attention(nn.Module):
@@ -380,83 +355,31 @@ def codebook(quant_input,embedding):
 
 class VQVAETrainer:
     def __init__(self, in_c, out_c, down_sampling_times, encode_laten_channel, Z_size, load_model_path, lr=1e-4):
-        self.in_c = in_c
-        self.out_c = out_c
-        self.down_sampling_times = down_sampling_times
-        self.encode_laten_channel = encode_laten_channel
-        self.Z_size = Z_size
-        self.load_model_path = load_model_path
-        self.lr = lr
-
-        # self.vqvae = VQVAE(in_c=in_c,
-        #                    out_c=out_c,
-        #                    st_c=128,
-        #                    down_sampling_times=down_sampling_times,
-        #                    encode_laten_channel=encode_laten_channel,
-        #                    Z_size=Z_size)
-        # self.vqvae = self.vqvae.to(device)
-        # embedding_weights = self.vqvae.embedding.weight.data
-        # max_weight = torch.max(embedding_weights)
-        # min_weight = torch.min(embedding_weights)
-        # print(f"Max weight: {max_weight}, Min weight: {min_weight}")
-        # self.optim = optim.Adam(self.vqvae.parameters(), lr=lr)
-        # self.scaler = amp.GradScaler()
-        # self.loss_fn = nn.MSELoss()
-        # if torch.cuda.device_count() > 1:
-        #     self.vqvae = nn.DataParallel(self.vqvae)
-        # if load_model_path:
-        #     self.load(load_model_path)
-        # embedding_weights = self.vqvae.embedding.weight.data
-        # max_weight = torch.max(embedding_weights)
-        # min_weight = torch.min(embedding_weights)
-        # print(f"Max weight: {max_weight}, Min weight: {min_weight}")
-
-    def train(self, rank, world_size, size, path_to_data, batch_size, num_epochs):
-        self.vqvae = VQVAE(in_c=self.in_c,
-                           out_c=self.out_c,
+        self.vqvae = VQVAE(in_c=in_c,
+                           out_c=out_c,
                            st_c=128,
-                           down_sampling_times=self.down_sampling_times,
-                           encode_laten_channel=self.encode_laten_channel,
-                           Z_size=self.Z_size)
-        
+                           down_sampling_times=down_sampling_times,
+                           encode_laten_channel=encode_laten_channel,
+                           Z_size=Z_size)
         self.vqvae = self.vqvae.to(device)
         embedding_weights = self.vqvae.embedding.weight.data
         max_weight = torch.max(embedding_weights)
         min_weight = torch.min(embedding_weights)
         print(f"Max weight: {max_weight}, Min weight: {min_weight}")
-        self.optim = optim.Adam(self.vqvae.parameters(), lr=self.lr)
+        self.optim = optim.Adam(self.vqvae.parameters(), lr=lr)
         self.scaler = amp.GradScaler()
         self.loss_fn = nn.MSELoss()
-
-        if self.load_model_path:
-            self.load(self.load_model_path)
+        if torch.cuda.device_count() > 1:
+            self.vqvae = nn.DataParallel(self.vqvae)
+        if load_model_path:
+            self.load(load_model_path)
         embedding_weights = self.vqvae.embedding.weight.data
         max_weight = torch.max(embedding_weights)
         min_weight = torch.min(embedding_weights)
         print(f"Max weight: {max_weight}, Min weight: {min_weight}")
-        model_size = sum(p.numel() for p in self.vqvae.parameters() if p.requires_grad)
-        print(f"Model size: {model_size} trainable parameters")
 
+    def train(self, train_loader, num_epochs):
         self.vqvae.train()
-        ddp_setup(rank, world_size)
-        # train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
-        transform = transforms.Compose([
-                # Resize to the desired dimensions
-                transforms.Resize((size, size)),
-                # Convert PIL image or numpy array to a tensor
-                transforms.ToTensor(),
-                # transforms.Lambda(lambda x:x/255.0),
-                transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(
-                    0.5, 0.5, 0.5))  # Normalize to [-1, 1]
-            ])
-        # train_dataset = datasets.MNIST(
-        #     root='./data', train=True, download=True, transform=transform)
-        train_dataset = datasets.ImageFolder(root=path_to_data,transform=transform)
-        sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
-        train_loader = DataLoader(
-            train_dataset, batch_size=batch_size, sampler=sampler, drop_last=True, num_workers=4)
-        
-        self.vqvae = DDP(self.vqvae, device_ids=[rank])
         for epoch in tqdm.tqdm(range(num_epochs)):
             loss_es = []
             for x, _ in tqdm.tqdm(train_loader):
@@ -472,7 +395,6 @@ class VQVAETrainer:
             print(f"Epoch {epoch} Loss {sum(loss_es)/len(loss_es)}")
             self.save(f"model/checkpoint/VQVAE{epoch//20}.pth")
             show_img_VAE(x,output,epoch)
-        dist.destroy_process_group()
 
     def save(self, path):
         state_dict = {
@@ -556,29 +478,9 @@ class diffusion_model:
         min_weight = torch.min(embedding_weights)
         print(f"Max weight: {max_weight}, Min weight: {min_weight}")
 
-    def train(self,rank, world_size, size, path_to_data, batch_size,train_loader,num_epoch):
+    def train(self,train_loader,num_epoch):
         self.model.train()
         self.vqvae.eval()
-        ddp_setup(rank, world_size)
-        # train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
-        transform = transforms.Compose([
-                # Resize to the desired dimensions
-                transforms.Resize((size, size)),
-                # Convert PIL image or numpy array to a tensor
-                transforms.ToTensor(),
-                # transforms.Lambda(lambda x:x/255.0),
-                transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(
-                    0.5, 0.5, 0.5))  # Normalize to [-1, 1]
-            ])
-        # train_dataset = datasets.MNIST(
-        #     root='./data', train=True, download=True, transform=transform)
-        train_dataset = datasets.ImageFolder(root=path_to_data,transform=transform)
-        sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
-        train_loader = DataLoader(
-            train_dataset, batch_size=batch_size, sampler=sampler, drop_last=True, num_workers=4)
-        
-        self.model = DDP(self.model, device_ids=[rank])
-        self.vqvae = DDP(self.vqvae, device_ids=[rank])
 
         for param in self.vqvae.parameters():
             param.requires_grad = False  # No gradient updates for vqvae
@@ -614,7 +516,6 @@ class diffusion_model:
             print(f"Epoch {epoch} Loss {sum(loss_es)/len(loss_es)}")
             self.save(f"model/checkpoint/DDPM_T_VQVAE{epoch//20}.pth")
             self.inference(epoch,x.size(2)//(2**self.down_sampling_times))
-        dist.destroy_process_group()
 
     def save(self,path):
         state_dict = {"model":self.model.state_dict(),
@@ -659,33 +560,13 @@ class diffusion_model_No_VQVAE:
         self.optim = optim.Adam(self.model.parameters(), lr=5e-4)
         self.scaler = amp.GradScaler()
         self.loss = nn.MSELoss()
-        # if torch.cuda.device_count() > 1:
-        #     self.model = nn.DataParallel(self.model)
+        if torch.cuda.device_count() > 1:
+            self.model = nn.DataParallel(self.model)
         if load_model_path:
             self.load(load_model_path)
 
-    def train(self,rank, world_size, size, path_to_data, batch_size,train_loader, num_epoch):
+    def train(self, train_loader, num_epoch):
         self.model.train()
-        ddp_setup(rank, world_size)
-        # train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
-        transform = transforms.Compose([
-                # Resize to the desired dimensions
-                transforms.Resize((size, size)),
-                # Convert PIL image or numpy array to a tensor
-                transforms.ToTensor(),
-                # transforms.Lambda(lambda x:x/255.0),
-                transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(
-                    0.5, 0.5, 0.5))  # Normalize to [-1, 1]
-            ])
-        # train_dataset = datasets.MNIST(
-        #     root='./data', train=True, download=True, transform=transform)
-        train_dataset = datasets.ImageFolder(root=path_to_data,transform=transform)
-        sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
-        train_loader = DataLoader(
-            train_dataset, batch_size=batch_size, sampler=sampler, drop_last=True, num_workers=4)
-        
-        self.model = DDP(self.model, device_ids=[rank])
-    
         for epoch in tqdm.tqdm(range(num_epoch)):
             loss_es = []
             for i, (x, _) in enumerate(tqdm.tqdm(train_loader)):
@@ -701,7 +582,6 @@ class diffusion_model_No_VQVAE:
             print(f"Epoch {epoch} Loss {sum(loss_es)/len(loss_es)}")
             self.save(f"model/checkpoint/DDPM_T{epoch//20}.pth")
             self.inference(epoch,32)
-        dist.destroy_process_group()
 
     def save(self, path):
         state_dict = {
