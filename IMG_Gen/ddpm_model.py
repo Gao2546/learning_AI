@@ -107,7 +107,7 @@ def main():
     )
 
     # Count model parameters
-    model_size = sum(p.numel() for p in model_VQVAE.parameters() if p.requires_grad)
+    model_size = sum(p.numel() for p in model_VQVAE.vqvae.parameters() if p.requires_grad)
     print(f"Model size: {model_size} trainable parameters")
 
     print("Starting distributed training...")
