@@ -353,7 +353,7 @@ def codebook(quant_input,embedding):
     quant_out = quant_out.reshape((B, H, W, C)).permute(0, 3, 1, 2)
     return quant_out
 
-class VQVAETrainer:
+class VQVAETrainer(nn.Module):
     def __init__(self, in_c, out_c, down_sampling_times, encode_laten_channel, Z_size, load_model_path, lr=1e-4):
         self.vqvae = VQVAE(in_c=in_c,
                            out_c=out_c,
