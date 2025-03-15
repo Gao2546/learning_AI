@@ -424,7 +424,7 @@ class VQVAETrainer:
         max_weight = torch.max(embedding_weights)
         min_weight = torch.min(embedding_weights)
         print(f"Max weight: {max_weight}, Min weight: {min_weight}")
-        self.optim = optim.Adam(self.vqvae.parameters(), lr=lr)
+        self.optim = optim.Adam(self.vqvae.parameters(), lr=self.down_sampling_timeslr)
         self.scaler = amp.GradScaler()
         self.loss_fn = nn.MSELoss()
 
