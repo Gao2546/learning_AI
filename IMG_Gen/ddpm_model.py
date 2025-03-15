@@ -56,7 +56,7 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
     # 🟢 FIX: Move Model to Rank-Specific Device & Wrap with DDP
     # model = VQVAETrainer(in_c=3, 
     #                            out_c=3, 
-    #                            down_sampling_times=2, 
+    #                            down_sampling_times=1, 
     #                            encode_laten_channel=4, 
     #                            Z_size=16384, 
     #                            load_model_path=model_ckp, 
@@ -72,7 +72,7 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
         num_head=1, 
         d_model=32, 
         num_resbox=2, 
-        allow_att=[True, True, True], 
+        allow_att=[False, True, False], 
         concat_up_down=True, 
         concat_all_resbox=True, 
         down_sampling_times=2, 
@@ -124,7 +124,7 @@ def main():
 
     # Training setup
     size = 16 * 8
-    batch_size = 16 * 10
+    batch_size = 16 * 8
 
     transform = transforms.Compose([
         transforms.Resize((size, size)),
