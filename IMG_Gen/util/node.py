@@ -487,7 +487,7 @@ class diffusion_model(nn.Module):
         for param in self.vqvae.parameters():
             param.requires_grad = False  # No gradient updates for vqvae
             
-        for epoch in tqdm.tqdm(range(num_epoch)):
+        for epoch in tqdm.tqdm(range(num_epochs)):
             loss_es = []
             # loss_vqvae = []
             for i,(x,_) in enumerate(tqdm.tqdm(train_loader)):
