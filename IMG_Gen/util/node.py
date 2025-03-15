@@ -434,6 +434,8 @@ class VQVAETrainer:
         max_weight = torch.max(embedding_weights)
         min_weight = torch.min(embedding_weights)
         print(f"Max weight: {max_weight}, Min weight: {min_weight}")
+        model_size = sum(p.numel() for p in self.vqvae.parameters() if p.requires_grad)
+        print(f"Model size: {model_size} trainable parameters")
 
         self.vqvae.train()
         ddp_setup(rank, world_size)
