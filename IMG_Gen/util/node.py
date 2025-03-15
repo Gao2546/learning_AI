@@ -15,6 +15,7 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 from util.utils import *
 import random
 device = torch.device("cuda")
+step_sampling = 250
 
 class Attention(nn.Module):
     def __init__(self,num_head, channels):
@@ -88,7 +89,7 @@ class UpSample(nn.Module):
     def forward(self, x, *args):
         return self.upsample(x)
 class SinusoidalPositionEmbeddings(nn.Module):
-    def __init__(self, total_time_steps=1000, time_emb_dims=128, time_emb_dims_exp=512):
+    def __init__(self, total_time_steps=step_sampling, time_emb_dims=128, time_emb_dims_exp=512):
         super().__init__()
 
         half_dim = time_emb_dims // 2
@@ -492,7 +493,7 @@ class diffusion_model(nn.Module):
             # loss_vqvae = []
             for i,(x,_) in enumerate(tqdm.tqdm(train_loader)):
                 x = x.to(device)
-                t = torch.randint(0, 1000, (x.size(0),), device=device).long()
+                t = torch.randint(0, step_sampling, (x.size(0),), device=device).long()
                 self.optim.zero_grad()
                 # self.vqvae_optim.zero_grad()
                 with amp.autocast():
@@ -573,7 +574,7 @@ class diffusion_model_No_VQVAE:
             loss_es = []
             for i, (x, _) in enumerate(tqdm.tqdm(train_loader)):
                 x = x.to(device)
-                t = torch.randint(0, 1000, (x.size(0),), device=device).long()
+                t = torch.randint(0, step_sampling, (x.size(0),), device=device).long()
                 self.optim.zero_grad()
                 with amp.autocast():
                     loss = get_loss(self.model, x, t)
