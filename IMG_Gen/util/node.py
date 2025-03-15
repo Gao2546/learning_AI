@@ -394,22 +394,22 @@ class VQVAETrainer:
         #                    down_sampling_times=down_sampling_times,
         #                    encode_laten_channel=encode_laten_channel,
         #                    Z_size=Z_size)
-        self.vqvae = self.vqvae.to(device)
-        embedding_weights = self.vqvae.embedding.weight.data
-        max_weight = torch.max(embedding_weights)
-        min_weight = torch.min(embedding_weights)
-        print(f"Max weight: {max_weight}, Min weight: {min_weight}")
-        self.optim = optim.Adam(self.vqvae.parameters(), lr=lr)
-        self.scaler = amp.GradScaler()
-        self.loss_fn = nn.MSELoss()
+        # self.vqvae = self.vqvae.to(device)
+        # embedding_weights = self.vqvae.embedding.weight.data
+        # max_weight = torch.max(embedding_weights)
+        # min_weight = torch.min(embedding_weights)
+        # print(f"Max weight: {max_weight}, Min weight: {min_weight}")
+        # self.optim = optim.Adam(self.vqvae.parameters(), lr=lr)
+        # self.scaler = amp.GradScaler()
+        # self.loss_fn = nn.MSELoss()
         # if torch.cuda.device_count() > 1:
         #     self.vqvae = nn.DataParallel(self.vqvae)
-        if load_model_path:
-            self.load(load_model_path)
-        embedding_weights = self.vqvae.embedding.weight.data
-        max_weight = torch.max(embedding_weights)
-        min_weight = torch.min(embedding_weights)
-        print(f"Max weight: {max_weight}, Min weight: {min_weight}")
+        # if load_model_path:
+        #     self.load(load_model_path)
+        # embedding_weights = self.vqvae.embedding.weight.data
+        # max_weight = torch.max(embedding_weights)
+        # min_weight = torch.min(embedding_weights)
+        # print(f"Max weight: {max_weight}, Min weight: {min_weight}")
 
     def train(self, rank, world_size, size, path_to_data, batch_size, num_epochs):
         self.vqvae = VQVAE(in_c=self.in_c,
@@ -418,6 +418,23 @@ class VQVAETrainer:
                            down_sampling_times=self.down_sampling_times,
                            encode_laten_channel=self.encode_laten_channel,
                            Z_size=self.Z_size)
+        
+        self.vqvae = self.vqvae.to(device)
+        embedding_weights = self.vqvae.embedding.weight.data
+        max_weight = torch.max(embedding_weights)
+        min_weight = torch.min(embedding_weights)
+        print(f"Max weight: {max_weight}, Min weight: {min_weight}")
+        self.optim = optim.Adam(self.vqvae.parameters(), lr=lr)
+        self.scaler = amp.GradScaler()
+        self.loss_fn = nn.MSELoss()
+
+        if self.load_model_path:
+            self.load(self.load_model_path)
+        embedding_weights = self.vqvae.embedding.weight.data
+        max_weight = torch.max(embedding_weights)
+        min_weight = torch.min(embedding_weights)
+        print(f"Max weight: {max_weight}, Min weight: {min_weight}")
+
         self.vqvae.train()
         ddp_setup(rank, world_size)
         # train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
