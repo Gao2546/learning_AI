@@ -54,13 +54,13 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
     train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler, drop_last=True, num_workers=4)
 
     # 🟢 FIX: Move Model to Rank-Specific Device & Wrap with DDP
-    model = VQVAETrainer(in_c=3, 
-                               out_c=3, 
-                               down_sampling_times=2, 
-                               encode_laten_channel=4, 
-                               Z_size=16384, 
-                               load_model_path=model_ckp, 
-                               lr=1e-3).to(rank)
+    # model = VQVAETrainer(in_c=3, 
+    #                            out_c=3, 
+    #                            down_sampling_times=2, 
+    #                            encode_laten_channel=4, 
+    #                            Z_size=16384, 
+    #                            load_model_path=model_ckp, 
+    #                            lr=1e-3).to(rank)
     model = diffusion_model(
         in_c=3, 
         out_c=3, 
