@@ -56,7 +56,7 @@ def train_ddp(rank, world_size, model_VQVAE, train_dataset, batch_size):
     train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler, drop_last=True, num_workers=4)
 
     # Wrap model with DDP
-    model_VQVAE = model_VQVAE.cuda(rank)
+    model_VQVAE = model_VQVAE.vqvae.cuda(rank)
     model_VQVAE = DDP(model_VQVAE, device_ids=[rank])
 
     print(f"Rank {rank}: Model loaded and ready for training")
