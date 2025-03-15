@@ -124,7 +124,7 @@ def main():
 
     # Training setup
     size = 16 * 8
-    batch_size = 16 * 32
+    batch_size = 16 * 12
 
     transform = transforms.Compose([
         transforms.Resize((size, size)),
