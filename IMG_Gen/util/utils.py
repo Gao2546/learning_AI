@@ -16,9 +16,10 @@ import tqdm
 device = torch.device("cuda")
 
 import torch.nn.functional as F
+step_sampling = 250
 
 def linear_beta_schedule(timesteps, start=0.0001, end=0.02):
-    scale = 1000 / timesteps
+    scale = step_sampling / timesteps
     start = scale*start
     end   = scale*end
     return torch.linspace(start, end, timesteps)
@@ -60,7 +61,7 @@ def forward_diffusion_sample(x_0, t, device="cpu"):
 
 
 # Define beta schedule
-T = 1000
+T = step_sampling
 betas = linear_beta_schedule(timesteps=T)
 # betas = cosine_beta_schedule(num_timesteps=T)
 
@@ -203,7 +204,7 @@ def sample_plot_image(Encode_Decode,Denoise_model,names,size):
     print(f"Max weight: {max_weight}, Min weight: {min_weight}")
     # return 0
 
-    for time_step in tqdm.tqdm(range(1,1000)[::-1]):
+    for time_step in tqdm.tqdm(range(1,step_sampling)[::-1]):
         t = torch.ones(sample_batch,device=device, dtype=torch.long) * time_step
         img = sample_timestep(img, t , time_step, Denoise_model)
         # Edit: This is to maintain the natural range of the distribution
@@ -240,9 +241,9 @@ def sample_plot_image_no_VQVAE(Denoise_model, names, size):
     img_size = size
     img = torch.randn((5, 3, img_size, img_size), device=device)
     # num_images = 10
-    # stepsize = int(1000 / num_images)
+    # stepsize = int(step_sampling / num_images)
 
-    for time_step in range(1, 1000)[::-1]:
+    for time_step in range(1, step_sampling)[::-1]:
         t = torch.ones(5, device=device, dtype=torch.long) * time_step
         img = sample_timestep(img, t, time_step, Denoise_model)
     img = torch.clamp(img, -1.0, 1.0)

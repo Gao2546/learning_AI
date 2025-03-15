@@ -54,6 +54,9 @@ def main():
     # print(f"Min weight: {embedding_weights.min().item()}")
     # print(f"Max weight: {embedding_weights.max().item()}")
     model = diffusion_model(3, 3, 64, [1, 2, 4], 64, 64, 256, 1, 32, 2, [True, True, True], True, True, 2, 4, 16384, model_ckp,model_VQVAE,1e-6 )
+    # Print the size of the model
+    model_size = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Model size: {model_size} trainable parameters")
     # model = diffusion_model_No_VQVAE(3, 3, 64, [1, 2, 4], 64, 64, 256, 4, 32, 2, [True, True, True], True, True, model_ckp)
     print("Model loaded")
     # model_VQVAE.train(train_loader,100)
