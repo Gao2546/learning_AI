@@ -380,12 +380,20 @@ def codebook(quant_input,embedding):
 
 class VQVAETrainer:
     def __init__(self, in_c, out_c, down_sampling_times, encode_laten_channel, Z_size, load_model_path, lr=1e-4):
-        self.vqvae = VQVAE(in_c=in_c,
-                           out_c=out_c,
-                           st_c=128,
-                           down_sampling_times=down_sampling_times,
-                           encode_laten_channel=encode_laten_channel,
-                           Z_size=Z_size)
+        self.in_c = in_c
+        self.out_c = out_c
+        self.down_sampling_times = down_sampling_times
+        self.encode_laten_channel = encode_laten_channel
+        self.Z_size = Z_size
+        self.load_model_path = load_model_path
+        self.lr = lr
+
+        # self.vqvae = VQVAE(in_c=in_c,
+        #                    out_c=out_c,
+        #                    st_c=128,
+        #                    down_sampling_times=down_sampling_times,
+        #                    encode_laten_channel=encode_laten_channel,
+        #                    Z_size=Z_size)
         self.vqvae = self.vqvae.to(device)
         embedding_weights = self.vqvae.embedding.weight.data
         max_weight = torch.max(embedding_weights)
@@ -404,7 +412,12 @@ class VQVAETrainer:
         print(f"Max weight: {max_weight}, Min weight: {min_weight}")
 
     def train(self, rank, world_size, size, path_to_data, batch_size, num_epochs):
-        self.vqvae = self.vqvae.clone()
+        self.vqvae = VQVAE(in_c=self.in_c,
+                           out_c=self.out_c,
+                           st_c=128,
+                           down_sampling_times=self.down_sampling_times,
+                           encode_laten_channel=self.encode_laten_channel,
+                           Z_size=self.Z_size)
         self.vqvae.train()
         ddp_setup(rank, world_size)
         # train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
