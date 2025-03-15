@@ -425,8 +425,9 @@ class VQVAETrainer(nn.Module):
             break
     
 
-class diffusion_model:
+class diffusion_model(nn.Module):
     def __init__(self,in_c,out_c,st_channel,channel_multi,att_channel,embedding_time_dim,time_exp,num_head,d_model,num_resbox,allow_att,concat_up_down,concat_all_resbox,down_sampling_times,encode_laten_channel,Z_size,load_model_path,load_model_path_VQVAE,lr) -> None:
+        super().__init__()
         self.model = UNet(
             in_c=encode_laten_channel,
             out_c=encode_laten_channel,
