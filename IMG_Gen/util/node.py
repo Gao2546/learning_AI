@@ -404,6 +404,7 @@ class VQVAETrainer:
         print(f"Max weight: {max_weight}, Min weight: {min_weight}")
 
     def train(self, rank, world_size, size, path_to_data, batch_size, num_epochs):
+        self.vqvae = self.vqvae.clone()
         self.vqvae.train()
         ddp_setup(rank, world_size)
         # train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
