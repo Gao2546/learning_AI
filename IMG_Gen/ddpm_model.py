@@ -38,8 +38,8 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     seed = -1
     set_seed(random.randint(0, 2**32-1)) if seed == -1 else set_seed(seed)
-    size = 16*4
-    batch_size = 16*16
+    size = 16*8
+    batch_size = 16*32
     path_to_data = './data/104Flower_resized'
 
     # # train_dataset = YOLODataset_xml(path=path_to_data, class_name=["cat", "dog"], width=size, height=size)
@@ -113,7 +113,7 @@ def main():
     #     load_model_path=model_ckp
     # )
     # model = diffusion_model_No_VQVAE(3, 3, 64, [1, 2, 4], 64, 64, 256, 4, 32, 2, [True, True, True], True, True, model_ckp)
-    model_size = sum(p.numel() for p in model_VQVAE.parameters() if p.requires_grad)
+    model_size = sum(p.numel() for p in model_VQVAE.vqvae.parameters() if p.requires_grad)
     print(f"Model size: {model_size} trainable parameters")
     print("Model loaded")
     # model_VQVAE.train(train_loader,100)
