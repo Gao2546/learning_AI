@@ -4,6 +4,8 @@ data/
 datas/
 images/
 image/
+env/
+.env/
 *.png
 *.jpg
 *.jpeg

@@ -1,3 +1,14 @@
-einops
-timm
 matplotlib
+numpy
+pandas
+pillow
+scikit-learn
+scipy
+six
+stack-data
+sympy
+torch
+torchvision
+torchaudio
+tqdm
+# --extra-index-url https://download.pytorch.org/whl/cu118
