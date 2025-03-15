@@ -100,8 +100,8 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
     #     load_model_path=model_ckp
     # )
     # Count model parameters
-    model_size = sum(p.numel() for p in model.model.parameters() if p.requires_grad)
-    print(f"Model size: {model_size} trainable parameters")
+    # model_size = sum(p.numel() for p in model.model.parameters() if p.requires_grad)
+    # print(f"Model size: {model_size} trainable parameters")
     model = DDP(model, device_ids=[rank])
 
     print(f"Rank {rank}: Model loaded. Starting training...")
