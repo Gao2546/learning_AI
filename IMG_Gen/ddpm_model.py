@@ -81,7 +81,7 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
         load_model_path=model_ckp, 
         load_model_path_VQVAE=model_VQVAE, 
         lr=1e-4
-    )
+    ).to(rank)
 
     # model = diffusion_model_No_VQVAE(
     #     in_c=3, 
