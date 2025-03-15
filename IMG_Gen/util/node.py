@@ -480,7 +480,7 @@ class diffusion_model(nn.Module):
         min_weight = torch.min(embedding_weights)
         print(f"Max weight: {max_weight}, Min weight: {min_weight}")
 
-    def train(self,train_loader,num_epoch):
+    def train_model(self,train_loader,num_epoch):
         self.model.train()
         self.vqvae.eval()
 
