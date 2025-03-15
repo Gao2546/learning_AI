@@ -355,6 +355,7 @@ def codebook(quant_input,embedding):
 
 class VQVAETrainer(nn.Module):
     def __init__(self, in_c, out_c, down_sampling_times, encode_laten_channel, Z_size, load_model_path, lr=1e-4):
+        super().__init__()
         self.vqvae = VQVAE(in_c=in_c,
                            out_c=out_c,
                            st_c=128,
