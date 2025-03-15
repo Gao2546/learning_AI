@@ -118,7 +118,7 @@ def main():
     set_seed(seed)
 
     # Paths
-    model_ckp = None#"model/checkpoint/DDPM_T_VQVAE4.pth"
+    model_ckp = "model/checkpoint/DDPM_T_VQVAE4.pth"
     model_VQVAE_path = "model/checkpoint/VQVAE1.pth"
     path_to_data = "./data/104Flower_resized"
 
