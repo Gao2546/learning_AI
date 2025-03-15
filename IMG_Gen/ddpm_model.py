@@ -54,34 +54,34 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
     train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler, drop_last=True, num_workers=4)
 
     # 🟢 FIX: Move Model to Rank-Specific Device & Wrap with DDP
-    model = VQVAETrainer(in_c=3, 
-                               out_c=3, 
-                               down_sampling_times=1, 
-                               encode_laten_channel=4, 
-                               Z_size=16384, 
-                               load_model_path=model_ckp, 
-                               lr=1e-3).to(rank)
-    # model = diffusion_model(
-    #     in_c=3, 
-    #     out_c=3, 
-    #     st_channel=64, 
-    #     channel_multi=[1, 2, 4], 
-    #     att_channel=64, 
-    #     embedding_time_dim=64, 
-    #     time_exp=256, 
-    #     num_head=1, 
-    #     d_model=32, 
-    #     num_resbox=2, 
-    #     allow_att=[False, True, False], 
-    #     concat_up_down=True, 
-    #     concat_all_resbox=True, 
-    #     down_sampling_times=2, 
-    #     encode_laten_channel=4, 
-    #     Z_size=16384, 
-    #     load_model_path=model_ckp, 
-    #     load_model_path_VQVAE=model_VQVAE, 
-    #     lr=1e-4
-    # ).to(rank)
+    # model = VQVAETrainer(in_c=3, 
+    #                            out_c=3, 
+    #                            down_sampling_times=1, 
+    #                            encode_laten_channel=4, 
+    #                            Z_size=16384, 
+    #                            load_model_path=model_ckp, 
+    #                            lr=1e-3).to(rank)
+    model = diffusion_model(
+        in_c=3, 
+        out_c=3, 
+        st_channel=64, 
+        channel_multi=[1, 2, 4], 
+        att_channel=64, 
+        embedding_time_dim=64, 
+        time_exp=256, 
+        num_head=1, 
+        d_model=32, 
+        num_resbox=2, 
+        allow_att=[False, True, False], 
+        concat_up_down=True, 
+        concat_all_resbox=True, 
+        down_sampling_times=1, 
+        encode_laten_channel=4, 
+        Z_size=16384, 
+        load_model_path=model_ckp, 
+        load_model_path_VQVAE=model_VQVAE, 
+        lr=1e-4
+    ).to(rank)
 
     # model = diffusion_model_No_VQVAE(
     #     in_c=3, 
