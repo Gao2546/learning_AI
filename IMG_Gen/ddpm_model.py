@@ -53,16 +53,54 @@ def main():
     # embedding_weights = model_VQVAE.vqvae.embedding.weight.data
     # print(f"Min weight: {embedding_weights.min().item()}")
     # print(f"Max weight: {embedding_weights.max().item()}")
-    model = diffusion_model(3, 3, 64, [1, 2, 4], 64, 64, 256, 1, 32, 2, [True, True, True], True, True, 2, 4, 16384, model_ckp,model_VQVAE,1e-6 )
+    model = diffusion_model(
+        in_c=3, 
+        out_c=3, 
+        st_channel=64, 
+        channel_multi=[1, 2, 4], 
+        att_channel=64, 
+        embedding_time_dim=64, 
+        time_exp=256, 
+        num_head=1, 
+        d_model=32, 
+        num_resbox=2, 
+        allow_att=[True, True, True], 
+        concat_up_down=True, 
+        concat_all_resbox=True, 
+        down_sampling_times=2, 
+        encode_laten_channel=4, 
+        Z_size=16384, 
+        load_model_path=model_ckp, 
+        load_model_path_VQVAE=model_VQVAE, 
+        lr=1e-4
+    )
+    # model = diffusion_model(3, 3, 64, [1, 2, 4], 64, 64, 256, 1, 32, 2, [True, True, True], True, True, 2, 4, 16384, model_ckp,model_VQVAE,1e-6 )
     # Print the size of the model
+    # model = diffusion_model_No_VQVAE(
+    #     in_c=3, 
+    #     out_c=3, 
+    #     st_channel=64, 
+    #     channel_multi=[1, 2, 4], 
+    #     att_channel=64, 
+    #     embedding_time_dim=64, 
+    #     time_exp=256, 
+    #     num_head=4, 
+    #     d_model=32, 
+    #     num_resbox=2, 
+    #     allow_att=[True, True, True], 
+    #     concat_up_down=True, 
+    #     concat_all_resbox=True, 
+    #     load_model_path=model_ckp
+    # )
+    # model = diffusion_model_No_VQVAE(3, 3, 64, [1, 2, 4], 64, 64, 256, 4, 32, 2, [True, True, True], True, True, model_ckp)
     model_size = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Model size: {model_size} trainable parameters")
-    # model = diffusion_model_No_VQVAE(3, 3, 64, [1, 2, 4], 64, 64, 256, 4, 32, 2, [True, True, True], True, True, model_ckp)
     print("Model loaded")
     # model_VQVAE.train(train_loader,100)
     # model_VQVAE.inference(train_loader,"test")
+
     # model.train(train_loader=train_loader,num_epoch=100)
-    model.inference("test",32*2) #input size of images
+    # model.inference("test",32*2) #input size of images
     print("Model train finished")
     # train(checkpoint_path=model_ckp, lr=1e-6, batch_size=16*2, num_epochs=100)
     # inference(model_ckp,size=28+4,channel=1)

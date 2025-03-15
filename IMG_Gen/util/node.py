@@ -213,11 +213,10 @@ class UNet(nn.Module):
         return out
     
 class VQVAE(nn.Module):
-    def __init__(self,in_c,out_c,st_c,input_shape,down_sampling_times,encode_laten_channel,Z_size) -> None:
+    def __init__(self,in_c,out_c,st_c,down_sampling_times,encode_laten_channel,Z_size) -> None:
         super(VQVAE,self).__init__()
         self.in_c = in_c
         self.out_c = out_c
-        self.input_shape = input_shape
         self.down_sampling_times = down_sampling_times
         self.st_c = st_c
 
@@ -356,7 +355,12 @@ def codebook(quant_input,embedding):
 
 class VQVAETrainer:
     def __init__(self, in_c, out_c, down_sampling_times, encode_laten_channel, Z_size, load_model_path, lr=1e-4):
-        self.vqvae = VQVAE(in_c=in_c,out_c=out_c,st_c=128,input_shape=128,down_sampling_times=down_sampling_times,encode_laten_channel=encode_laten_channel,Z_size=Z_size)
+        self.vqvae = VQVAE(in_c=in_c,
+                           out_c=out_c,
+                           st_c=128,
+                           down_sampling_times=down_sampling_times,
+                           encode_laten_channel=encode_laten_channel,
+                           Z_size=Z_size)
         self.vqvae = self.vqvae.to(device)
         embedding_weights = self.vqvae.embedding.weight.data
         max_weight = torch.max(embedding_weights)
@@ -422,8 +426,28 @@ class VQVAETrainer:
 
 class diffusion_model:
     def __init__(self,in_c,out_c,st_channel,channel_multi,att_channel,embedding_time_dim,time_exp,num_head,d_model,num_resbox,allow_att,concat_up_down,concat_all_resbox,down_sampling_times,encode_laten_channel,Z_size,load_model_path,load_model_path_VQVAE,lr) -> None:
-        self.model = UNet(encode_laten_channel,encode_laten_channel,st_channel,channel_multi,att_channel,embedding_time_dim,time_exp,num_head,d_model,num_resbox,allow_att,concat_up_down,concat_all_resbox)
-        self.vqvae = VQVAE(in_c=in_c,out_c=out_c,st_c=128,input_shape=128,down_sampling_times=down_sampling_times,encode_laten_channel=encode_laten_channel,Z_size=Z_size)
+        self.model = UNet(
+            in_c=encode_laten_channel,
+            out_c=encode_laten_channel,
+            st_channel=st_channel,
+            channel_multi=channel_multi,
+            att_channel=att_channel,
+            embedding_time_dim=embedding_time_dim,
+            time_exp=time_exp,
+            num_head=num_head,
+            d_model=d_model,
+            num_resbox=num_resbox,
+            allow_att=allow_att,
+            concat_up_down=concat_up_down,
+            concat_all_resbox=concat_all_resbox
+        )
+        # self.model = UNet(encode_laten_channel,encode_laten_channel,st_channel,channel_multi,att_channel,embedding_time_dim,time_exp,num_head,d_model,num_resbox,allow_att,concat_up_down,concat_all_resbox)
+        self.vqvae = VQVAE(in_c=in_c,
+                           out_c=out_c,
+                           st_c=128,
+                           down_sampling_times=down_sampling_times,
+                           encode_laten_channel=encode_laten_channel,
+                           Z_size=Z_size)
         self.model = self.model.to(device)
         self.vqvae = self.vqvae.to(device)
         self.down_sampling_times =down_sampling_times
