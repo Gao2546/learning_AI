@@ -379,7 +379,7 @@ class VQVAETrainer(nn.Module):
         min_weight = torch.min(embedding_weights)
         print(f"Max weight: {max_weight}, Min weight: {min_weight}")
 
-    def train(self, train_loader, num_epochs):
+    def train_model(self, train_loader, num_epochs):
         self.vqvae.train()
         for epoch in tqdm.tqdm(range(num_epochs)):
             loss_es = []
