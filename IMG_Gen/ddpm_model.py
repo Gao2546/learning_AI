@@ -62,7 +62,7 @@ def train_ddp(rank, world_size, model_VQVAE, train_dataset, batch_size):
     print(f"Rank {rank}: Model loaded and ready for training")
 
     # Start training
-    model_VQVAE.module.custom_train(train_loader, num_epochs=100)
+    model_VQVAE.module.train(train_loader, num_epochs=100)
 
     # Cleanup
     destroy_process_group()
