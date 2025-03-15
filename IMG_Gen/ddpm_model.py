@@ -54,34 +54,34 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
     train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler, drop_last=True, num_workers=4)
 
     # 🟢 FIX: Move Model to Rank-Specific Device & Wrap with DDP
-    # model = VQVAETrainer(in_c=3, 
-    #                            out_c=3, 
-    #                            down_sampling_times=1, 
-    #                            encode_laten_channel=4, 
-    #                            Z_size=16384, 
-    #                            load_model_path=model_ckp, 
-    #                            lr=1e-3).to(rank)
-    model = diffusion_model(
-        in_c=3, 
-        out_c=3, 
-        st_channel=64, 
-        channel_multi=[1, 2, 4], 
-        att_channel=64, 
-        embedding_time_dim=64, 
-        time_exp=256, 
-        num_head=1, 
-        d_model=32, 
-        num_resbox=2, 
-        allow_att=[False, True, False], 
-        concat_up_down=True, 
-        concat_all_resbox=True, 
-        down_sampling_times=2, 
-        encode_laten_channel=4, 
-        Z_size=16384, 
-        load_model_path=model_ckp, 
-        load_model_path_VQVAE=model_VQVAE, 
-        lr=1e-4
-    ).to(rank)
+    model = VQVAETrainer(in_c=3, 
+                               out_c=3, 
+                               down_sampling_times=1, 
+                               encode_laten_channel=4, 
+                               Z_size=16384, 
+                               load_model_path=model_ckp, 
+                               lr=1e-3).to(rank)
+    # model = diffusion_model(
+    #     in_c=3, 
+    #     out_c=3, 
+    #     st_channel=64, 
+    #     channel_multi=[1, 2, 4], 
+    #     att_channel=64, 
+    #     embedding_time_dim=64, 
+    #     time_exp=256, 
+    #     num_head=1, 
+    #     d_model=32, 
+    #     num_resbox=2, 
+    #     allow_att=[False, True, False], 
+    #     concat_up_down=True, 
+    #     concat_all_resbox=True, 
+    #     down_sampling_times=2, 
+    #     encode_laten_channel=4, 
+    #     Z_size=16384, 
+    #     load_model_path=model_ckp, 
+    #     load_model_path_VQVAE=model_VQVAE, 
+    #     lr=1e-4
+    # ).to(rank)
 
     # model = diffusion_model_No_VQVAE(
     #     in_c=3, 
@@ -118,8 +118,8 @@ def main():
     set_seed(seed)
 
     # Paths
-    model_ckp = "model/checkpoint/DDPM_T_VQVAE4.pth"
-    model_VQVAE_path = "model/checkpoint/VQVAE1.pth"
+    model_ckp = None#"model/checkpoint/DDPM_T_VQVAE4.pth"
+    model_VQVAE_path = None#"model/checkpoint/VQVAE1.pth"
     path_to_data = "./data/104Flower_resized"
 
     # Training setup
@@ -134,7 +134,7 @@ def main():
 
     # Load dataset
     # train_dataset = datasets.ImageFolder(root=path_to_data, transform=transform)
-    train_dataset = datasets.CIFAR100(root='IMG_Gen/data', split='train', transform=transform)
+    train_dataset = datasets.CIFAR100(root='IMG_Gen/data', train=True, transform=transform, download=True)
     
     print("Data loaded successfully!")
 
