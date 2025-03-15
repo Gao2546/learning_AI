@@ -54,12 +54,15 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp):
     train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler, drop_last=True, num_workers=4)
 
     # 🟢 FIX: Move Model to Rank-Specific Device & Wrap with DDP
-    model = VQVAETrainer(in_c=3, out_c=3, down_sampling_times=2, encode_laten_channel=4, 
+    model_VQVAE = VQVAETrainer(in_c=3, out_c=3, down_sampling_times=2, encode_laten_channel=4, 
                          Z_size=16384, load_model_path=model_ckp, lr=1e-3).to(rank)
-    model = DDP(model, device_ids=[rank])
+    # Count model parameters
+    model_size = sum(p.numel() for p in model_VQVAE.vqvae.parameters() if p.requires_grad)
+    print(f"Model size: {model_size} trainable parameters")
+    model_VQVAE = DDP(model_VQVAE, device_ids=[rank])
 
     print(f"Rank {rank}: Model loaded. Starting training...")
-    model.module.train_model(train_loader, num_epochs=100)
+    model_VQVAE.module.train_model(train_loader, num_epochs=100)
 
     dist.destroy_process_group()
 
@@ -90,21 +93,6 @@ def main():
     train_dataset = datasets.ImageFolder(root=path_to_data, transform=transform)
     
     print("Data loaded successfully!")
-
-    # Initialize model
-    model_VQVAE = VQVAETrainer(
-        in_c=3, 
-        out_c=3, 
-        down_sampling_times=2, 
-        encode_laten_channel=4, 
-        Z_size=16384, 
-        load_model_path=model_VQVAE_path, 
-        lr=1e-3
-    )
-
-    # Count model parameters
-    model_size = sum(p.numel() for p in model_VQVAE.vqvae.parameters() if p.requires_grad)
-    print(f"Model size: {model_size} trainable parameters")
 
     print("Starting distributed training...")
 
