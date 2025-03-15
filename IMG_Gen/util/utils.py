@@ -16,7 +16,7 @@ import tqdm
 device = torch.device("cuda")
 
 import torch.nn.functional as F
-step_sampling = 250
+step_sampling = 1000
 
 def linear_beta_schedule(timesteps, start=0.0001, end=0.02):
     scale = step_sampling / timesteps

@@ -15,7 +15,7 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 from util.utils import *
 import random
 device = torch.device("cuda")
-step_sampling = 250
+step_sampling = 1000
 
 class Attention(nn.Module):
     def __init__(self,num_head, channels):
@@ -519,7 +519,7 @@ class diffusion_model(nn.Module):
             print(f"Epoch {epoch} Loss {sum(loss_es)/len(loss_es)}")
             self.save(f"model/checkpoint/DDPM_T_VQVAE{epoch//20}.pth")
             if epoch % 10 == 0:
-            	self.inference(epoch,x.size(2)//(2**self.down_sampling_times))
+                self.inference(epoch,x.size(2)//(2**self.down_sampling_times))
 
     def save(self,path):
         state_dict = {"model":self.model.state_dict(),
