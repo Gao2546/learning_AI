@@ -47,22 +47,65 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 # Function to be run by mp.spawn()
-def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp):
+def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVAE):
     ddp_setup(rank, world_size)
 
     sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler, drop_last=True, num_workers=4)
 
     # 🟢 FIX: Move Model to Rank-Specific Device & Wrap with DDP
-    model_VQVAE = VQVAETrainer(in_c=3, out_c=3, down_sampling_times=2, encode_laten_channel=4, 
-                         Z_size=16384, load_model_path=model_ckp, lr=1e-3).to(rank)
+    model = VQVAETrainer(in_c=3, 
+                               out_c=3, 
+                               down_sampling_times=2, 
+                               encode_laten_channel=4, 
+                               Z_size=16384, 
+                               load_model_path=model_ckp, 
+                               lr=1e-3).to(rank)
+    model = diffusion_model(
+        in_c=3, 
+        out_c=3, 
+        st_channel=64, 
+        channel_multi=[1, 2, 4], 
+        att_channel=64, 
+        embedding_time_dim=64, 
+        time_exp=256, 
+        num_head=1, 
+        d_model=32, 
+        num_resbox=2, 
+        allow_att=[True, True, True], 
+        concat_up_down=True, 
+        concat_all_resbox=True, 
+        down_sampling_times=2, 
+        encode_laten_channel=4, 
+        Z_size=16384, 
+        load_model_path=model_ckp, 
+        load_model_path_VQVAE=model_VQVAE, 
+        lr=1e-4
+    )
+
+    # model = diffusion_model_No_VQVAE(
+    #     in_c=3, 
+    #     out_c=3, 
+    #     st_channel=64, 
+    #     channel_multi=[1, 2, 4], 
+    #     att_channel=64, 
+    #     embedding_time_dim=64, 
+    #     time_exp=256, 
+    #     num_head=4, 
+    #     d_model=32, 
+    #     num_resbox=2, 
+    #     allow_att=[True, True, True], 
+    #     concat_up_down=True, 
+    #     concat_all_resbox=True, 
+    #     load_model_path=model_ckp
+    # )
     # Count model parameters
-    model_size = sum(p.numel() for p in model_VQVAE.vqvae.parameters() if p.requires_grad)
+    model_size = sum(p.numel() for p in model.vqvae.parameters() if p.requires_grad)
     print(f"Model size: {model_size} trainable parameters")
-    model_VQVAE = DDP(model_VQVAE, device_ids=[rank])
+    model = DDP(model, device_ids=[rank])
 
     print(f"Rank {rank}: Model loaded. Starting training...")
-    model_VQVAE.module.train_model(train_loader, num_epochs=100)
+    model.module.train_model(train_loader, num_epochs=100)
 
     dist.destroy_process_group()
 
@@ -76,7 +119,7 @@ def main():
 
     # Paths
     model_ckp = None#"model/checkpoint/DDPM_T_VQVAE4.pth"
-    model_VQVAE_path = None#"model/checkpoint/VQVAE0.pth"
+    model_VQVAE_path = "model/checkpoint/VQVAE1.pth"
     path_to_data = "./data/104Flower_resized"
 
     # Training setup
@@ -98,7 +141,7 @@ def main():
 
     # Use mp.spawn() to run training across multiple GPUs
     #mp.spawn(train_ddp, args=(world_size, model_VQVAE, train_dataset, batch_size), nprocs=world_size, join=True)
-    mp.spawn(train_ddp, args=(world_size, train_dataset, batch_size, model_ckp), nprocs=world_size, join=True)
+    mp.spawn(train_ddp, args=(world_size, train_dataset, batch_size, model_ckp, model_VQVAE_path), nprocs=world_size, join=True)
 
     print("Training completed!")
 
