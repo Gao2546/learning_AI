@@ -10,6 +10,7 @@ langchain-core
 chromadb
 pdfminer.six
 beautifulsoup4
+ipykernel
 matplotlib
 numpy
 pandas

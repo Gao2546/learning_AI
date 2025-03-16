@@ -14,3 +14,5 @@ source ./env/pytorch/bin/activate
 
 # Install the requirements from requirements.txt
 pip install -r requirement.txt
+
+python -m ipykernel install --user --name=pytorch --display-name "Python (pytorch)"

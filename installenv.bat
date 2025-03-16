@@ -22,6 +22,9 @@ call env\pytorch\Scripts\activate
 REM Install the required packages
 pip install -r requirement.txt
 
+REM
+python -m ipykernel install --user --name=pytorch --display-name "Python (pytorch)"
+
 REM Deactivate the virtual environment
 deactivate
 
