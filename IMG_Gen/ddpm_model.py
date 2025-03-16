@@ -135,6 +135,10 @@ def main():
     batch_size = 16 * 1
 
     transform = transforms.Compose([
+        transforms.RandomHorizontalFlip(p=0.5),  # Flip images horizontally with 50% chance
+        transforms.RandomRotation(15),  # Rotate images by up to ±15 degrees
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),  # Adjust color
+        transforms.RandomResizedCrop(size, scale=(0.8, 1.0)),  # Randomly crop and resize
         transforms.Resize((size, size)),
         transforms.ToTensor(),
         transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
