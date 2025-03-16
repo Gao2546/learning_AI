@@ -126,6 +126,8 @@ def main():
     # Check if the dataset path exists
     if not os.path.exists(path_to_data):
         print("Downloading and extracting Tiny ImageNet dataset...")
+        os.system("apt-get update")
+        os.system("apt-get install unzip")
         os.system("wget http://cs231n.stanford.edu/tiny-imagenet-200.zip")
         os.system("unzip tiny-imagenet-200.zip -d ./data")
         path_to_data = "./data/tiny-imagenet-200/train"
