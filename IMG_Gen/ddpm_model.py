@@ -105,7 +105,7 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
     model = DDP(model, device_ids=[rank])
 
     print(f"Rank {rank}: Model loaded. Starting training...")
-    model.module.train_model(train_loader, num_epochs=100)
+    model.module.train_model(train_loader, num_epochs=20)
 
     dist.destroy_process_group()
 
@@ -135,7 +135,7 @@ def main():
 
     # Training setup
     size = 16 * 4
-    batch_size = 16 * 1
+    batch_size = 16 * 32
 
     transform = transforms.Compose([
         transforms.RandomHorizontalFlip(p=0.5),  # Flip images horizontally with 50% chance
