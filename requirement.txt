@@ -8,6 +8,7 @@ ollama
 langchain-ollama
 langchain-core
 chromadb
+pdfminer.six
 beautifulsoup4
 matplotlib
 numpy
