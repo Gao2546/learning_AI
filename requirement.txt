@@ -1,3 +1,14 @@
+langchain-text-splitters 
+langchain-community 
+langgraph
+# langchain[aws]
+# langchain[google-vertexai]
+# langchain-aws
+ollama
+langchain-ollama
+langchain-core
+chromadb
+beautifulsoup4
 matplotlib
 numpy
 pandas

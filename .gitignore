@@ -5,6 +5,7 @@ datas/
 images/
 image/
 env/
+data_base/
 .env/
 *.png
 *.jpg
