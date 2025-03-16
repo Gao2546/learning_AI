@@ -58,7 +58,7 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
                                out_c=3, 
                                down_sampling_times=1, 
                                encode_laten_channel=4, 
-                               Z_size=16384, 
+                               Z_size= 64*64, #16384, 
                                load_model_path=model_ckp, 
                                lr=1e-3).to(rank)
     # model = diffusion_model(
@@ -77,7 +77,7 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
     #     concat_all_resbox=True, 
     #     down_sampling_times=1, 
     #     encode_laten_channel=4, 
-    #     Z_size=16384, 
+    #     Z_size=64*64,#16384, 
     #     load_model_path=model_ckp, 
     #     load_model_path_VQVAE=model_VQVAE, 
     #     lr=1e-4
@@ -120,11 +120,19 @@ def main():
     # Paths
     model_ckp = None#"model/checkpoint/DDPM_T_VQVAE4.pth"
     model_VQVAE_path = None#"model/checkpoint/VQVAE1.pth"
-    path_to_data = "./data/104Flower_resized"
+    # path_to_data = "./data/104Flower_resized"
+    path_to_data = "./data/tiny-imagenet-200/train"
+
+    # Check if the dataset path exists
+    if not os.path.exists(path_to_data):
+        print("Downloading and extracting Tiny ImageNet dataset...")
+        os.system("wget http://cs231n.stanford.edu/tiny-imagenet-200.zip")
+        os.system("unzip tiny-imagenet-200.zip -d ./data")
+        path_to_data = "./data/tiny-imagenet-200/train"
 
     # Training setup
-    size = 16 * 8
-    batch_size = 16 * 4
+    size = 16 * 4
+    batch_size = 16 * 1
 
     transform = transforms.Compose([
         transforms.Resize((size, size)),
