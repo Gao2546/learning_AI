@@ -133,7 +133,8 @@ def main():
     ])
 
     # Load dataset
-    train_dataset = datasets.ImageFolder(root=path_to_data, transform=transform)
+    # train_dataset = datasets.ImageFolder(root=path_to_data, transform=transform)
+    train_dataset = datasets.CIFAR100(root='IMG_Gen/data', split='train', transform=transform)
     
     print("Data loaded successfully!")
 
