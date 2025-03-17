@@ -9,6 +9,7 @@ ollama
 langchain-ollama
 langchain-core
 chromadb
+runpod
 pdfminer.six
 beautifulsoup4
 ipykernel
