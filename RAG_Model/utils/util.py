@@ -13,6 +13,29 @@ import os
 import time
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 
+import getpass
+import os
+import ollama
+
+import bs4
+from langchain import hub
+from langchain_community.document_loaders import WebBaseLoader
+from langchain.document_loaders import PyMuPDFLoader
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langgraph.graph import START, StateGraph
+from typing_extensions import List, TypedDict
+from langchain_community.llms import Ollama
+from langchain_ollama import OllamaEmbeddings
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_community.vectorstores import Chroma
+from langchain.embeddings import HuggingFaceEmbeddings
+
+from typing import Any, AsyncIterator, Dict, Iterator, List, Optional, Sequence, Union
+
+# os.environ["LANGSMITH_TRACING"] = "true"
+# os.environ["LANGSMITH_API_KEY"] = getpass.getpass()
+
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
 
 
@@ -496,3 +519,222 @@ class WarmupCosineScheduler:
         #     self.cosine_scheduler.T_max = self.current_max_steps
         
         self.current_step += 1
+
+# Define state for application
+class State(TypedDict):
+    question: str
+    context: List[Document]
+    answer: str
+    history: List[Dict]
+
+class RAG_module:
+    def __init__(self,embeddings_model : str = "llama3.2", # llama3.2 , all-MiniLM-L6-v2
+                      vector_store_type : str = "InMemory", # chroma , InMemory 
+                      prompt_model : str = "rlm/rag-prompt", #rlm/rag-prompt
+                      model_name : str = "gemma3:1b", #gemma3:1b
+                      k_sim : int = 10,
+                      ):
+        self.k_sim = k_sim
+        self.model_name = model_name
+        self.document_str = ""
+        if embeddings_model == "llama3.2":
+            embeddings = OllamaEmbeddings(model="llama3.2")
+        elif embeddings_model == "all-MiniLM-L6-v2":
+            embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+
+        if vector_store_type == "chroma":
+            self.vector_store = Chroma(persist_directory="./data_base/chroma_db", embedding_function=embeddings)
+        elif vector_store_type == "InMemory":
+            self.vector_store = InMemoryVectorStore(embeddings)
+
+        if prompt_model == "rlm/rag-prompt":
+            self.prompt = hub.pull("rlm/rag-prompt")
+        
+        self.historyChat = []
+
+    def RAG_Web(self,
+                link: Union[str , Sequence[str]] = "",
+                store: bool = True):
+        loader = WebBaseLoader(
+        # web_paths=("https://lilianweng.github.io/posts/2023-06-23-agent/",),
+        web_paths=(link,),
+        bs_kwargs=dict(
+            parse_only=bs4.SoupStrainer(
+                # data_component_=("headline-block", "text-block")
+                attrs={"data-component": ["headline-block", "text-block"]}
+                #class_=("post-content", "post-title", "post-header")
+                        )
+                    ),
+                )
+        docs = loader.load()
+        if store:
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=50)
+            all_splits = text_splitter.split_documents(docs)
+
+            # Index chunks
+            _ = self.vector_store.add_documents(documents=all_splits)
+        else:
+            self.document_str += "\n\n\n".join(["source: " + page.metadata["source"] + "\n\n" + page.page_content for page in docs]) + "\n\n\n\n"
+        
+
+    def RAG_PDF(self, file_path, floder, store = True):
+        if floder != None:
+            files = os.listdir(floder)
+        else:
+            files = [file_path]
+
+            # Loop through each file and extract text if it's a PDF
+        for file in files:
+            if file.endswith(".pdf"):  # Check if the file is a PDF
+                file_path = os.path.join(floder, file) if floder else file_path
+
+                # data_pdf = extract_text(file_path)
+                loader = PyMuPDFLoader(file_path)
+                docs = loader.load()
+                if store:
+                    text_splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=50)
+                    all_splits = text_splitter.split_documents(docs)
+
+                    # Index chunks
+                    _ = self.vector_store.add_documents(documents=all_splits)
+                else:
+                    self.document_str += "\n\n\n".join(["page: " + page.metadata["page"] + "\n\n" + page.page_content for page in docs]) + "\n\n\n\n"
+        
+
+    def RAG_text_file(self, file_path, floder, store = True, chunk_size=1000, chunk_overlap=200):
+        if floder != None:
+            files = os.listdir(floder)
+            print(files)
+        else:
+            files = [file_path]
+
+        # Loop through each file and extract text if it's a text file
+        for file in files:
+            if file.endswith(".txt") or file.endswith(".doc") or file.endswith(".docx"):  # Check if the file is a text file
+                file_path = os.path.join(floder, file) if floder else file_path
+                with open(file_path, "r", encoding="utf-8") as f:
+                    text = f.read()
+                docs = [Document(page_content=text)]
+                if store:
+                    text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+                    all_splits = text_splitter.split_documents(docs)
+
+                    # Index chunks
+                    _ = self.vector_store.add_documents(documents=all_splits)
+                else:
+                    self.document_str += text + "\n\n\n\n"
+        
+
+    def RAG_OCR(self,file_path, floder):
+        pass
+
+        # Define application steps
+    def retrieve(self, state: State):
+        retrieved_docs = self.vector_store.similarity_search(state["question"], k=self.k_sim)
+        # print(retrieved_docs)
+        # print("---------------------------------------------------------------------")
+        return {"context": retrieved_docs}
+
+
+    def generate(self, state: State):
+        docs_content = "\n\n".join(doc.page_content for doc in state["context"])
+        print(docs_content)
+        # print("---------------------------------------------------------------------")
+        messages = self.prompt.invoke({"question": state["question"], "context": docs_content})
+        if state["history"] != None:
+            state["history"].append({'role': 'user', 'content': messages.to_string()})
+            response = ollama.chat(model=self.model_name, messages=state["history"])
+        # print(messages.to_string())
+        # print(messages.content)
+        # print(type(messages))
+        # print("---------------------------------------------------------------------")
+        # print("\n\n\n")
+        else:
+            response = ollama.generate(model=self.model_name, prompt=messages.to_string()).response
+        # response = llm.invoke(messages)
+        return {"answer": response, "history": state["history"]}
+
+    def promtRAG(self,question):
+        # Compile application and test
+        graph_builder = StateGraph(State).add_sequence([self.retrieve, self.generate])
+        graph_builder.add_edge(START, "retrieve")
+        graph = graph_builder.compile()
+
+        response = graph.invoke({"question": question , "history": None})
+        print("answer : \n")
+        print(response["answer"])
+
+    def promtRAGChat(self,question):
+            # self.historyChat.append({'role': 'user', 'content': question})
+            graph_builder = StateGraph(State).add_sequence([self.retrieve, self.generate])
+            graph_builder.add_edge(START, "retrieve")
+            graph = graph_builder.compile()
+
+            response = graph.invoke({"question": question,
+                                     "history": self.historyChat})
+            
+            self.historyChat = response["history"]
+
+            self.historyChat.append({'role': response["answer"].message.role, 'content': response["answer"].message.content})
+            print("answer : \n")
+            print(response["answer"].message.content)
+        
+
+    def promtStr(self, question, data_inp):
+        if data_inp:
+            qq = data_inp + "\n\n" + "question : " + question
+        else:
+            qq = self.document_str + "\n\n" + "question : " + question
+        response = ollama.generate(model=self.model_name, prompt=qq).response
+        # response = llm.invoke(messages)
+        return response.response
+    
+    def promtStrChat(self, question = "hello", data_inp = None):
+        if data_inp == "off":
+            qq = question
+        elif data_inp:
+            qq = data_inp + "\n\n" + "question : " + question
+        else:
+            qq = self.document_str + "\n\n" + "question : " + question
+        self.historyChat.append({"role" : "user", "content": qq})
+        # response = ollama.generate(model=self.model_name, prompt=qq).response
+        response = ollama.chat(model=self.model_name, messages=self.historyChat)
+        self.historyChat.append({'role': response.message.role, 'content': response.message.content})
+        # response = llm.invoke(messages)
+        return response.message.content
+    
+    def new_chat(self):
+        self.historyChat = []
+    
+    def PDF_loop_Read(self):
+        # List all files in the ./data directory
+        files = os.listdir("./data")
+
+        # Loop through each file and extract text if it's a PDF
+        for file in files:
+            if file.endswith(".pdf"):  # Check if the file is a PDF
+                file_path = os.path.join("./data", file)
+                # data_pdf = extract_text(file_path)
+                loader = PyMuPDFLoader(file_path)
+                documents = loader.load()
+                FullMessage = []
+                all_resMessage = ""
+                FullMessage.append({'role': 'user', 'content': 'ดึงข้อความทั้งหมดจากทุกหน้าของสไลด์ หากข้อความเป็นภาษาอังกฤษ ให้แปลเป็นภาษาไทย หากเป็นภาษาไทยให้นำมาแบบเดิม จัดรูปแบบให้เข้าใจง่ายและคงโครงสร้างของเนื้อหาเดิมให้มากที่สุด'})
+                respond = ollama.chat(model='gemma3:1b', messages=FullMessage, options={'num_ctx': 1024*1, # Context size
+                                                                           'num_predict': 1024    # Increase max output tokens
+                                                                          })
+                mess = respond.message
+                all_resMessage = all_resMessage + "\n\n" + mess.content
+                for page in documents:
+                    FullMessage.append({'role': mess.role, 'content': mess.content})
+                    FullMessage.append({'role': 'user', 'content': "page: " + str(page.metadata['page']) + "\n\n" + page.page_content + "ดึงข้อความทั้งหมดจากทุกหน้าของสไลด์ หากข้อความเป็นภาษาอังกฤษ ให้แปลเป็นภาษาไทย หากเป็นภาษาไทยให้นำมาแบบเดิม จัดรูปแบบให้เข้าใจง่ายและคงโครงสร้างของเนื้อหาเดิมให้มากที่สุด"})
+                    respond = ollama.chat(model='gemma3:1b', messages=FullMessage, options={'num_ctx': 1024*1, # Context size
+                                                                           'num_predict': 1024    # Increase max output tokens
+                                                                          })
+                    mess = respond.message
+                    all_resMessage = all_resMessage + "\n\n" + mess.content
+                # Save the response to a text file with the same name as the PDF file
+                text_file_path = os.path.splitext(file_path)[0] + ".txt"
+                print("save to " , text_file_path)
+                with open(text_file_path, "w", encoding="utf-8") as text_file:
+                    text_file.write(all_resMessage)
