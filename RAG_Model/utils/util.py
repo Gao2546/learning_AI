@@ -30,6 +30,11 @@ from langchain_ollama import OllamaEmbeddings
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_community.vectorstores import Chroma
 from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.chat_models import init_chat_model
+from langchain_openai import OpenAIEmbeddings
+import fitz  # PyMuPDF
+
+from openai import OpenAI
 
 from typing import Any, AsyncIterator, Dict, Iterator, List, Optional, Sequence, Union
 
@@ -537,10 +542,21 @@ class RAG_module:
         self.k_sim = k_sim
         self.model_name = model_name
         self.document_str = ""
+        self.client = None
+        if self.model_name == "gpt-4o-mini":
+            if not os.environ.get("OPENAI_API_KEY"):
+                os.environ["OPENAI_API_KEY"] = getpass.getpass("Enter API key for OpenAI: ")
+                self.client = OpenAI(
+                                # This is the default and can be omitted
+                                api_key=os.environ.get("OPENAI_API_KEY"),
+                                )
+            # self.llm = init_chat_model(self.model_name, model_provider="openai")
         if embeddings_model == "llama3.2":
             embeddings = OllamaEmbeddings(model="llama3.2")
         elif embeddings_model == "all-MiniLM-L6-v2":
             embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        elif embeddings_model == "text-embedding-3-large":
+            embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 
         if vector_store_type == "chroma":
             self.vector_store = Chroma(persist_directory="./data_base/chroma_db", embedding_function=embeddings)
@@ -643,14 +659,28 @@ class RAG_module:
         messages = self.prompt.invoke({"question": state["question"], "context": docs_content})
         if state["history"] != None:
             state["history"].append({'role': 'user', 'content': messages.to_string()})
-            response = ollama.chat(model=self.model_name, messages=state["history"])
+            if self.client:
+                response = self.client.chat.completions.create(
+                        model=self.model_name,
+                        messages=state["history"],
+                        max_tokens=1024*16
+                    ).choices[0]
+            else:
+                response = ollama.chat(model=self.model_name, messages=state["history"])
         # print(messages.to_string())
         # print(messages.content)
         # print(type(messages))
         # print("---------------------------------------------------------------------")
         # print("\n\n\n")
         else:
-            response = ollama.generate(model=self.model_name, prompt=messages.to_string()).response
+            if self.client:
+                response = self.client.responses.create(
+                    model=self.model_name,
+                    #instructions="You are a coding assistant that talks like a pirate.",
+                    input=messages.to_string(),
+                    ).output_text
+            else:
+                response = ollama.generate(model=self.model_name, prompt=messages.to_string()).response
         # response = llm.invoke(messages)
         return {"answer": response, "history": state["history"]}
 
@@ -685,9 +715,16 @@ class RAG_module:
             qq = data_inp + "\n\n" + "question : " + question
         else:
             qq = self.document_str + "\n\n" + "question : " + question
-        response = ollama.generate(model=self.model_name, prompt=qq).response
-        # response = llm.invoke(messages)
-        return response.response
+        if self.client:
+            response = self.client.responses.create(
+                    model=self.model_name,
+                    #instructions="You are a coding assistant that talks like a pirate.",
+                    input=qq,
+                    ).output_text
+        else:
+            response = ollama.generate(model=self.model_name, prompt=qq).response
+        # response = self.llm.invoke(qq)
+        return response
     
     def promtStrChat(self, question = "hello", data_inp = None):
         if data_inp == "off":
@@ -698,43 +735,253 @@ class RAG_module:
             qq = self.document_str + "\n\n" + "question : " + question
         self.historyChat.append({"role" : "user", "content": qq})
         # response = ollama.generate(model=self.model_name, prompt=qq).response
-        response = ollama.chat(model=self.model_name, messages=self.historyChat)
+        if self.client:
+            response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=self.historyChat
+                ).choices[0]
+        else:
+            response = ollama.chat(model=self.model_name, messages=self.historyChat)
         self.historyChat.append({'role': response.message.role, 'content': response.message.content})
-        # response = llm.invoke(messages)
+        # response = self.llm.invoke(qq)
         return response.message.content
     
     def new_chat(self):
         self.historyChat = []
     
-    def PDF_loop_Read(self):
+    def PDF_loop_Read(self,folder,file_path,prompt):
         # List all files in the ./data directory
-        files = os.listdir("./data")
+        if folder != None:
+            files = os.listdir(folder)
+        else:
+            files = [file_path]
+
 
         # Loop through each file and extract text if it's a PDF
         for file in files:
             if file.endswith(".pdf"):  # Check if the file is a PDF
-                file_path = os.path.join("./data", file)
+                # file_path = os.path.join("./data", file)
+                file_path = os.path.join(folder, file) if folder else file_path
                 # data_pdf = extract_text(file_path)
                 loader = PyMuPDFLoader(file_path)
                 documents = loader.load()
                 FullMessage = []
                 all_resMessage = ""
-                FullMessage.append({'role': 'user', 'content': 'ดึงข้อความทั้งหมดจากทุกหน้าของสไลด์ หากข้อความเป็นภาษาอังกฤษ ให้แปลเป็นภาษาไทย หากเป็นภาษาไทยให้นำมาแบบเดิม จัดรูปแบบให้เข้าใจง่ายและคงโครงสร้างของเนื้อหาเดิมให้มากที่สุด'})
-                respond = ollama.chat(model='gemma3:1b', messages=FullMessage, options={'num_ctx': 1024*1, # Context size
-                                                                           'num_predict': 1024    # Increase max output tokens
-                                                                          })
-                mess = respond.message
+                FullMessage.append({'role': 'user', 'content': prompt})
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=FullMessage,
+                ).choices[0]
+                # response = ollama.chat(model='gemma3:1b', messages=FullMessage, options={'num_ctx': 1024*1, # Context size
+                #                                                            'num_predict': 1024    # Increase max output tokens
+                #                                                           })
+                mess = response.message
                 all_resMessage = all_resMessage + "\n\n" + mess.content
-                for page in documents:
-                    FullMessage.append({'role': mess.role, 'content': mess.content})
-                    FullMessage.append({'role': 'user', 'content': "page: " + str(page.metadata['page']) + "\n\n" + page.page_content + "ดึงข้อความทั้งหมดจากทุกหน้าของสไลด์ หากข้อความเป็นภาษาอังกฤษ ให้แปลเป็นภาษาไทย หากเป็นภาษาไทยให้นำมาแบบเดิม จัดรูปแบบให้เข้าใจง่ายและคงโครงสร้างของเนื้อหาเดิมให้มากที่สุด"})
-                    respond = ollama.chat(model='gemma3:1b', messages=FullMessage, options={'num_ctx': 1024*1, # Context size
-                                                                           'num_predict': 1024    # Increase max output tokens
-                                                                          })
-                    mess = respond.message
-                    all_resMessage = all_resMessage + "\n\n" + mess.content
+                cummulate_content = ""
+                for n,page in enumerate(documents):
+                    cummulate_content += "page: " + str(page.metadata['page']) + "\n\n" + page.page_content + "\n\n"
+                    if (n+1) % 20 == 0 or (len(documents) - (n+1)) == 0:
+                        FullMessage.append({'role': mess.role, 'content': mess.content})
+                        FullMessage.append({'role': 'user', 'content': cummulate_content + prompt})
+                        response = self.client.chat.completions.create(
+                                model=self.model_name,
+                                messages=FullMessage,
+                                max_tokens=1024*16
+                            ).choices[0]
+                    # response = ollama.chat(model='gemma3:1b', messages=FullMessage, options={'num_ctx': 1024*1, # Context size
+                    #                                                        'num_predict': 1024    # Increase max output tokens
+                    #                                                       })
+                        mess = response.message
+                        all_resMessage = all_resMessage + "\n\n" + mess.content
+                        cummulate_content = ""
+                    # elif (len(documents) - (n+1)) == 0:
+                    #     FullMessage.append({'role': mess.role, 'content': mess.content})
+                    #     FullMessage.append({'role': 'user', 'content': cummulate_content + prompt})
+                    #     response = self.client.chat.completions.create(
+                    #             model=self.model_name,
+                    #             messages=FullMessage,
+                    #             max_tokens=1024*15
+                    #         ).choices[0]
+                    # # response = ollama.chat(model='gemma3:1b', messages=FullMessage, options={'num_ctx': 1024*1, # Context size
+                    # #                                                        'num_predict': 1024    # Increase max output tokens
+                    # #                                                       })
+                    #     mess = response.message
+                    #     all_resMessage = all_resMessage + "\n\n" + mess.content
+                    #     cummulate_content = ""
+                    
                 # Save the response to a text file with the same name as the PDF file
                 text_file_path = os.path.splitext(file_path)[0] + ".txt"
                 print("save to " , text_file_path)
                 with open(text_file_path, "w", encoding="utf-8") as text_file:
                     text_file.write(all_resMessage)
+        return all_resMessage
+    
+
+    def PDF_loop_ReadV2(self, folder, file_path, prompt, n=10):
+        """
+        Function to read a PDF, split it every 'n' pages, save chunks, and send each chunk to the model.
+
+        :param folder: Folder where PDFs are stored.
+        :param file_path: Single file path if a folder is not specified.
+        :param prompt: The prompt to send to the model along with each chunk of the PDF.
+        :param n: Number of pages per chunk.
+        """
+        # List all files in the provided folder or use a single file path
+        if folder is not None:
+            files = os.listdir(folder)
+        else:
+            files = [file_path]
+
+        # Loop through each file and extract text if it's a PDF
+        for file in files:
+            if file.endswith(".pdf"):  # Check if the file is a PDF
+                file_path = os.path.join(folder, file) if folder else file_path
+
+                # Open the PDF with PyMuPDF (fitz)
+                pdf_document = fitz.open(file_path)
+                num_pages = pdf_document.page_count
+                # print(num_pages)
+
+                # # Split the PDF into chunks of 'n' pages
+                # split_documents = []
+                # print(pdf_document)
+                # for i in range(0, num_pages, n):  # Split every 'n' pages
+                #     print(i)
+                #     print(i+n)
+                #     split_document = pdf_document[i:i+n]  # Get a subset of pages
+                #     split_documents.append(split_document)
+                #     print(split_document)
+                all_resMessage = ""
+                FullMessage = []
+                # Upload the chunk to the API
+                uploaded_file = self.client.files.create(
+                    file=open(file_path, "rb"),
+                    purpose="user_data"
+                )
+                FullMessage.append({
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "file",
+                                        "file": {
+                                            "file_id": uploaded_file.id,
+                                        }
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "นี้คือข้อมูลจากสไลด์",
+                                    },
+                                ]
+                            })
+                # Send the uploaded chunk to the model
+                completion = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=FullMessage,
+                    max_tokens = 1024*2
+                )
+                # Extract the response message from the model
+                response_message = completion.choices[0].message
+                all_resMessage += "\n\n" + response_message.content
+
+                round = num_pages//n
+                if num_pages%n != 0:
+                    round += 1
+                # Loop through the chunks and upload each chunk to the model
+                for chunk_index in range(0,round):
+                    if (chunk_index+1)*n > num_pages:
+                        stp = chunk_index*n+1
+                        stop = num_pages
+                    else:
+                        stp = chunk_index*n+1
+                        stop = (chunk_index+1)*n
+                    print(f"page{stp} - {stop}")
+                    # # Create a temporary file path for the chunk (saving each chunk as a new PDF)
+                    # temp_pdf_path = f"{file_path}_chunk_{chunk_index + 1}.pdf"
+                    # with fitz.open() as temp_pdf:
+                    #     for page in split_document:
+                    #         temp_pdf.insert_pdf(pdf_document, from_page=page.number, to_page=page.number)
+                    #     temp_pdf.save(temp_pdf_path)
+
+                    # Upload the chunk to the API
+                    uploaded_file = self.client.files.create(
+                        file=open(file_path, "rb"),
+                        purpose="user_data"
+                    )
+
+                    FullMessage.append({'role': response_message.role, 'content': response_message.content})
+                    FullMessage.append({'role': 'user', 'content': prompt + f"Slide {stp} - {stop}"})
+                    print(FullMessage)
+
+                    # Send the uploaded chunk to the model
+                    completion = self.client.chat.completions.create(
+                        model=self.model_name,
+                        messages=FullMessage,
+                        max_tokens = 1024*2
+                    )
+
+                    # Extract the response message from the model
+                    response_message = completion.choices[0].message
+                    print(response_message.content + "\n\n")
+                    all_resMessage += "\n\n" + response_message.content
+                    FullMessage.pop(0)
+                    FullMessage.pop(0)
+
+                    # Optionally, delete the temporary PDF after sending to model
+                    # os.remove(temp_pdf_path)
+
+                # Save the model's response to a text file
+                text_file_path = os.path.splitext(file_path)[0] + ".txt"
+                print("Saving to ", text_file_path)
+                with open(text_file_path, "w", encoding="utf-8") as text_file:
+                    text_file.write(all_resMessage)
+
+        return all_resMessage
+
+
+
+    def text_loop_Read(self, folder, file_path, prompt, n_char=500000):
+        # List all files in the specified directory
+        if folder is not None:
+            files = os.listdir(folder)
+        else:
+            files = [file_path]
+
+        # Loop through each file and process if it's a text file
+        for file in files:
+            if file.endswith(".txt") or file.endswith(".doc") or file.endswith(".docx"):  # Check if the file is a text file
+                file_path = os.path.join(folder, file) if folder else file_path
+                with open(file_path, "r", encoding="utf-8") as f:
+                    text = f.read()
+
+                FullMessage = []
+                all_resMessage = ""
+                FullMessage.append({'role': 'user', 'content': prompt})
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=FullMessage
+                ).choices[0]
+                mess = response.message
+                all_resMessage += "\n\n" + mess.content
+
+                cummulate_content = ""
+                for i in range(0, len(text), n_char):
+                    chunk = text[i:i + n_char]
+                    cummulate_content += chunk + "\n\n"
+                    if (i + n_char) >= len(text) or (i // n_char + 1) % 10 == 0:  # Process every 10 chunks or at the end
+                        FullMessage.append({'role': mess.role, 'content': mess.content})
+                        FullMessage.append({'role': 'user', 'content': cummulate_content + prompt})
+                        response = self.client.chat.completions.create(
+                            model=self.model_name,
+                            messages=FullMessage,
+                            max_tokens=1024*16
+                        ).choices[0]
+                        mess = response.message
+                        all_resMessage += "\n\n" + mess.content
+                        cummulate_content = ""
+
+                # Save the response to a text file with the same name as the input file
+                text_file_path = os.path.splitext(file_path)[0] + "_response.txt"
+                print("save to", text_file_path)
+                with open(text_file_path, "w", encoding="utf-8") as text_file:
+                    text_file.write(all_resMessage)
+        return all_resMessage

@@ -1,15 +1,28 @@
-langchain-text-splitters 
-langchain-community 
-langgraph
-# langchain[aws]
-# langchain[google-vertexai]
-# langchain-aws
-pymupdf
+## LangChain
+    langchain-text-splitters 
+    langchain-community 
+    langchain-core
+    langgraph
+
+    # Model
+    # langchain[aws]
+    # langchain[google-vertexai]
+    langchain[openai]
+
+    # Embedding
+    # langchain-aws
+    langchain-openai
+    langchain-ollama
+
+# Model
 ollama
-langchain-ollama
-langchain-core
+openai
+
+# DB_vector
 chromadb
+
 runpod
+pymupdf
 pdfminer.six
 beautifulsoup4
 ipykernel
@@ -23,6 +36,8 @@ six
 stack-data
 sympy
 transformers
+
+#Pytorch
 torch
 torchvision
 torchaudio
