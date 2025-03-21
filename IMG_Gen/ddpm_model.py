@@ -60,7 +60,7 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
                                    down_sampling_times=1, 
                                    encode_laten_channel=4, 
                                    Z_size= 64*64, #16384, 
-                                   load_model_path=model_ckp, 
+                                   load_model_path=model_VQVAE, 
                                    lr=1e-3).to(rank)
         vqvae_size = sum(p.numel() for p in model.vqvae.parameters() if p.requires_grad)
         print(f"Model size: {vqvae_size} trainable parameters")
@@ -84,7 +84,7 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
             Z_size=64*64,#16384, 
             load_model_path=model_ckp, 
             load_model_path_VQVAE=model_VQVAE, 
-            lr=1e-4
+            lr=1e-6
         ).to(rank)
         model_size = sum(p.numel() for p in model.model.parameters() if p.requires_grad)
         vqvae_size = sum(p.numel() for p in model.vqvae.parameters() if p.requires_grad)
@@ -112,7 +112,8 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
     model = DDP(model, device_ids=[rank])
 
     print(f"Rank {rank}: Model loaded. Starting training...")
-    model.module.train_model(train_loader, num_epochs=n_epoch)
+    # model.module.train_model(train_loader, num_epochs=n_epoch)
+    model.module.inference("test",64)
 
     dist.destroy_process_group()
 
@@ -125,8 +126,8 @@ def main():
     set_seed(seed)
 
     # Paths
-    model_ckp = None#"model/checkpoint/DDPM_T_VQVAE4.pth"
-    model_VQVAE_path = "model/checkpoint/VQVAE0.pth"
+    model_ckp = "model/checkpoint/DDPM_T_VQVAETinyImagesNet200.pth"
+    model_VQVAE_path = "model/checkpoint/VQVAETinyImagesNet200.pth"
     # path_to_data = "./data/104Flower_resized"
     path_to_data = "./data/tiny-imagenet-200/train"
 
@@ -143,7 +144,7 @@ def main():
     # Training setup <====================================
     size = 16 * 4
     batch_size = 16 * 4
-    epochs = 100
+    epochs = 10
     traning_VQVAE = False
 
     transform = transforms.Compose([
