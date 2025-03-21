@@ -71,10 +71,10 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
             att_channel=64, 
             embedding_time_dim=64, 
             time_exp=256, 
-            num_head=1, 
-            d_model=32, 
-            num_resbox=2, 
-            allow_att=[False, True, False], 
+            num_head=1*4, 
+            d_model=32*8, 
+            num_resbox=2*4, 
+            allow_att=[True, True, True], 
             concat_up_down=True, 
             concat_all_resbox=True, 
             down_sampling_times=1, 
@@ -139,6 +139,7 @@ def main():
     size = 16 * 4
     batch_size = 16 * 32
     epochs = 20
+    traning_VQVAE = True
 
     transform = transforms.Compose([
         transforms.RandomHorizontalFlip(p=0.5),  # Flip images horizontally with 50% chance
@@ -160,7 +161,7 @@ def main():
 
     # Use mp.spawn() to run training across multiple GPUs
     #mp.spawn(train_ddp, args=(world_size, model_VQVAE, train_dataset, batch_size), nprocs=world_size, join=True)
-    mp.spawn(train_ddp, args=(world_size, train_dataset, batch_size, model_ckp, model_VQVAE_path,epochs), nprocs=world_size, join=True)
+    mp.spawn(train_ddp, args=(world_size, train_dataset, batch_size, model_ckp, model_VQVAE_path,traning_VQVAE,epochs), nprocs=world_size, join=True)
 
     print("Training completed!")
 
