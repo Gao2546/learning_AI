@@ -858,30 +858,30 @@ class RAG_module:
                     file=open(file_path, "rb"),
                     purpose="user_data"
                 )
-                FullMessage.append({
-                                "role": "user",
-                                "content": [
-                                    {
-                                        "type": "file",
-                                        "file": {
-                                            "file_id": uploaded_file.id,
-                                        }
-                                    },
-                                    {
-                                        "type": "text",
-                                        "text": "นี้คือข้อมูลจากสไลด์",
-                                    },
-                                ]
-                            })
+                # FullMessage.append({
+                #                 "role": "user",
+                #                 "content": [
+                #                     {
+                #                         "type": "file",
+                #                         "file": {
+                #                             "file_id": uploaded_file.id,
+                #                         }
+                #                     },
+                #                     {
+                #                         "type": "text",
+                #                         "text": "นี้คือข้อมูลจากสไลด์",
+                #                     },
+                #                 ]
+                #             })
                 # Send the uploaded chunk to the model
-                completion = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=FullMessage,
-                    max_tokens = 1024*2
-                )
+                # completion = self.client.chat.completions.create(
+                #     model=self.model_name,
+                #     messages=FullMessage,
+                #     max_tokens = 1024*10
+                # )
                 # Extract the response message from the model
-                response_message = completion.choices[0].message
-                all_resMessage += "\n\n" + response_message.content
+                # response_message = completion.choices[0].message
+                # all_resMessage += "\n\n" + response_message.content
 
                 round = num_pages//n
                 if num_pages%n != 0:
@@ -903,28 +903,46 @@ class RAG_module:
                     #     temp_pdf.save(temp_pdf_path)
 
                     # Upload the chunk to the API
-                    uploaded_file = self.client.files.create(
-                        file=open(file_path, "rb"),
-                        purpose="user_data"
-                    )
+                    # uploaded_file = self.client.files.create(
+                    #     file=open(file_path, "rb"),
+                    #     purpose="user_data"
+                    # )
 
-                    FullMessage.append({'role': response_message.role, 'content': response_message.content})
-                    FullMessage.append({'role': 'user', 'content': prompt + f"Slide {stp} - {stop}"})
+                    # FullMessage.append({'role': response_message.role, 'content': response_message.content})
+                    FullMessage.append({
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "file",
+                                        "file": {
+                                            "file_id": uploaded_file.id,
+                                        }
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": prompt + f"Slide {stp} - {stop}",
+                                    },
+                                ]
+                            })
+                    # FullMessage.append({'role': 'user', 'content': prompt + f"Slide {stp} - {stop}"})
                     print(FullMessage)
 
                     # Send the uploaded chunk to the model
                     completion = self.client.chat.completions.create(
                         model=self.model_name,
                         messages=FullMessage,
-                        max_tokens = 1024*2
+                        max_tokens = 1024*10
                     )
 
                     # Extract the response message from the model
                     response_message = completion.choices[0].message
+                    FullMessage.append({'role': response_message.role, 'content': response_message.content})
                     print(response_message.content + "\n\n")
                     all_resMessage += "\n\n" + response_message.content
                     FullMessage.pop(0)
-                    FullMessage.pop(0)
+                    if chunk_index != 0:
+                        FullMessage.pop(0)
+                    # FullMessage.pop(1)
 
                     # Optionally, delete the temporary PDF after sending to model
                     # os.remove(temp_pdf_path)
