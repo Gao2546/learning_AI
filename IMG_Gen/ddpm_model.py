@@ -62,6 +62,8 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
                                    Z_size= 64*64, #16384, 
                                    load_model_path=model_ckp, 
                                    lr=1e-3).to(rank)
+        vqvae_size = sum(p.numel() for p in model.vqvae.parameters() if p.requires_grad)
+        print(f"Model size: {vqvae_size} trainable parameters")
     else:
         model = diffusion_model(
             in_c=3, 
@@ -73,7 +75,7 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
             time_exp=256, 
             num_head=1*4, 
             d_model=32*8, 
-            num_resbox=2*4, 
+            num_resbox=2*2, 
             allow_att=[True, True, True], 
             concat_up_down=True, 
             concat_all_resbox=True, 
@@ -84,6 +86,9 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
             load_model_path_VQVAE=model_VQVAE, 
             lr=1e-4
         ).to(rank)
+        model_size = sum(p.numel() for p in model.model.parameters() if p.requires_grad)
+        vqvae_size = sum(p.numel() for p in model.vqvae.parameters() if p.requires_grad)
+        print(f"Model size: {model_size + vqvae_size} trainable parameters")
 
     # model = diffusion_model_No_VQVAE(
     #     in_c=3, 
@@ -121,7 +126,7 @@ def main():
 
     # Paths
     model_ckp = None#"model/checkpoint/DDPM_T_VQVAE4.pth"
-    model_VQVAE_path = None#"model/checkpoint/VQVAE1.pth"
+    model_VQVAE_path = "model/checkpoint/VQVAE0.pth"
     # path_to_data = "./data/104Flower_resized"
     path_to_data = "./data/tiny-imagenet-200/train"
 
@@ -137,9 +142,9 @@ def main():
 
     # Training setup <====================================
     size = 16 * 4
-    batch_size = 16 * 32
-    epochs = 20
-    traning_VQVAE = True
+    batch_size = 16 * 4
+    epochs = 100
+    traning_VQVAE = False
 
     transform = transforms.Compose([
         transforms.RandomHorizontalFlip(p=0.5),  # Flip images horizontally with 50% chance
