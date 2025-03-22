@@ -250,10 +250,11 @@ def sample_plot_image_no_VQVAE(Denoise_model, names, size, CLIP_model,img_c,num_
         img = sample_timestep(img, t, time_step, Denoise_model, encode_text)
     img = torch.clamp(img, -1.0, 1.0)
     fig = plt.figure(1, clear=True)
-    grid = ImageGrid(fig, rect=111, nrows_ncols=(1, 5), axes_pad=0.1)
+    grid = ImageGrid(fig, rect=111, nrows_ncols=(1, num_gen), axes_pad=0.1)
 
     for ax, im in zip(grid, img.to("cpu")):
         ax.imshow(show_tensor_image(im))
+        ax.set_title(f"Label: {descreaption[grid.index(ax)].item()}", fontsize=8)
     plt.savefig(f"output/sample_no_VQVAE_{names}.png")
 
 def show_img_VAE(batch,recon,names):
