@@ -133,7 +133,7 @@ def show_tensor_image(image):
     return reverse_transforms(image)
     # plt.imshow(reverse_transforms(image))
 @torch.no_grad()
-def sample_timestep(x, t, time_step, Denoise_models):
+def sample_timestep(x, t, time_step, Denoise_models, encode_text):
     """
     Calls the model to predict the noise in the image and returns
     the denoised image.
@@ -147,7 +147,7 @@ def sample_timestep(x, t, time_step, Denoise_models):
 
     # Call model (current image - noise prediction)
     with torch.no_grad():
-        pre_noises = Denoise_models(x,t)
+        pre_noises = Denoise_models(x,t,encode_text)
     # noises = Denoise_models(x, t)
     model_mean = sqrt_recip_alphas_t * (
         x - (betas_t / sqrt_one_minus_alphas_cumprod_t * pre_noises)
@@ -236,16 +236,18 @@ def sample_plot_image(Encode_Decode,Denoise_model,names,size):
     plt.savefig(f"output/sample_{names}.png")
 
 @torch.no_grad()
-def sample_plot_image_no_VQVAE(Denoise_model, names, size):
+def sample_plot_image_no_VQVAE(Denoise_model, names, size, CLIP_model):
     # Sample noise
     img_size = size
     img = torch.randn((5, 3, img_size, img_size), device=device)
     # num_images = 10
     # stepsize = int(step_sampling / num_images)
+    descreaption = torch.randint(0, 9, (5,), device=device, dtype=torch.long)
+    encode_text = CLIP_model.text_encoding(descreaption)
 
     for time_step in range(1, step_sampling)[::-1]:
         t = torch.ones(5, device=device, dtype=torch.long) * time_step
-        img = sample_timestep(img, t, time_step, Denoise_model)
+        img = sample_timestep(img, t, time_step, Denoise_model, encode_text)
     img = torch.clamp(img, -1.0, 1.0)
     fig = plt.figure(1, clear=True)
     grid = ImageGrid(fig, rect=111, nrows_ncols=(1, 5), axes_pad=0.1)

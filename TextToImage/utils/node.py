@@ -402,20 +402,24 @@ class CLIPModel(nn.Module):
         self.batch_size = batch_size
         self.data_path = data_path
         # self.loss = nn.CosineEmbeddingLoss()
-        if load_model_path:
-            self.load(load_model_path)
+        try:
+            if load_model_path:
+                self.load(load_model_path)
+        except:
+            print("No model to load")
         
-    def train_model(self, num_epoch):
+    def train_model(self, train_dataloader, num_epochs):
         self.optim = optim.Adam(list(self.text_encoding.parameters()) + list(self.image_encoding.parameters()), lr=self.lr)
         self.scaler = amp.GradScaler()
         self.loss = CLIPLoss()
         self.text_encoding.train()
         self.image_encoding.train()
-        if self.data_path == None:
-            transform = transforms.Compose([transforms.ToTensor()])
-            train_dataset = datasets.MNIST(root="./data", train=True, transform=transform, download=True)
-            self.train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
-        for epoch in tqdm.tqdm(range(num_epoch)):
+        # if self.data_path == None:
+            # transform = transforms.Compose([transforms.ToTensor()])
+            # train_dataset = datasets.MNIST(root="./data", train=True, transform=transform, download=True)
+            # self.train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+        self.train_loader = train_dataloader
+        for epoch in tqdm.tqdm(range(num_epochs)):
             loss_es = []
             for i, (image, text) in enumerate(tqdm.tqdm(self.train_loader)):
                 # text = torch.nn.functional.one_hot(torch.tensor(text), num_classes=self.vocab_size).to(device)
@@ -839,4 +843,4 @@ class diffusion_model_No_VQVAE(nn.Module):
     def inference(self, names, size):
         self.model.eval()
         # sample_plot_image(None, self.model, names)
-        sample_plot_image_no_VQVAE(self.model,names,size)
+        sample_plot_image_no_VQVAE(self.model,names,size,self.clip)
