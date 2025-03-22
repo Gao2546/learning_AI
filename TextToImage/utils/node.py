@@ -435,7 +435,7 @@ class CLIPModel(nn.Module):
                 self.scaler.update()
                 loss_es.append(loss.item())
             print(f"Epoch {epoch} Loss {sum(loss_es)/len(loss_es)}")
-            self.save(f"./model/CLIP{epoch//20}.pth")
+            self.save(f"./model/checkpoint/CLIP{epoch//20}.pth")
         self.sample_plot_image_clip(epoch, 1)
     
     def save(self, path):
