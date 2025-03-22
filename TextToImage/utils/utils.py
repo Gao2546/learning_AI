@@ -252,9 +252,9 @@ def sample_plot_image_no_VQVAE(Denoise_model, names, size, CLIP_model,img_c,num_
     fig = plt.figure(1, clear=True)
     grid = ImageGrid(fig, rect=111, nrows_ncols=(1, num_gen), axes_pad=0.1)
 
-    for ax, im in zip(grid, img.to("cpu")):
+    for idx, (ax, im) in enumerate(zip(grid, img.to("cpu"))):
         ax.imshow(show_tensor_image(im))
-        ax.set_title(f"Label: {descreaption[grid.index(ax)].item()}", fontsize=8)
+        ax.set_title(f"Label: {descreaption[idx].item()}", fontsize=8)
     plt.savefig(f"output/sample_no_VQVAE_{names}.png")
 
 def show_img_VAE(batch,recon,names):
