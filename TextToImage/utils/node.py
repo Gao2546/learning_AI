@@ -757,6 +757,7 @@ class diffusion_model_No_VQVAE(nn.Module):
         super().__init__()
         # self.model = UNet(in_c, out_c, st_channel, channel_multi, att_channel, embedding_time_dim, time_exp, num_head, d_model, num_resbox, allow_att, concat_up_down, concat_all_resbox)
         self.in_c = in_c
+        self.img_size = img_size
         self.model = UNet(
             in_c=in_c,
             out_c=out_c,
@@ -822,7 +823,7 @@ class diffusion_model_No_VQVAE(nn.Module):
                 loss_es.append(loss.item())
             print(f"Epoch {epoch} Loss {sum(loss_es)/len(loss_es)}")
             self.save(f"model/checkpoint/DDPM_T{epoch//20}.pth")
-            self.inference(epoch,32)
+            self.inference(epoch,self.img_size)
 
     def save(self, path):
         state_dict = {
