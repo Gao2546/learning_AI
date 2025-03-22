@@ -249,7 +249,7 @@ def sample_plot_image_no_VQVAE(Denoise_model, names, size, CLIP_model,img_c,num_
         t = torch.ones(num_gen, device=device, dtype=torch.long) * time_step
         img = sample_timestep(img, t, time_step, Denoise_model, encode_text)
     img = torch.clamp(img, -1.0, 1.0)
-    fig = plt.figure(1, clear=True,size=(10,15))
+    fig = plt.figure(1, clear=True, figsize=(15, 10))
     grid = ImageGrid(fig, rect=111, nrows_ncols=(1, num_gen), axes_pad=0.5)
 
     for idx, (ax, im) in enumerate(zip(grid, img.to("cpu"))):
