@@ -161,7 +161,7 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
 
     print(f"Rank {rank}: Model loaded. Starting training...")
     model.module.train_model(train_loader, num_epochs=n_epoch)
-    # model.module.inference("test",64)
+    # model.module.inference("test",img_size)
 
     dist.destroy_process_group()
 
