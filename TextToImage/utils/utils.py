@@ -236,17 +236,17 @@ def sample_plot_image(Encode_Decode,Denoise_model,names,size):
     plt.savefig(f"output/sample_{names}.png")
 
 @torch.no_grad()
-def sample_plot_image_no_VQVAE(Denoise_model, names, size, CLIP_model):
+def sample_plot_image_no_VQVAE(Denoise_model, names, size, CLIP_model,img_c,num_gen):
     # Sample noise
     img_size = size
-    img = torch.randn((5, 3, img_size, img_size), device=device)
+    img = torch.randn((num_gen, img_c, img_size, img_size), device=device)
     # num_images = 10
     # stepsize = int(step_sampling / num_images)
-    descreaption = torch.randint(0, 9, (5,), device=device, dtype=torch.long)
+    descreaption = torch.randint(0, 9, (num_gen,), device=device, dtype=torch.long)
     encode_text = CLIP_model.text_encoding(descreaption)
 
     for time_step in range(1, step_sampling)[::-1]:
-        t = torch.ones(5, device=device, dtype=torch.long) * time_step
+        t = torch.ones(num_gen, device=device, dtype=torch.long) * time_step
         img = sample_timestep(img, t, time_step, Denoise_model, encode_text)
     img = torch.clamp(img, -1.0, 1.0)
     fig = plt.figure(1, clear=True)

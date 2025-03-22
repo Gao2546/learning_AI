@@ -756,6 +756,7 @@ class diffusion_model_No_VQVAE(nn.Module):
     def __init__(self, in_c, out_c, img_size, st_channel, channel_multi, att_channel, embedding_time_dim, time_exp, num_head, d_model, num_resbox, allow_att, concat_up_down, concat_all_resbox, load_model_path, load_CLIP_path, Text_dim ,n_class):
         super().__init__()
         # self.model = UNet(in_c, out_c, st_channel, channel_multi, att_channel, embedding_time_dim, time_exp, num_head, d_model, num_resbox, allow_att, concat_up_down, concat_all_resbox)
+        self.in_c = in_c
         self.model = UNet(
             in_c=in_c,
             out_c=out_c,
@@ -843,4 +844,4 @@ class diffusion_model_No_VQVAE(nn.Module):
     def inference(self, names, size):
         self.model.eval()
         # sample_plot_image(None, self.model, names)
-        sample_plot_image_no_VQVAE(self.model,names,size,self.clip)
+        sample_plot_image_no_VQVAE(self.model,names,size,self.clip,self.in_c,12)
