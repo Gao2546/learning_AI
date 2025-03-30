@@ -1,6 +1,6 @@
 ---
 
-# **Web Page or Search Engine Query Instructions [mcp_BrowserBase]**  
+# **Web Page or Search Engine Query Instructions [mcp_BrowserBase]**
 
 You can search for information on any web page or use the **DuckDuckGo** search engine. Follow these steps:  
 
@@ -24,7 +24,7 @@ You can search for information on any web page or use the **DuckDuckGo** search 
    - Before calling 'Search_By_idOrClass' you must be using this step
    - Use this step to find resources have been retrieved from data you want after this step you must get data from this step analysis it.
    - You can use this step only find data you want
-   - prompt to find resources have been retrieved from data you want and select top k search results related to the query. (use 3 for find links use 3 for find search box and use 10 for find text)
+   - prompt to find resources have been retrieved from data you want and select top k search results related to the query. (use 3 for find links use 3 for find search box and use 10 for find text you can adjust top k search results if you want more information)
 
 4. **Perform a Search on the Page**  
    - Once you have the **ID** or **Class** of the search box, use the `Search_By_idOrClass` command to search for your desired content.  
@@ -49,7 +49,7 @@ You can search for information on any web page or use the **DuckDuckGo** search 
    - If you do not need HTML tags, ignore them after this step.  
    - Use this step to find resources have been retrieved from data you want after this step you must get data from this step analysis it.
    - You can use this step only find data you want
-   - prompt to find resources have been retrieved from data you want and select top k search results related to the query. (use 3 for find links use 3 for find search box and use 10 for find text)
+   - prompt to find resources have been retrieved from data you want and select top k search results related to the query. (use 3 for find links you can adjust top k search results if you want more information , use 3 for find search box , you can adjust top k search results if you want more information and use 10 for find text you can adjust top k search results if you want more information)
 
 4. **Retrieve and Search the Selected Page**  
    - Use **Step 1** again to load the selected page.  
@@ -59,5 +59,8 @@ You can search for information on any web page or use the **DuckDuckGo** search 
 
 ## **Additional Notes**  
 - If searching within web pages from search engine results, **combine** both **Method 1** and **Method 2** as necessary.  
+- Ask user every time to use this tool
+- If information about questions not enough you can search more information about questions. using **Method 1** and **Method 2**
+- If user do not need to use this tool. you can answer user questions using your knowledge
 
 This version keeps everything concise, logical, and clear. Let me know if you'd like any further refinements!
