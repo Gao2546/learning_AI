@@ -119,10 +119,13 @@ class TextFeatureToImageFeature(nn.Module):
         self.image_feature_size = image_feature_size
         self.images_feature_channels = images_feature_channels
         self.linear = nn.Linear(in_features=text_feature_dim, out_features=image_feature_size * image_feature_size * images_feature_channels)
+        self.batchnorm = nn.BatchNorm1d(num_features=image_feature_size * image_feature_size * images_feature_channels)
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        x = self.relu(self.linear(x))
+        x = self.linear(x)
+        x = self.batchnorm(x)
+        x = self.relu(x)
         x = x.view(x.size(0), -1, self.image_feature_size, self.image_feature_size)
         return x
     

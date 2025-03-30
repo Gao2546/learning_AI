@@ -1,0 +1,65 @@
+Your prompt is already well-structured and clear. I made slight refinements to improve readability, consistency, and logical flow while ensuring all instructions are precise.  
+
+---
+
+# **Web Page or Search Engine Query Instructions [mcp_BrowserBase]**  
+
+You can search for information on any web page or use the **DuckDuckGo** search engine. Follow these steps:  
+
+---
+
+## **Method 1: Searching on a Specific Web Page**  
+
+1. **Retrieve the Web Page**  
+   - If you have not yet loaded the web page, use the `get_page` command.  
+   - To search using **DuckDuckGo**, pass `"http://duckduckgo.com"` as the URL.  
+   - If you use **DuckDuckGo** you must be getting the link of serach resul and get the page for that link
+
+2. **Retrieve the Page Source Or Text**  
+   - If the page source has not been retrieved, use the `get_source` command to extract and save it to **RAG** (Retrieval-Augmented Generation).  
+   - If the page text has not been retrieved, use the `get_text` command to extract and save it to **RAG** (Retrieval-Augmented Generation). if you use **DuckDuckGo** you do not use ((`get_text`)).
+   - this steps is only get data from page and save it to **RAG** (Retrieval-Augmented Generation). if you wnat to get data you need to call `get_SourceOrText_from_rag`
+
+3. **Extract the Search Box Identifier**  
+   - If you have already retrieved the page source, use the `get_SourceOrText_from_rag` command to fetch the stored source.  
+   - Locate the **ID** or **Class** of the search box.
+   - Before calling 'Search_By_idOrClass' you must be using this step
+   - Use this step to find resources have been retrieved from data you want after this step you must get data from this step analysis it.
+   - You can use this step only find data you want
+   - prompt to find resources have been retrieved from data you want and select top k search results related to the query. (use 3 for find links use 3 for find search box and use 10 for find text)
+
+4. **Perform a Search on the Page**  
+   - Once you have the **ID** or **Class** of the search box, use the `Search_By_idOrClass` command to search for your desired content.  
+   - **Skip this step** if you do not need to perform a search.  
+
+---
+
+## **Method 2: Searching via a Search Engine & Extracting Information**  
+
+1. **Initiate a Search via DuckDuckGo**  
+   - Use **Step 1** (`get_page` with `"http://duckduckgo.com"`) to open DuckDuckGo.  
+   - Follow **Steps 2–4** from **Method 1** to perform a search.  
+   - If you use **DuckDuckGo** you must be getting the link of serach resul and get the page for that link
+
+2. **Retrieve the Search Results Source**  
+   - Use **Step 2** (`get_source`) to extract the page source.  
+   - Use **Step 2** (`get_text`) to extract the page text. if you use **DuckDuckGo** you do not use ((`get_text`)).
+   - this steps is only get data from page and save it to **RAG** (Retrieval-Augmented Generation). if you wnat to get data you need to call `get_SourceOrText_from_rag`
+
+3. **Extract Relevant Links from Search Results**  
+   - Use **Step 3** (`get_SourceOrText_from_rag`) to find and select the **Nth** link of interest, use prompt about data you want to find.  
+   - If you do not need HTML tags, ignore them after this step.  
+   - Use this step to find resources have been retrieved from data you want after this step you must get data from this step analysis it.
+   - You can use this step only find data you want
+   - prompt to find resources have been retrieved from data you want and select top k search results related to the query. (use 3 for find links use 3 for find search box and use 10 for find text)
+
+4. **Retrieve and Search the Selected Page**  
+   - Use **Step 1** again to load the selected page.  
+   - If needed, follow **Method 1** to search within the page.  
+
+---
+
+## **Additional Notes**  
+- If searching within web pages from search engine results, **combine** both **Method 1** and **Method 2** as necessary.  
+
+This version keeps everything concise, logical, and clear. Let me know if you'd like any further refinements!

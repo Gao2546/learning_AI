@@ -569,7 +569,7 @@ class RAG_module:
         self.historyChat = []
 
     def RAG_Web(self,
-                link: Union[str , Sequence[str]] = "",
+                link: str = "",
                 store: bool = True):
         loader = WebBaseLoader(
         # web_paths=("https://lilianweng.github.io/posts/2023-06-23-agent/",),
@@ -593,7 +593,7 @@ class RAG_module:
             self.document_str += "\n\n\n".join(["source: " + page.metadata["source"] + "\n\n" + page.page_content for page in docs]) + "\n\n\n\n"
         
 
-    def RAG_PDF(self, file_path, floder, store = True):
+    def RAG_PDF(self, file_path, floder, store = True,chunk_size=1000, chunk_overlap=200):
         if floder != None:
             files = os.listdir(floder)
         else:
@@ -608,7 +608,7 @@ class RAG_module:
                 loader = PyMuPDFLoader(file_path)
                 docs = loader.load()
                 if store:
-                    text_splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=50)
+                    text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
                     all_splits = text_splitter.split_documents(docs)
 
                     # Index chunks
@@ -654,7 +654,7 @@ class RAG_module:
 
     def generate(self, state: State):
         docs_content = "\n\n".join(doc.page_content for doc in state["context"])
-        print(docs_content)
+        # print(docs_content)
         # print("---------------------------------------------------------------------")
         messages = self.prompt.invoke({"question": state["question"], "context": docs_content})
         if state["history"] != None:

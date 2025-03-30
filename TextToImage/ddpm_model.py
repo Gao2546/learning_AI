@@ -174,7 +174,7 @@ def main():
     set_seed(seed)
 
     # Paths
-    model_ckp = None#"model/checkpoint/DDPM_T_VQVAETinyImagesNet200.pth"
+    model_ckp = "model/checkpoint/DDPM_T0.pth"
     model_VQVAE_path = None#"model/checkpoint/VQVAETinyImagesNet200.pth"
     model_CLIP = "model/checkpoint/CLIP0.pth"
     # path_to_data = "./data/104Flower_resized"
@@ -197,7 +197,7 @@ def main():
     No_VQVAE = True
     n_class = 10
     batch_size = 16 * 1
-    epochs = 10
+    epochs = 100
     traning_VQVAE = False
     training_CLIP = False
     # ===================================================>
