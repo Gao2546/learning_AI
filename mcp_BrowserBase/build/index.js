@@ -190,7 +190,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     return {
                         content: [{
                                 type: "text",
-                                text: "complete",
+                                text: data.result,
                             }]
                     };
                 }
@@ -208,7 +208,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return {
                     content: [{
                             type: "text",
-                            text: "complete",
+                            text: data.result,
                         }]
                 };
             }
@@ -225,7 +225,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return {
                     content: [{
                             type: "text",
-                            text: "complete",
+                            text: data.result,
                         }]
                 };
             }
@@ -278,7 +278,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return {
                     content: [{
                             type: "text",
-                            text: data.complete
+                            text: data.result
                         }]
                 };
             }

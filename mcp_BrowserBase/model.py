@@ -10,7 +10,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 # from typing_extensions import List, TypedDict
 # from langchain_ollama import OllamaEmbeddings
 from langchain_core.vectorstores import InMemoryVectorStore
-# from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import OpenAIEmbeddings
 import time
 import random
@@ -51,6 +51,7 @@ def generate():
 @app.route('/GetPage' , methods=['GET','POST'])
 def get_page_route():
     global driver
+    st = time.time()
     try:
         if driver:
             driver.quit()
@@ -63,32 +64,47 @@ def get_page_route():
     driver = init_driver()
     driver.get(url)
     print("complete")
-    return jsonify({'result': 'complete'})
+    sto = time.time()
+    print(f'complete dT = {sto - st} Sec')
+    return jsonify({'result': f'complete dT = {sto - st} Sec'})
 
 @app.route('/GetSourcePage', methods=['GET','POST'])
 def get_source_route():
     global vector_store
     global embeddings
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    st = time.time()
+    # embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    # embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
     vector_store = InMemoryVectorStore(embeddings)
+    print(time.time() - st,"ssssssssssssssssssssssssssss")
     page_source = driver.find_element(By.TAG_NAME, "body").get_attribute('innerHTML')
+    print(time.time() - st,"ssssssssssssssssssssssssssss")
     soup = bs4.BeautifulSoup(page_source, "html.parser")
+    print(time.time() - st,"ssssssssssssssssssssssssssss")
+    # elements = soup.find_all()
     elements = [
             element
             for element in soup.find_all()
-            if element.name not in ['script', 'img']
+            if (element.name not in ['script', 'img', 'svg', "link", 'meta','head','noscript','meta','style','div','span','path','section'])
         ]
+    print(time.time() - st,"ssssssssssssssssssssssssssss")
     # inputs = soup.find_all(["input", "textarea"])  # ดึงเฉพาะ <input> elements
-    page_source = "\n".join(str(inp) for inp in elements)  # แปลงเป็นสตริง
+    # page_source = "\n".join(str(inp) for inp in elements)  # แปลงเป็นสตริง
     pages = [str(inp) for inp in elements]
-    _ = vector_store.add_texts(texts=pages) # Adds the split documents
-    return jsonify({'page_source': page_source}) # Return the converted data
+    print(len(pages))
+    _ = vector_store.add_texts(texts=pages)
+    print(time.time() - st,"ssssssssssssssssssssssssssss")
+    sto = time.time()
+    print(f'complete dT = {sto - st} Sec') # Return the converted data
+    return jsonify({'result': f'complete dT = {sto - st} Sec'}) # Return the converted data
 
 @app.route('/GetTextPage', methods=['GET','POST'])
 def get_text():
     global vector_store
     global embeddings
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    st = time.time()
+    # embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    # embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
     vector_store = InMemoryVectorStore(embeddings)
     page_source = driver.find_element(By.TAG_NAME, "body").get_attribute('innerHTML')
     soup = bs4.BeautifulSoup(page_source, "html.parser")
@@ -96,21 +112,27 @@ def get_text():
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     pages = text_splitter.split_text(soup_text)
     _ = vector_store.add_texts(texts=pages)
-    return jsonify({'page_source': page_source})
+    sto = time.time()
+    print(f'complete dT = {sto - st} Sec') # Return the converted data
+    return jsonify({'result': f'complete dT = {sto - st} Sec'})
 
 @app.route('/GetData', methods=['POST'])
 def get_data():
+    st = time.time()
     promt = request.json['prompt']
     k = request.json['k']
     vector_search = vector_store.similarity_search(promt, k=int(k))
     retrieved_docs = "\n\n".join(doc.page_content for doc in vector_search)
-    print(type(retrieved_docs))
-    print(len(retrieved_docs))
-    app.logger.info("test")
+    # print(type(retrieved_docs))
+    # print(len(retrieved_docs))
+    # app.logger.info("test")
+    sto = time.time()
+    print(f'complete dT = {sto - st} Sec')
     return jsonify({'retrieved_docs': retrieved_docs})
 
 @app.route('/Search_By_ID', methods=['POST'])
 def Search_By_ID():
+    st = time.time()
     id = request.json['id']
     text = request.json['text']
 
@@ -130,11 +152,13 @@ def Search_By_ID():
         # else:
             # print("Element is not visible")
             # return jsonify({"complete":"use another id or class from search list"})
-    for char in "hello world":
-        # input_box.send_keys(char)
-        time.sleep(random.uniform(0.1, 0.3))
+    # for char in "hello world":
+    #     # input_box.send_keys(char)
+    #     time.sleep(random.uniform(0.1, 0.3))
     field.send_keys(Keys.RETURN)
-    return jsonify({"complete":"complete"})           
+    sto = time.time()
+    print(f'complete dT = {sto - st} Sec')
+    return jsonify({"result":f'complete dT = {sto - st} Sec'})           
 
 
 
@@ -144,4 +168,7 @@ if __name__ == '__main__':
     # embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     # embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
     # vector_store = InMemoryVectorStore(embeddings)
+    # embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2") ## slowest and but efficient
+    # embeddings = HuggingFaceEmbeddings(model_name="multi-qa-MiniLM-L6-cos-v1") ##fastest but less efficient
+    embeddings = HuggingFaceEmbeddings(model_name="paraphrase-MiniLM-L6-v2") ## faster and more efficient
     app.run(port=5001,debug=True)
