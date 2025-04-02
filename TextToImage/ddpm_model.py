@@ -160,8 +160,9 @@ def train_ddp(rank, world_size, train_dataset, batch_size, model_ckp, model_VQVA
     model = DDP(model, device_ids=[rank])
 
     print(f"Rank {rank}: Model loaded. Starting training...")
-    model.module.train_model(train_loader, num_epochs=n_epoch)
+    # model.module.train_model(train_loader, num_epochs=n_epoch)
     # model.module.inference("test",img_size)
+    model.module.generate([0,1,2,3,4,5,6,7,8,9], img_size)
 
     dist.destroy_process_group()
 
@@ -174,11 +175,11 @@ def main():
     set_seed(seed)
 
     # Paths
-    model_ckp = "model/checkpoint/DDPM_T0.pth"
-    model_VQVAE_path = None#"model/checkpoint/VQVAETinyImagesNet200.pth"
-    model_CLIP = "model/checkpoint/CLIP0.pth"
-    # path_to_data = "./data/104Flower_resized"
-    path_to_data = "./data/tiny-imagenet-200/train"
+    model_ckp = "TextToImage/model/checkpoint/DDPM_T0.pth"
+    model_VQVAE_path = None#"TextToImage/model/checkpoint/VQVAETinyImagesNet200.pth"
+    model_CLIP = "TextToImage/model/checkpoint/CLIP0.pth"
+    # path_to_data = "TextToImage/data/104Flower_resized"
+    path_to_data = "TextToImage/data/tiny-imagenet-200/train"
 
     # Check if the dataset path exists
     if not os.path.exists(path_to_data):
@@ -216,7 +217,7 @@ def main():
     # train_dataset = datasets.ImageFolder(root=path_to_data, transform=transform)
     # train_dataset = datasets.CIFAR100(root='/data', train=True, transform=transform, download=True)
     transform = transforms.Compose([transforms.ToTensor()])
-    train_dataset = datasets.MNIST(root="./data", train=True, transform=transform, download=True)
+    train_dataset = datasets.MNIST(root="TextToImage/data", train=True, transform=transform, download=True)
     n_class = len(train_dataset.classes)
     size, image_c = train_dataset[0][0].shape[1], train_dataset[0][0].shape[0]
     

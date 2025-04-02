@@ -3,6 +3,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from bs4 import BeautifulSoup
 from langchain_huggingface import HuggingFaceEmbeddings
+import time
 
 
 def get_page_source_as_list(url):
@@ -20,11 +21,17 @@ def get_page_source_as_list(url):
     """
     try:
         # Set up the Chrome driver (ensure you have chromedriver installed and in your PATH)
-        service = Service() # Use default path for chromedriver
-        options = webdriver.ChromeOptions()
+        service = Service('/usr/local/bin/chromedriver')
+        # service = Service() # Use default path for chromedriver
+        # options = webdriver.ChromeOptions()
+        options = webdriver.FirefoxOptions()
+        options.add_argument("--user-data-dir=/home/athip/.config/firefox/")  # Update this path
+        # options.add_argument("--user-data-dir=/home/athip/.config/google-chrome/")  # Update this path
+        options.add_argument("--profile-directory=Default")  # Change to "Profile 1" if needed
         # You can add options like headless mode if needed:
         # options.add_argument("--headless")
-        driver = webdriver.Chrome(service=service, options=options)
+        # driver = webdriver.Chrome(options=options)
+        driver = webdriver.Firefox(options=options)
 
         # Open the web page
         driver.get(url)
@@ -49,8 +56,8 @@ def get_page_source_as_list(url):
             # print(element.name)
 
         # Close the browser
-        driver.quit()
-
+        # driver.quit()
+        time.sleep(100)
         return elements
 
     except Exception as e:
@@ -59,7 +66,7 @@ def get_page_source_as_list(url):
 
 if __name__ == "__main__":
     # emm = HuggingFaceEmbeddings(model_name = "sentence-transformers/all-mpnet-base-v2")
-    embeddings = HuggingFaceEmbeddings(model_name="paraphrase-MiniLM-L6-v2")
+    # embeddings = HuggingFaceEmbeddings(model_name="paraphrase-MiniLM-L6-v2")
     url_to_open = "https://duckduckgo.com/?t=h_&q=%E0%B8%A7%E0%B8%B4%E0%B8%98%E0%B8%B5%E0%B8%97%E0%B8%B3%E0%B8%82%E0%B9%89%E0%B8%B2%E0%B8%A7%E0%B8%9C%E0%B8%B1%E0%B8%94&ia=web"  # Replace with the URL you want to open
     elements = get_page_source_as_list(url_to_open)
 

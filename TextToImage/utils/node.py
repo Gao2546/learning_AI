@@ -12,9 +12,17 @@ import numpy as np
 import gc
 from torch.cuda import amp
 from mpl_toolkits.axes_grid1 import ImageGrid
-from utils.utils import *
 import random
 import os
+import sys
+
+# Add project root to sys.path to allow absolute imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+from utils.utils import *
+
 device = torch.device("cuda")
 step_sampling = 1000
 
@@ -849,3 +857,8 @@ class diffusion_model_No_VQVAE(nn.Module):
         self.model.eval()
         # sample_plot_image(None, self.model, names)
         sample_plot_image_no_VQVAE(self.model,names,size,self.clip,self.in_c,12)
+
+    def generate(self, prompt, size):
+        self.model.eval()
+        img = generate_image_no_VQVAE(self.model, self.clip, size, self.in_c, prompt)
+        return img

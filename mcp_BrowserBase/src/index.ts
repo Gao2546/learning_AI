@@ -67,16 +67,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "IMG_Generate",
-        description: "Create a new image from a given text",
+        description: "Create a new image from a given text prompt",
         inputSchema: {
           type: "object",
           properties: {
-            text: {
+            prompt: {
               type: "string",
               description: "Text to generate the image from"
             },
           },
-          required: ["text"]
+          required: ["prompt"]
         }
       },
       {
@@ -91,6 +91,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["url"]
+        }
+      },
+      {
+        name: "click_on_page",
+        description: "Click element on the web page. If you want to click on a page",
+        inputSchema: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description: "id or class of element on the web page you want to click"
+            },
+          },
+          required: ["id"]
         }
       },
       {
@@ -162,8 +176,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   switch (request.params.name) {
 
     case "IMG_Generate": {
-      const text = String(request.params.arguments?.text);
-      if (!text) {
+      const prompt = String(request.params.arguments?.prompt);
+      if (!prompt) {
         throw new Error("Text is required");
       } else {
         const response = await fetch('http://127.0.0.1:5001/Generate', {
@@ -171,7 +185,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           headers: {
             'Content-Type': 'application/json'
                     },
-          body: JSON.stringify({ text: text })
+          body: JSON.stringify({ prompt: prompt })
           });
           const data = await response.json();
           console.log(data.result);
@@ -199,6 +213,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ url: url })
+        });
+        const data = await response.json();
+        // console.log(data.page_source);
+
+        // const id = String(Object.keys(sources).length + 1);
+        // sources[id] = { url, content: data.page_source };
+
+        return {
+          content: [{
+            type: "text",
+            text: data.result,
+          }]
+        };
+      }
+    };
+
+    case "click_on_page": {
+      const id = String(request.params.arguments?.id);
+      if (!id) {
+        throw new Error("ID or Class is required");
+      } else {
+        const response = await fetch('http://127.0.1:5001/Click', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ id: id })
         });
         const data = await response.json();
         // console.log(data.page_source);

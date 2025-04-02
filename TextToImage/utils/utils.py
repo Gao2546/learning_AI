@@ -1,4 +1,5 @@
 import torch
+import datetime
 from torch.utils.data import DataLoader
 from torch import nn
 from torchvision import datasets,transforms
@@ -13,6 +14,7 @@ import gc
 from torch.cuda import amp
 from mpl_toolkits.axes_grid1 import ImageGrid
 import tqdm
+import time
 device = torch.device("cuda")
 
 import torch.nn.functional as F
@@ -233,7 +235,7 @@ def sample_plot_image(Encode_Decode,Denoise_model,names,size):
     #     plt.subplot(4, 8, im+1)
     #     show_tensor_image(img[im].detach().cpu())
     # plt.show()
-    plt.savefig(f"output/sample_{names}.png")
+    plt.savefig(f"TextToImage/output/sample_{names}_{datetime.datetime.now().strftime('%d_%m_%Y')}.png")
 
 @torch.no_grad()
 def sample_plot_image_no_VQVAE(Denoise_model, names, size, CLIP_model,img_c,num_gen):
@@ -255,7 +257,21 @@ def sample_plot_image_no_VQVAE(Denoise_model, names, size, CLIP_model,img_c,num_
     for idx, (ax, im) in enumerate(zip(grid, img.to("cpu"))):
         ax.imshow(show_tensor_image(im))
         ax.set_title(f"Label: {descreaption[idx].item()}", fontsize=8)
-    plt.savefig(f"output/sample_no_VQVAE_{names}.png")
+    plt.savefig(f"TextToImage/output/sample_no_VQVAE_{names}_{datetime.datetime.now().strftime('%d_%m_%Y')}.png")
+
+@torch.no_grad()
+def generate_image_no_VQVAE(Denoise_model, CLIP_model, image_size, image_c, prompt):
+    prompt = torch.tensor([int(prompts) for prompts in prompt],device=device, dtype=torch.long)
+    num_prompt = prompt.size(0)
+    encode_text = CLIP_model.text_encoding(prompt)
+    img = torch.randn((num_prompt, image_c, image_size, image_size), device=device)
+    for time_step in range(1, step_sampling)[::-1]:
+        t = torch.ones(num_prompt, device=device, dtype=torch.long) * time_step
+        img = sample_timestep(img, t, time_step, Denoise_model, encode_text)
+    img = torch.clamp(img, -1.0, 1.0)
+    for p,i in zip(prompt.cpu().tolist(),img):
+        plt.imsave(f"/home/athip/psu/learning_AI/TextToImage/output/{p}_{datetime.datetime.now().strftime('%d_%m_%Y')}.png",show_tensor_image(i.cpu()))
+    return img
 
 def show_img_VAE(batch,recon,names):
     fig = plt.figure(1,clear=True)
@@ -277,7 +293,7 @@ def show_img_VAE(batch,recon,names):
     for ax, im in zip(grid, recon.to("cpu")):
         # Iterating over the grid returns the Axes.
         ax.imshow(show_tensor_image(im))
-    plt.savefig(f"output/VQVAE{names}.png")
+    plt.savefig(f"TextToImage/output/VQVAE{names}_{datetime.datetime.now().strftime('%d_%m_%Y')}.png")
     # for im in range(img.size(0)):
     #     plt.subplot(4, 8, im+1)
     #     show_tensor_image(img[im].detach().cpu())
