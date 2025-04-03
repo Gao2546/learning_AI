@@ -416,7 +416,8 @@ class CLIPModel(nn.Module):
         try:
             if load_model_path:
                 self.load(load_model_path)
-        except:
+        except Exception as e:
+            print(f"Error loading model: {e}")
             print("No model to load")
         
     def train_model(self, train_dataloader, num_epochs):
@@ -803,7 +804,7 @@ class diffusion_model_No_VQVAE(nn.Module):
             self.clip = None
         self.model = self.model.to(device)
         self.optim = optim.Adam(self.model.parameters(), lr=5e-4)
-        self.scaler = amp.GradScaler()
+        self.scaler = torch.amp.GradScaler()
         self.loss = nn.MSELoss()
         # if torch.cuda.device_count() > 1:
         #     self.model = nn.DataParallel(self.model)

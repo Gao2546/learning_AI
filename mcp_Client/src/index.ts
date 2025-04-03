@@ -5,7 +5,6 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 (async () => {
     let client: Client | undefined; // Declare client here to access in finally
 
-    try {
         // Initialize transport
         const transport = new StdioClientTransport({
             "command": "bash",
@@ -37,12 +36,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
     console.log("Client connected.");
 
     // List prompts
-    try {
         const prompts = await client.listPrompts();
         console.log("Available Prompts:", JSON.stringify(prompts, null, 2));
-    } catch (error) {
-        console.error("Error listing prompts:", error);
-    }
 
     // Get a prompt (Example - keep commented or implement)
     // try {
@@ -53,12 +48,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
     // }
 
     // List resources
-    try {
         const resources = await client.listResources();
         console.log("Available Resources:", JSON.stringify(resources, null, 2));
-    } catch (error) {
-        console.error("Error listing resources:", error);
-    }
 
     // Read a resource (Example - keep commented or implement)
     // try {
@@ -69,15 +60,10 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
     // }
 
     // List tools
-    try {
         const tools = await client.listTools();
         console.log("Available Tools:", JSON.stringify(tools, null, 2));
-    } catch (error) {
-        console.error("Error listing tools:", error);
-    }
 
     // Call a tool
-    try {
         const result = await client.callTool({
             name: "get_page",
             arguments: {
@@ -85,27 +71,13 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
             }
         });
         console.log("Tool 'get_page' Result:", JSON.stringify(result, null, 2));
-    } catch (error) {
-        console.error("Error calling tool 'get_page':", error);
-    }
 
-    } catch (error) {
-        // Catch errors from initialization, connection, or operations
-        console.error("An error occurred:", error);
-        // Optionally exit if initialization/connection failed critically
-        // if (!client?.isConnected) process.exit(1); // Check if client exists and is connected before deciding to exit
-    } finally {
         // Ensure disconnection attempt even if initialization failed partially
         if (client) { // Check if client was successfully initialized
              // Assuming client.close() is safe to call even if not connected or already closed
-            try {
                 await client.close();
                 console.log("Client disconnected.");
-            } catch (closeError) {
-                console.error("Error during client disconnection:", closeError);
-            }
         } else {
             console.log("Client was not initialized, skipping disconnection.");
         }
-    }
 })(); // Immediately invoke the async function
