@@ -79,6 +79,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["prompt"]
         }
       },
+
       {
         name: "get_page",
         description: "Get the web page do not send value in link.",
@@ -93,20 +94,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["url"]
         }
       },
+
       {
         name: "click_on_page",
         description: "Click element on the web page. If you want to click on a page",
         inputSchema: {
           type: "object",
           properties: {
-            id: {
+            Id: {
               type: "string",
-              description: "id or class of element on the web page you want to click"
+              description: "id of element on the web page you want to click"
+            },
+            Class: {
+              type: "string",
+              description: "class of element on the web page you want to click"
+            },
+            TagName: {
+              type: "string",
+              description: "tag name of element on the web page you want to click"
             },
           },
-          required: ["id"]
+          required: ["IdOrClass"]
         }
       },
+
       {
         name: "get_source",
         description: "Get the source of the web page and save source to RAG",
@@ -117,9 +128,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: []
         }
       },
+
       {
         name: "get_text",
-        description: "Get the text of the web page and save source to RAG",
+        description: "Get the text content of the web page and save source to RAG",
         inputSchema: {
           type: "object",
           properties: {
@@ -127,6 +139,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: []
         }
       },
+
       {
         name: "get_SourceOrText_from_rag",
         description: "Get the source or text of the web page from RAG",
@@ -145,25 +158,52 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["prompt","k"] 
         }
       },
+
       {
         name: "Search_By_idOrClass",
-        description: "Search data of the web page from ID or Class etc. of Search Box",
+        description: "Search data of the web page from ID Class and Tag of Search Box by using css selector",
         inputSchema: {
           type: "object" ,
           properties: {
-            id: {
+            Id: {
               type: "string",
-              description: "id or class for find element is box search"
+              description: "id for find box search element"
+            },
+            Class: {
+              type: "string",
+              description: "class for find box search element"
+            },
+            TagName: {
+              type: "string",
+              description: "tag for find box search element"
             },
             text: {
               type: "string",
               description: "text to search"
             }
           },
-          required: ["id", "text"]
+          required: ["Id", "Class", "TagName","text"]
         }
       },
 
+      {
+        name: "Search_By_DuckDuckGo",
+        description: "Search web page from DuckDuckGo search engine",
+        inputSchema: {
+          type: "object" ,
+          properties: {
+            query: {
+              type: "string",
+              description: "text to search"
+            },
+            max_results: {
+              type: "string",
+              description: "max results to search"
+          },
+          required: ["query", "max_results"]
+        }
+      },
+    }
     ]
   };
 });
@@ -230,8 +270,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
 
     case "click_on_page": {
-      const id = String(request.params.arguments?.id);
-      if (!id) {
+      const Id = String(request.params.arguments?.Id);
+      const Class = String(request.params.arguments?.Class);
+      const TagName = String(request.params.arguments?.TagName);
+      if (!Id && !Class && !TagName) {
         throw new Error("ID or Class is required");
       } else {
         const response = await fetch('http://127.0.1:5001/Click', {
@@ -239,7 +281,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ id: id })
+          body: JSON.stringify({ Id: Id,
+                                 Class: Class,
+                                 TagName: TagName})
         });
         const data = await response.json();
         // console.log(data.page_source);
@@ -315,9 +359,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
 
     case "Search_By_idOrClass":{
-      const id = String(request.params.arguments?.id);
+      const Id = String(request.params.arguments?.Id);
+      const Class = String(request.params.arguments?.Class);
+      const TagName = String(request.params.arguments?.TagName);
       const text = String(request.params.arguments?.text);
-      if (!id && !text) {
+      if (!Id && !Class && !TagName && !text) {
         throw new Error("url id and text is required");
       } else {
         const response = await fetch("http://127.0.1:5001/Search_By_ID", {
@@ -325,14 +371,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           headers: {
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({id: id, text: text })
+          body: JSON.stringify({Id: Id,
+                                Class: Class,
+                                TagName: TagName,
+                                text: text })
         });
         const data = await response.json();
-        console.log(data.complete)
         return {
           content: [{
             type: "text",
             text: data.result
+          }]
+        }
+      };
+    }
+
+    case "Search_By_DuckDuckGo":{
+      const query = String(request.params.arguments?.query);
+      const max_results = String(request.params.arguments?.max_results);
+      if (!query && !max_results) {
+        throw new Error("url id and text is required");
+      } else {
+        const response = await fetch("http://127.0.1:5001/Search_By_DuckDuckGo", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({query: query,
+                                max_results: max_results
+           })
+        });
+        const data = await response.json();
+        console.log(data.result);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(data.result)
           }]
         }
       };
