@@ -73,7 +73,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             prompt: {
               type: "string",
-              description: "Text to generate the image from"
+              description: "Text to generate the image from (ex. {prompt: 0} , {prompt: 5} , .etc)"
             },
           },
           required: ["prompt"]

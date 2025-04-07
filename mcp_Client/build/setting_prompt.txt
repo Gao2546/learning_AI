@@ -472,7 +472,7 @@ When a server is connected, you can use the server's tools via the `use_mcp_tool
       "properties": {
         "prompt": {
           "type": "string",
-          "description": "Text to generate the image from"
+          "description": "Text to generate the image from (ex. Generate just one image showing the number 0. {prompt: 0} , Generate just one image showing the number 5. {prompt: 5} , .etc)"
         }
       },
       "required": [
@@ -940,3 +940,15 @@ You can search for information on any web page or use the **DuckDuckGo** search 
 - If you not sure in each step you must ask user.
 - Before task complete please check the result. If result is not complete please find other way to finish
 - you must use `get_text` if you want to find infomation on page.
+- If you want to Generate Image with tool `IMG_Generate` use this format 
+  task : generate image number 0 one image.
+  {
+    prompt: 0
+  }
+  or
+  task : generate image number 5 one image.
+  {
+    prompt: 5
+  }
+  .etc
+- If task complete using this tool `attempt_completion`

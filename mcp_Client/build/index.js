@@ -186,7 +186,7 @@ async function llm(question) {
                         arguments: tool_u.arguments,
                     });
                     console.log("RESPONSE:\n", result.content[0].text, "\n================================================");
-                    return `[use_mcp_tool for '${tool_u.serverName}'] Result:\n${result.content[0].text}\n current step using ${tool_u.toolName} is complete move to next step if task complete return attempt_completion`; // Return the result of the tool call
+                    return `[use_mcp_tool for '${tool_u.serverName}'] Result:\n${result.content[0].text}\n current step using ${tool_u.toolName} is complete move to next step if task complete use tool attempt_completion`; // Return the result of the tool call
                 }
                 catch (toolError) {
                     console.error("Error during MCP tool connection or call:", tool_u.toolName, toolError);
