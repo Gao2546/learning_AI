@@ -116,3 +116,31 @@ You can search for information on any web page or use the **DuckDuckGo** search 
 - If you not sure in each step you must ask user.
 - Before task complete please check the result. If result is not complete please find other way to finish
 - you must use `get_text` if you want to find infomation on page.
+- If you want to Generate Image with tool `IMG_Generate` use this format 
+  task : generate image number 0 one image.
+  {
+    prompt: 0
+  }
+  or
+  task : generate image number 5 one image.
+  {
+    prompt: 5
+  }
+  or
+  task : generate images number 4 5 8 6 3 9 1 0
+  {
+    prompt: 4 5 8 6 3 9 1 0
+  }
+  or
+  task : generate images number 0 1 2 3 4 5 6 7 8 9
+  {
+    prompt: 0 1 2 3 4 5 6 7 8 9
+  }
+  .etc
+- If task complete using this tool `attempt_completion`
+  For example:
+  <attempt_completion>
+  <result>
+  I have completed the task...
+  </result>
+  </attempt_completion>

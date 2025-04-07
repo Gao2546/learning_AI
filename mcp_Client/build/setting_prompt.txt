@@ -950,5 +950,21 @@ You can search for information on any web page or use the **DuckDuckGo** search 
   {
     prompt: 5
   }
+  or
+  task : generate images number 4 5 8 6 3 9 1 0
+  {
+    prompt: 4 5 8 6 3 9 1 0
+  }
+  or
+  task : generate images number 0 1 2 3 4 5 6 7 8 9
+  {
+    prompt: 0 1 2 3 4 5 6 7 8 9
+  }
   .etc
 - If task complete using this tool `attempt_completion`
+  For example:
+  <attempt_completion>
+  <result>
+  I have completed the task...
+  </result>
+  </attempt_completion>
