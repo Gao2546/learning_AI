@@ -1,0 +1,230 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    background-color: #333;
+    height: 90vh;
+    color: #fff;
+}
+
+h1 {
+    text-align: center;
+    color: #fff;
+}
+
+#chatbox {
+    max-width: 100%;
+    height: calc(100vh - 150px);
+    margin: 20px auto;
+    width: 100%;
+    background-color: #444;
+    /* border: 1px solid #555; */
+    border-radius: 5px;
+    /* padding: 15px; */
+    /* box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); */
+    display: flex;
+    flex-direction: column;
+    /* align-items: flex-start; */
+}
+
+#messages {
+    flex-grow: 1;
+    overflow-y: auto;
+    /* border: 1px solid #555; */
+    padding: 10px 25%;
+    background-color: #333;
+    color: #fff;
+    /* overflow-x:hidden; */
+    width: 50%;
+}
+
+#userInput {
+    flex-grow: 1;
+    padding: 10px;
+    border:0px solid #555;
+    border-radius: 10px 0px 0px 10px ;
+    background-color: #555;
+    color: #fff;
+    /* margin-right: 5px; */
+    resize: none;
+    max-height: 150px;
+    height: 37px;
+    overflow-y: auto;
+    margin: 0px;
+}
+
+#userInput:focus {
+    outline: none;
+}
+
+#sendButton {
+    padding: 10px 15px;
+    background-color: #0056b3;
+    color: #fff;
+    border: none;
+    border-radius: 0px 10px 10px 0px;
+    cursor: pointer;
+    height: 100%;
+
+}
+
+/* Add flexbox container for input and button */
+.input-container {
+    display: flex;
+    align-items: center;
+    border: 10px;
+    border-radius: 5px;
+    /* margin-top: 10px;
+    margin-bottom: 10px;
+    margin-left: 10px;
+    margin-right: 10px; */
+    border-color: #333;
+    background-color: #333;
+    padding: 10px 25%;
+    width: 50%;
+}
+
+#sendButton:hover {
+    background-color: #003d80;
+}
+
+.user-message, .agent-message {
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    border-radius: 5px;
+    width: fit-content;
+}
+
+.user-message {
+    background-color: #444;
+    margin-left: auto;
+    color: #fff;
+    max-width: 95%;
+    /* min-height: 55px; */
+    display: flex;
+    justify-content: center; /* horizontal */
+    align-items: center;     /* vertical */
+    padding: 15px;
+    border-radius: 25px;
+}
+
+.agent-message {
+    background-color: #333;
+    color: #fff;
+    /* overflow-x: auto; */
+    max-width: 95%;
+    overflow-wrap: break-word;
+}
+
+.agent-message * {
+    overflow-wrap: break-word;
+    /* max-width: 98%; */
+}
+
+
+/* Responsive design */
+@media (max-width: 768px) {
+    #chatbox {
+        margin: 5px auto;
+        padding: 10px;
+        width: 95%;
+    }
+
+    #userInput {
+        width: calc(100% - 80px);
+        resize: vertical;
+    }
+
+    #sendButton {
+        padding: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        margin: 0;
+    }
+
+    #chatbox {
+        margin: 5px auto;
+        padding: 5px;
+        width: 95%;
+    }
+
+    #messages {
+        height: auto;
+    }
+
+    #userInput {
+        width: calc(100% - 60px);
+        padding: 8px;
+        resize: vertical;
+    }
+
+    #sendButton {
+        padding: 8px;
+    }
+}
+
+/* Add style for code highlight */
+pre.hljs {
+  background-color: #000; /* Black background */
+  color: #fff; /* White text color */
+  padding: 10px;
+  border-radius: 5px;
+  overflow-x: auto; /* Add horizontal scrollbar for overflow */
+  margin-top: 5px;
+  margin-bottom: 0px;
+}
+
+.code-block-header {
+  background-color: #555;
+  color: #fff;
+  padding: 2px;
+  /* border-top-left-radius: 5px;
+  border-top-right-radius: 5px; */
+  border: #555;
+  border-radius: 5px;
+  font-weight:normal;
+  font-size: large;
+}
+
+pre.hljs * {
+    background-color: #000;
+    font-size: large;
+}
+
+.lang {
+    margin-left: 10px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+code {
+    font-size: medium;
+    background-color: rgb(153, 161, 167);
+    border-radius: 5px;
+    padding: 5px;
+    /* color: #000; */
+}
+
+pre code {
+    padding: 0px;
+}
+
+ul {
+    margin-top: 7px;
+    margin-bottom: 7px;
+    line-height: 7px;
+}
+
+li {
+    margin-top: 7px;
+    margin-bottom: 7px;
+    line-height: 30px;
+}
+
+strong {
+    margin-top: 7px;
+    margin-bottom: 7px;
+}
+
