@@ -1,103 +1,149 @@
-/* Center the form-container vertically and horizontally */
+/* Base styles */
 body {
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
     margin: 0;
-    font-family: system-ui;
-    background-color: #333;
-    color: #fff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Match main style */
+    background-color: #1e1e1e; /* Match main background */
+    color: #e0e0e0; /* Match main text color */
 }
 
-/* Register and Login page form container */
+/* Form container */
 .form-container {
+    width: 100%;
     max-width: 400px;
-    padding: 20px;
+    padding: 30px; /* Increase padding */
     display: flex;
     flex-direction: column;
     align-items: center;
-    background-color: #333;
-    border-radius: 5px;
+    background-color: #2a2a2a; /* Slightly lighter background */
+    border-radius: 10px; /* More rounded corners */
+    border: 1px solid #3a3a3a; /* Subtle border */
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); /* Add subtle shadow */
 }
 
-/* Form inside the container */
+/* Form titles */
+.form-container h1 {
+    color: #e0e0e0;
+    margin-bottom: 25px; /* Increase space below title */
+    font-size: 1.8em; /* Larger title */
+    font-weight: 600;
+}
+
+/* Form element */
 .form-container form {
     display: flex;
     flex-direction: column;
     width: 100%;
 }
 
-/* Input fields inside forms */
+/* Input fields */
 .form-container input[type="text"],
 .form-container input[type="email"],
 .form-container input[type="password"] {
-    margin-bottom: 10px;
-    padding: 8px;
-    border-radius: 5px;
-    border: none;
+    margin-bottom: 15px; /* Increase spacing */
+    padding: 12px 15px; /* Increase padding */
+    border-radius: 8px; /* Rounded corners */
+    border: 1px solid #4a4a4a; /* Subtle border */
+    background-color: #3c3c3c; /* Darker input background */
+    color: #e0e0e0;
+    font-size: 1em;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .form-container input[type="text"]:focus,
 .form-container input[type="email"]:focus,
 .form-container input[type="password"]:focus {
     outline: none;
+    border-color: #007acc; /* Highlight focus */
+    box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.3); /* Subtle focus glow */
 }
 
-
-/* Submit button inside forms */
-.form-container button.login-button {
+/* Submit button */
+.form-container button.login-button { /* Target button specifically within form */
     display: block;
-    /* position: relative;
-    position: ; */
-    margin: 10px auto;
-    text-align: center;
-    position:sticky;
-    border: 0px;
     width: 100%;
-    max-width: 300px;
-
+    padding: 12px 15px; /* Increase padding */
+    margin-top: 10px; /* Add space above button */
+    background-color: #007acc; /* Match accent color */
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1.1em; /* Slightly larger text */
+    font-weight: 600;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    /* Reset fixed/sticky positioning if not needed here */
+    position: static;
 }
 
-/* Paragraph under the form */
+.form-container button.login-button:hover {
+    background-color: #005fa3; /* Darker on hover */
+    transform: scale(1.02);
+}
+
+.form-container button.login-button:active {
+    transform: scale(0.98);
+}
+
+/* Link paragraph */
 .form-container p {
-    margin-top: 15px;
+    margin-top: 20px; /* Increase space above link */
     text-align: center;
+    color: #b0b0b0; /* Slightly muted link text */
 }
 
-body h1.LoginTitle {
-    text-align: center;
-    color: #fff;
-    margin: 0px;
-    line-height: normal;
-    padding-top: 10px;
-
+.form-container p a {
+    color: #00a0ff; /* Brighter blue for links */
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s ease;
 }
 
-body h1.RegisterTitle {
-    text-align: center;
-    color: #fff;
-    margin: 0px;
-    line-height: normal;
-    padding-top: 10px;
-
+.form-container p a:hover {
+    color: #40c0ff; /* Lighter blue on hover */
+    text-decoration: underline;
 }
 
+/* Error message styling */
+.error-message {
+    color: #ff6b6b; /* Softer red */
+    background-color: rgba(255, 107, 107, 0.1); /* Very subtle red background */
+    padding: 12px 15px; /* Match input padding */
+    margin-bottom: 15px;
+    border: 1px solid #ff6b6b; /* Red border */
+    border-radius: 8px; /* Match input radius */
+    text-align: center;
+    font-weight: 500; /* Medium weight */
+    width: 100%;
+    box-sizing: border-box;
+    display: none; /* Hide by default */
+}
+
+/* General login button (top right - if still used, keep consistent) */
 .login-button {
     position: fixed;
-    top: 10px;
-    right: 10px;
-    z-index: 9999;
-    background-color: #0056b3;
+    top: 15px;
+    right: 15px;
+    z-index: 1000;
+    background-color: #007acc;
     color: #fff;
     padding: 8px 16px;
-    border-radius: 5px;
+    border-radius: 8px;
     text-decoration: none;
-    font-weight: bold;
+    font-weight: 600;
     cursor: pointer;
-    display: none;
+    display: none; /* Keep hidden by default */
+    transition: background-color 0.2s ease, transform 0.1s ease;
 }
 
 .login-button:hover {
-    background-color: #003d80;
+    background-color: #005fa3;
+    transform: scale(1.02);
+}
+
+.login-button:active {
+    transform: scale(0.98);
 }

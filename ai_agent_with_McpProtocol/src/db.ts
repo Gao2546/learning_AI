@@ -138,6 +138,19 @@ async function getUserByUserId(userId: number) {
     throw error;
   }
 }
+async function getUserByEmail(email: string) {
+  const query = 'SELECT * FROM users WHERE email = $1';
+  const values = [email];
+
+  try {
+    const result = await pool.query(query, values);
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error getting user by email:', error);
+    throw error;
+  }
+}
+
 
 async function newChatHistory(userId: number) {
   const query = 'INSERT INTO chat_history (user_id, message) VALUES ($1, \'\') RETURNING id';
@@ -330,6 +343,7 @@ export {
   createGuestUser,
   getUserByUsername,
   getUserByUserId,
+  getUserByEmail,
   pool as default,
   newChatHistory,
   storeChatHistory,

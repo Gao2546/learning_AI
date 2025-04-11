@@ -12,6 +12,7 @@
 <body>
     <div class="form-container">
         <h1 class="RegisterTitle">Register</h1>
+        <div id="error-message" class="error-message"></div> <!-- Added error message container -->
         <form action="/auth/register" method="POST">
             <label for="username">Username:</label>
             <input type="text" id="username" name="username" required />
@@ -26,6 +27,7 @@
         </form>
         <p>Already have an account? <a href="/auth/login">Login here</a></p>
     </div>
+    <script src="register.js"></script> <!-- Added script reference -->
 </body>
 
 </html>

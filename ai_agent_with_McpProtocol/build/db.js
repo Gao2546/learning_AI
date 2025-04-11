@@ -128,6 +128,18 @@ async function getUserByUserId(userId) {
         throw error;
     }
 }
+async function getUserByEmail(email) {
+    const query = 'SELECT * FROM users WHERE email = $1';
+    const values = [email];
+    try {
+        const result = await pool.query(query, values);
+        return result.rows[0];
+    }
+    catch (error) {
+        console.error('Error getting user by email:', error);
+        throw error;
+    }
+}
 async function newChatHistory(userId) {
     const query = 'INSERT INTO chat_history (user_id, message) VALUES ($1, \'\') RETURNING id';
     const values = [userId];
@@ -283,4 +295,4 @@ async function deleteInactiveGuestUsersAndChats() {
         client.release();
     }
 }
-export { createUser, createGuestUser, getUserByUsername, getUserByUserId, pool as default, newChatHistory, storeChatHistory, listChatHistory, readChatHistory, deleteChatHistory, setUserActiveStatus, getUserActiveStatus, setCurrentChatId, getCurrentChatId, deleteUserAndHistory, deleteInactiveGuestUsersAndChats };
+export { createUser, createGuestUser, getUserByUsername, getUserByUserId, getUserByEmail, pool as default, newChatHistory, storeChatHistory, listChatHistory, readChatHistory, deleteChatHistory, setUserActiveStatus, getUserActiveStatus, setCurrentChatId, getCurrentChatId, deleteUserAndHistory, deleteInactiveGuestUsersAndChats };

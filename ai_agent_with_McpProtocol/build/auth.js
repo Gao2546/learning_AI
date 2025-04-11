@@ -1,6 +1,6 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
-import { createUser, getUserByUsername, listChatHistory, getCurrentChatId, setCurrentChatId, setUserActiveStatus, deleteUserAndHistory } from './db.js';
+import { createUser, getUserByUsername, getUserByEmail, listChatHistory, getCurrentChatId, setCurrentChatId, setUserActiveStatus, deleteUserAndHistory } from './db.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 const router = express.Router();
@@ -8,15 +8,27 @@ const router = express.Router();
 router.post('/register', async (req, res) => {
     try {
         const { username, password, email } = req.body;
+        // Check if username already exists
+        const existingUserByUsername = await getUserByUsername(username);
+        if (existingUserByUsername) {
+            return res.redirect('/auth/register?error=username_exists');
+        }
+        // Check if email already exists
+        const existingUserByEmail = await getUserByEmail(email);
+        if (existingUserByEmail) {
+            return res.redirect('/auth/register?error=email_exists');
+        }
         // Hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
         // Insert the user into the database
         const newUser = await createUser(username, hashedPassword, email);
-        res.redirect('/auth/login');
+        // Redirect to login page upon successful registration
+        res.redirect('/auth/login?success=registered');
     }
     catch (error) {
         console.error('Error registering user:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        // Redirect back to register page with a generic error
+        res.redirect('/auth/register?error=server_error');
     }
 });
 // Login endpoint
@@ -25,14 +37,16 @@ router.post('/login', async (req, res) => {
         const { username, password } = req.body;
         // Check if the user exists
         const user = await getUserByUsername(username);
-        await setUserActiveStatus(user.id, true);
         if (!user) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+            // User not found
+            return res.redirect('/auth/login?error=invalid_credentials');
         }
+        await setUserActiveStatus(user.id, true);
         // Compare the password
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+            // Incorrect password
+            return res.redirect('/auth/login?error=invalid_credentials');
         }
         if (req.session.user) {
             if (req.session.user.isGuest === true) {
@@ -66,7 +80,8 @@ router.post('/login', async (req, res) => {
     }
     catch (error) {
         console.error('Error logging in:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        // Redirect back to login page with a generic error
+        res.redirect('/auth/login?error=server_error');
     }
 });
 const __filename = fileURLToPath(import.meta.url);
