@@ -1,128 +1,224 @@
-import { createRequire as _createRequire } from "module";
-const __require = _createRequire(import.meta.url);
 import express from 'express';
+import session from 'express-session';
+import cors from 'cors';
 import path from 'path';
+import authRouters from './auth.js';
+import agentRouters from './agent.js';
+import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import { fileURLToPath } from 'url';
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { GoogleGenAI } from "@google/genai";
-import { parseStringPromise } from 'xml2js';
-// Initialize transport
-const transport_mcp_BrowserBase = new StdioClientTransport({
-    "command": "bash",
-    "args": [
-        "-c",
-        "cd /home/athip/psu/learning_AI/mcp_BrowserBase/ && ./build/index.js"
-    ],
-});
-console.log("Transport initialized.\n");
-// Initialize client
-const client = new Client({
-    name: "example-client",
-    version: "1.0.0"
-}, {
-    capabilities: {
-        prompts: {},
-        resources: {},
-        tools: {}
-    }
-});
-console.log("Client object initialized.\n");
-const ai = new GoogleGenAI({ apiKey: "AIzaSyAeKtGko-Vn8xNlOk3zVAuERcXPupOa_C8" });
-const fs = __require("fs");
-async function readFile(filename) {
-    return new Promise((resolve, reject) => {
-        fs.readFile(filename, 'utf8', (err, data) => {
-            if (err) {
-                reject(err);
-            }
-            else {
-                resolve(data);
-            }
-        });
-    });
-}
-let setting_prompt = await readFile("./build/setting_prompt.txt");
-const parseXML = async (xmlString) => {
-    // xmlString = xmlString.replace(/<\?xml.*?\?>/, ""); // Remove XML declaration if present
-    // xmlString = xmlString.replace("\n", ""); // Replace
-    // console.log(xmlString);
-    try {
-        const result = (await parseStringPromise(xmlString));
-        const serverName = result.use_mcp_tool.server_name[0];
-        const toolName = result.use_mcp_tool.tool_name[0];
-        const argumentsText = result.use_mcp_tool.arguments[0];
-        let argumentsObj = {}; // Default to empty object
-        if (argumentsText) {
-            try {
-                argumentsObj = JSON.parse(argumentsText);
-            }
-            catch (parseError) {
-                console.error("Error parsing arguments JSON:", parseError, "Raw arguments text:", argumentsText);
-                // Keep argumentsObj as {} or handle error as needed
-            }
-        }
-        const parsedData = {
-            serverName,
-            toolName,
-            arguments: argumentsObj,
-        };
-        return parsedData; // ✅ Returning a JSON object, not a string
-    }
-    catch (error) {
-        console.error("Error parsing XML:", error);
-        throw error;
-    }
-};
-const ChatHistory = [];
-async function addChatHistory(content) {
-    ChatHistory.push(content);
-}
-// await addChatHistory(setting_prompt);
+// Import DB functions for session timeout cleanup
+import { setCurrentChatId, setUserActiveStatus, deleteUserAndHistory, getUserByUsername, deleteInactiveGuestUsersAndChats } from './db.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
+app.use(cors());
 app.use(express.json()); // Middleware to parse JSON bodies
-const port = process.env.PORT || 3000;
+app.use(express.urlencoded({ extended: true })); // Middleware to parse URL-encoded form data
+const port = process.env.PORT || 3001;
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 app.use(express.static(path.join(__dirname, '..', 'public')));
+// Session configuration
+const sessionConfig = {
+    secret: 'my_secret_key', // Replace with a strong, random secret
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: false,
+        sameSite: 'lax',
+    }
+};
+const sessionMiddleware = session(sessionConfig);
+app.use(sessionMiddleware);
+const CLEANUP_INTERVAL_MS = 1 * 1 * 60 * 1000; // 11 sec
+setInterval(async () => {
+    // console.log('Starting periodic cleanup of inactive guest users and chats...');
+    try {
+        await deleteInactiveGuestUsersAndChats();
+        console.log('Periodic cleanup completed.');
+    }
+    catch (error) {
+        console.error('Error during periodic cleanup:', error);
+    }
+}, CLEANUP_INTERVAL_MS);
+// Session timeout cleanup middleware
+app.use(async (req, res, next) => {
+    try {
+        const user = req.session.user;
+        // If no user in session, treat as expired
+        if (!user) {
+            // return res.status(440).json({ message: 'Session expired' });
+            next();
+            // return res.status(440).json({ message: 'Session expired' });
+            return;
+        }
+        const now = Date.now();
+        const TIMEOUT_DURATION = 1 * 1 * 1 * 30 * 1000; // 1 houre
+        // Initialize lastAccess if not set
+        if (!req.session.lastAccess) {
+            req.session.lastAccess = now;
+        }
+        // Check if session has timed out
+        if (now - req.session.lastAccess > TIMEOUT_DURATION) {
+            const userId = user.id;
+            try {
+                await setCurrentChatId(userId, null);
+                await setUserActiveStatus(userId, false);
+                // Check if guest user
+                let isGuest = false;
+                if (user.isGuest !== undefined) {
+                    isGuest = user.isGuest;
+                }
+                else {
+                    // fallback: query DB
+                    const dbUser = await getUserByUsername(user.username);
+                    isGuest = dbUser?.is_guest === true;
+                }
+                if (isGuest) {
+                    await deleteUserAndHistory(userId);
+                }
+            }
+            catch (cleanupErr) {
+                console.error('Error during session timeout cleanup:', cleanupErr);
+            }
+            req.session.destroy((err) => {
+                if (err) {
+                    console.error('Error destroying expired session:', err);
+                }
+            });
+            console.log('Session expired');
+            deleteInactiveGuestUsersAndChats();
+            return res.json({ exp: true });
+        }
+        // Update last access time
+        req.session.lastAccess = now;
+    }
+    catch (err) {
+        console.error('Error in session timeout middleware:', err);
+    }
+    next();
+});
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
-// API endpoint to handle messages from the UI
-app.post('/api/message', async (req, res) => {
-    try {
-        const userMessage = req.body.message;
-        if (!userMessage) {
-            return res.status(400).json({ error: 'Message is required' });
+// Use authentication routes
+app.use('/auth', authRouters);
+app.use('/api', agentRouters);
+// Create HTTP + WebSocket server
+const httpServer = createServer(app);
+const io = new SocketIOServer(httpServer, {
+    cors: { origin: "*", methods: ["GET", "POST"] }
+});
+// Share session middleware with Socket.IO
+// io.use((socket, next) => {
+//   sessionMiddleware(socket.request as any, {} as any, next as any);
+// });
+// Socket.IO user tracking
+const clients = new Map();
+io.on('connection', (socket) => {
+    console.log(`Socket connected: ${socket.id}`);
+    socket.on('register', async (data) => {
+        const userId = typeof data === 'object' && data?.userId ? data.userId : data;
+        if (!userId) {
+            console.log("no data");
+            return;
         }
-        await addChatHistory("user: " + userMessage + "\n");
-        const question = ChatHistory.join("\n");
-        // Initialize MCP Client (example using a local MCP server)
-        const response = await ai.models.generateContent({
-            model: "models/gemini-2.0-flash-001", //"models/gemini-2.0-flash-001", // gemini-2.5-pro-exp-03-25
-            contents: question, //setting_prompt + "\n\n" + question,
-        });
-        // Example: Using the MCP client to get a response
-        // This is a placeholder; actual implementation depends on your MCP server's capabilities
-        await addChatHistory("assistance: " + response.text + "\n");
-        // Send the response back to the UI
-        res.json({ response: response.text });
-    }
-    catch (error) {
-        console.error('Error handling message:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
+        socket.data.userId = userId;
+        // Check if userId already exists in clients map
+        let existingSocketId = null;
+        for (const [socketId, client] of clients.entries()) {
+            if (client.userId === userId) {
+                existingSocketId = socketId;
+                break;
+            }
+        }
+        if (existingSocketId) {
+            // Update existing client's socket id and lastSeen
+            clients.delete(existingSocketId);
+            clients.set(socket.id, { userId, lastSeen: Date.now() });
+            console.log(`User ${userId} reconnected with new socket id: ${socket.id}`);
+        }
+        else {
+            // Add new client
+            clients.set(socket.id, { userId, lastSeen: Date.now() });
+        }
+        try {
+            await setUserActiveStatus(userId, true);
+            socket.emit('ping');
+            console.log(`User ${userId} active`);
+        }
+        catch (err) {
+            console.error('Error setting user active status:', err);
+        }
+    });
+    socket.on('pong', () => {
+        const client = clients.get(socket.id);
+        console.log(`Received pong from client${client?.userId}`);
+        if (client)
+            client.lastSeen = Date.now();
+    });
+    // socket.on('disconnect', async () => {
+    //   console.log("disconnecting")
+    //   const client = clients.get(socket.id);
+    //   if (!client) return;
+    //   try {
+    //     // await fetch(`${BASE_URL}/api/endsession`);
+    //     await setUserActiveStatus(client.userId, false);
+    //     // await setCurrentChatId(client.userId, null);
+    //     const user = await getUserByUserId(socket.data.userId);
+    //     if (user?.is_guest) {
+    //       // console.log(socket.request.session);
+    //       // if (socket.request && socket.request.session) {
+    //       //   socket.request.session.destroy((err: any) => {
+    //       //     console.log("destroying session")
+    //       //     if (err) {
+    //       //       console.error('Error destroying session on disconnect:', err);
+    //       //     }
+    //       //   });
+    //       // }
+    //       await deleteUserAndHistory(client.userId);
+    //       console.log(`Deleted guest ${client.userId}`);
+    //     }
+    //   } catch (err) {
+    //     console.error('Disconnect error:', err);
+    //   }
+    //   clients.delete(socket.id);
+    //   console.log(`Socket disconnected: ${socket.id}`);
+    // });
 });
-// API endpoint to get chat history
-app.get('/api/chat-history', (req, res) => {
-    try {
-        res.json({ chatHistory: ChatHistory });
+// Periodic check for inactive clients
+const CHECK_INTERVAL_MS = 10 * 1000; // 10 seconds
+const CLIENT_TIMEOUT_MS = 20 * 1000; // 20 seconds
+// Periodic ping and timeout disconnect
+setInterval(async () => {
+    const now = Date.now();
+    for (const [socketId, client] of clients.entries()) {
+        if (now - client.lastSeen > CLIENT_TIMEOUT_MS) { // 20 sec timeout
+            try {
+                const socket = io.sockets.sockets.get(socketId);
+                if (!socket) {
+                    clients.delete(socketId);
+                    await setUserActiveStatus(client.userId, false);
+                    // await setCurrentChatId(client.userId, null);
+                    console.log(`Client ${socketId} timed out. No socket found`);
+                }
+                // else{
+                //   await setUserActiveStatus(client.userId, false);
+                //   socket.disconnect();
+                //   console.log(`Client ${socketId} timed out.`);
+                // }
+            }
+            catch (err) {
+                console.error('Timeout status error:', err);
+            }
+        }
+        else {
+            const socket = io.sockets.sockets.get(socketId);
+            if (socket)
+                socket.emit('ping');
+        }
     }
-    catch (error) {
-        console.error('Error getting chat history:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
-    }
-});
-app.listen(port, () => {
+}, CHECK_INTERVAL_MS); // check every 10s
+httpServer.listen(port, () => {
     console.log(`Server listening at http://localhost:${port}`);
 });

@@ -6,24 +6,32 @@
     <title>AI Agent with MCP</title>
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/4712/4712108.png">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/monokai.min.css">
-  </head>
+</head>
 <body>
-    <h1>AI Agent Interface</h1>
-    <div id="chatbox">
-        <div id="messages"></div>
-        <div class="input-container">
-            <textarea id="userInput" placeholder="Enter your command..." rows="1"></textarea>
-            <button id="sendButton">Send</button>
+    <a href="auth/login" class="login-button" id="loginBtn">Login</a>
+    <div class="container">
+        <div id="chatList">
+            <button id="newChatButton">New Chat</button>
+            <div id="chatListEle">
+                <h3>Chat History</h3>
+            </div>
+        </div>
+        <div id="chatbox">
+            <h1>AI Agent Interface</h1>
+            <div id="messages"></div>
+            <div class="input-container">
+                <textarea id="userInput" placeholder="Enter your command..." rows="1"></textarea>
+                <button id="sendButton">Send</button>
+            </div>
         </div>
     </div>
-<!-- markdown-it -->
-<script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-<script>hljs.highlightAll();</script>
 
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
 
-    <!-- MathJax config -->
     <script>
     window.MathJax = {
       tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
@@ -31,8 +39,7 @@
     };
     </script>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
-
-        
 </body>
 </html>

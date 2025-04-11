@@ -1,0 +1,103 @@
+/* Center the form-container vertically and horizontally */
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    font-family: system-ui;
+    background-color: #333;
+    color: #fff;
+}
+
+/* Register and Login page form container */
+.form-container {
+    max-width: 400px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #333;
+    border-radius: 5px;
+}
+
+/* Form inside the container */
+.form-container form {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+/* Input fields inside forms */
+.form-container input[type="text"],
+.form-container input[type="email"],
+.form-container input[type="password"] {
+    margin-bottom: 10px;
+    padding: 8px;
+    border-radius: 5px;
+    border: none;
+}
+
+.form-container input[type="text"]:focus,
+.form-container input[type="email"]:focus,
+.form-container input[type="password"]:focus {
+    outline: none;
+}
+
+
+/* Submit button inside forms */
+.form-container button.login-button {
+    display: block;
+    /* position: relative;
+    position: ; */
+    margin: 10px auto;
+    text-align: center;
+    position:sticky;
+    border: 0px;
+    width: 100%;
+    max-width: 300px;
+
+}
+
+/* Paragraph under the form */
+.form-container p {
+    margin-top: 15px;
+    text-align: center;
+}
+
+body h1.LoginTitle {
+    text-align: center;
+    color: #fff;
+    margin: 0px;
+    line-height: normal;
+    padding-top: 10px;
+
+}
+
+body h1.RegisterTitle {
+    text-align: center;
+    color: #fff;
+    margin: 0px;
+    line-height: normal;
+    padding-top: 10px;
+
+}
+
+.login-button {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 9999;
+    background-color: #0056b3;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 5px;
+    text-decoration: none;
+    font-weight: bold;
+    cursor: pointer;
+    display: none;
+}
+
+.login-button:hover {
+    background-color: #003d80;
+}
