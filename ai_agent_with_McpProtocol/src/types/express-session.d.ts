@@ -5,8 +5,10 @@ declare module 'express-session' {
     user?: {
       id: number;
       username: string;
-      current_chat_id?: number | string | null;
-      [key: string]: any;
+      current_chat_id?: number | string | null; // Keep existing
+      currentChatMode?: string | null; // Add chat mode
+      currentChatModel?: string | null; // Add chat model
+      [key: string]: any; // Keep for flexibility
     };
   }
 }

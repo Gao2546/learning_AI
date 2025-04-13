@@ -14,6 +14,11 @@ socket.on('ping', () => {
 const messagesDiv = document.getElementById('messages');
 const userInput = document.getElementById('userInput');
 const sendButton = document.getElementById('sendButton');
+const chatList = document.getElementById('chatList');
+const toggleSidebarButton = document.getElementById('toggleSidebarButton');
+const modeSelector = document.getElementById('modeSelector');
+const modelSelector = document.getElementById('modelSelector'); // Add reference for model selector
+const loginBtn = document.getElementById('loginBtn');
 
 window.addEventListener('beforeunload', async (event) => {
     // event.preventDefault(); // Some browsers require this
@@ -58,24 +63,49 @@ document.addEventListener('DOMContentLoaded', async (event) => {
     await fetch(`/api/reload-page`)
         .then(response => response.json())
         .then(data => {
-            console.log(data.userId)
-            if (data.chatHistory && data.chatHistory.length > 0) {
-                console.log(data.userId)
+            console.log('Reload-page data:', data);
+            // Ensure dropdowns are populated before setting values
+            const defaultMode = populateModes();
+            const defaultModel = populateModels();
+
+            if (data.userId) {
                 socket.emit('register', { userId: data.userId });
-                data.chatHistory.forEach(message => {
-                    if (message.startsWith('user:')) {
-                        displayMessage(message.substring(5).trim(), 'user-message');
-                    } else if (message.startsWith('assistance:')) {
-                        displayMarkdownMessage(message.substring(11).trim(), 'agent-message');
+                messagesDiv.innerHTML = ''; // Clear existing messages
+                if (data.chatHistory && data.chatHistory.length > 0) {
+                    data.chatHistory.forEach(message => {
+                        if (message.startsWith('user:')) {
+                            displayMessage(message.substring(5).trim(), 'user-message');
+                        } else if (message.startsWith('assistance:')) {
+                            displayMarkdownMessage(message.substring(11).trim(), 'agent-message');
+                        }
+                    });
+                }
+
+                // Validate and set Mode dropdown
+                if (modeSelector) {
+                    if (data.chatMode && modeSelector.querySelector(`option[value="${data.chatMode}"]`)) {
+                        modeSelector.value = data.chatMode;
+                        console.log(`Mode set from reload: ${data.chatMode}`);
+                    } else {
+                        modeSelector.value = defaultMode; // Set default if invalid/null
+                        console.log(`Mode reset to default from reload: ${defaultMode}`);
                     }
-                });
-            }
-            else if (data.userId){
-                console.log(data.userId)
-                socket.emit('register', { userId: data.userId });
-            } 
-            else if (data.error) {
-                console.error('Error:', data.error);
+                }
+                // Validate and set Model dropdown
+                if (modelSelector) {
+                     if (data.chatModel && modelSelector.querySelector(`option[value="${data.chatModel}"]`)) {
+                        modelSelector.value = data.chatModel;
+                        console.log(`Model set from reload: ${data.chatModel}`);
+                    } else {
+                        modelSelector.value = defaultModel; // Set default if invalid/null
+                        console.log(`Model reset to default from reload: ${defaultModel}`);
+                    }
+                }
+            } else if (data.error) {
+                console.error('Error fetching reload-page:', data.error);
+                // Reset dropdowns to default if error indicates session issue
+                if (modeSelector) modeSelector.value = defaultMode;
+                if (modelSelector) modelSelector.value = defaultModel;
             }
         })
         .catch(error => {
@@ -89,122 +119,128 @@ document.addEventListener('DOMContentLoaded', async (event) => {
             try {
                 const response = await fetch('/auth/session');
                 const data = await response.json();
-    
-                if (data.loggedIn && !data.isGuest) {
-                    loginBtn.textContent = 'Logout';
-                    loginBtn.href = '/auth/logout';
-                    loginBtn.style.display = 'block';
-    
-                    if (data.chatIds) {
-                        await displayChatList(data.chatIds);
-                        const currChatId = data.currChatId;
-    
-                        // Now we can use currChatId after the async call
-                        const chatListDiv = document.getElementById('chatListEle');
-                        const allChatItems = chatListDiv.querySelectorAll('.chat-item');
-    
-                        // Remove 'active' class from all items
-                        allChatItems.forEach(item => item.classList.remove('active'));
-    
-                        // Find the item with the specific text
-                        const targetText = `Chat ${currChatId}`; // Replace with the exact text you're looking for
-                        console.log(targetText)
-                        const targetItem = Array.from(allChatItems).find(item => item.getElementsByClassName('chat-title')[0].textContent?.trim() === targetText);
-                        allChatItems.forEach((item)=>{
-                            console.log(item.textContent)
-                        })
-    
-                        if (targetItem) {
-                            targetItem.classList.add('active');
-                        } else {
-                            console.warn('Chat item not found with text:', targetText);
-                        }
-                    }
-                } 
-                else if (data.loggedIn && data.isGuest) {
-                    loginBtn.textContent = 'Login';
-                    loginBtn.href = 'auth/login';
+                console.log('Session data:', data);
+                // Ensure dropdowns are populated before setting values
+                const defaultMode = populateModes();
+                const defaultModel = populateModels();
+
+                if (data.loggedIn) {
+                    loginBtn.textContent = data.isGuest ? 'Login' : 'Logout';
+                    loginBtn.href = data.isGuest ? '/auth/login' : '/auth/logout';
                     loginBtn.style.display = 'block';
 
                     if (data.chatIds) {
                         await displayChatList(data.chatIds);
                         const currChatId = data.currChatId;
-    
-                        // Now we can use currChatId after the async call
-                        const chatListDiv = document.getElementById('chatListEle');
-                        const allChatItems = chatListDiv.querySelectorAll('.chat-item');
-    
-                        // Remove 'active' class from all items
-                        allChatItems.forEach(item => item.classList.remove('active'));
-    
-                        // Find the item with the specific text
-                        const targetText = `Chat ${currChatId}`; // Replace with the exact text you're looking for
-                        console.log(targetText)
-                        const targetItem = Array.from(allChatItems).find(item => item.getElementsByClassName('chat-title')[0].textContent?.trim() === targetText);
-                        allChatItems.forEach((item)=>{
-                            console.log(item.textContent)
-                        })
-    
-                        if (targetItem) {
-                            targetItem.classList.add('active');
-                        } else {
-                            console.warn('Chat item not found with text:', targetText);
+
+                        // Highlight the active chat item
+                        if (currChatId) {
+                            const chatListDiv = document.getElementById('chatListEle');
+                            const allChatItems = chatListDiv.querySelectorAll('.chat-item');
+                            allChatItems.forEach(item => item.classList.remove('active'));
+                            const targetText = `Chat ${currChatId}`;
+                            const targetItem = Array.from(allChatItems).find(item => item.getElementsByClassName('chat-title')[0].textContent?.trim() === targetText);
+                            if (targetItem) {
+                                targetItem.classList.add('active');
+                            } else {
+                                console.warn('Chat item not found for currentChatId:', targetText);
+                            }
                         }
+
+                        // Validate and set Mode dropdown from session
+                        if (modeSelector) {
+                            if (data.currentChatMode && modeSelector.querySelector(`option[value="${data.currentChatMode}"]`)) {
+                                modeSelector.value = data.currentChatMode;
+                                console.log(`Mode set from session: ${data.currentChatMode}`);
+                            } else {
+                                modeSelector.value = defaultMode; // Reset to default if null/invalid
+                                console.log(`Mode reset to default from session: ${defaultMode}`);
+                            }
+                        }
+                        // Validate and set Model dropdown from session
+                        if (modelSelector) {
+                            if (data.currentChatModel && modelSelector.querySelector(`option[value="${data.currentChatModel}"]`)) {
+                                modelSelector.value = data.currentChatModel;
+                                console.log(`Model set from session: ${data.currentChatModel}`);
+                            } else {
+                                modelSelector.value = defaultModel; // Reset to default if null/invalid
+                                console.log(`Model reset to default from session: ${defaultModel}`);
+                            }
+                        }
+                    } else {
+                        // Logged in but no chats yet, ensure dropdowns are at default
+                        if (modeSelector) modeSelector.value = defaultMode;
+                        if (modelSelector) modelSelector.value = defaultModel;
                     }
-                }
-                else {
+                } else {
+                    // Not logged in
                     loginBtn.textContent = 'Login';
-                    loginBtn.href = 'auth/login';
+                    loginBtn.href = '/auth/login';
                     loginBtn.style.display = 'block';
+                    messagesDiv.innerHTML = '';
+                    const chatListDiv = document.getElementById('chatListEle');
+                    chatListDiv.innerHTML = '<h3>Chat History</h3>';
+                    if (modeSelector) modeSelector.value = defaultMode;
+                    if (modelSelector) modelSelector.value = defaultModel;
                 }
             } catch (error) {
                 console.error('Error checking session status:', error);
                 loginBtn.textContent = 'Login';
-                loginBtn.href = 'login.html';
+                loginBtn.href = '/auth/login';
+                loginBtn.style.display = 'block';
+                // Reset dropdowns on error too
+                if (modeSelector) modeSelector.value = populateModes();
+                if (modelSelector) modelSelector.value = populateModels();
             }
         }
     
-
-   
-
+    const cc = populateModes(); // Populate modes on load
+    const mm = populateModels(); // Populate models on load
+    console.log('Modes:', cc, 'Models:', mm);
+    if (modeSelector) {
+        modeSelector.addEventListener('change', handleModeChange);
+    }
+    // Add event listener for model change
+    if (modelSelector) {
+        modelSelector.addEventListener('change', handleModelChange);
+    }
 });
+
+// Sidebar toggle functionality
+if (toggleSidebarButton && chatList) {
+    toggleSidebarButton.addEventListener('click', () => {
+        chatList.classList.toggle('collapsed');
+    });
+}
 
 const newChatButton = document.getElementById('newChatButton');
 newChatButton.addEventListener('click', createNewChat);
 
 async function createNewChat() {
     await fetch('/api/ClearChat')
-        .then(response => {
-            console.log(response);
-            if (response.ok) {
-                messagesDiv.innerHTML = ''; // Clear existing messages
-                console.log('Chat cleared successfully');
-                // Reload chat history after clearing
-                // fetch(`/api/chat-history?chatId=${"bypass"}`)
-                //     .then(response => response.json())
-                //     .then(data => {
-                //         if (data.chatHistory && data.chatHistory.length > 0) {
-                //             data.chatHistory.forEach(message => {
-                //                 if (message.startsWith('user:')) {
-                //                     displayMessage(message.substring(5).trim(), 'user-message');
-                //                 } else if (message.startsWith('assistance:')) {
-                //                     displayMarkdownMessage(message.substring(11).trim(), 'agent-message');
-                //                 }
-                //             });
-                //         } else if (data.error) {
-                //             console.error('Error:', data.error);
-                //         }
-                //     })
-                //     .catch(error => {
-                //         console.error('Error fetching chat history:', error);
-                //     });
-            } else {
-                console.error('Failed to clear chat');
+        .then(response => response.json())
+        .then(data => {
+            console.log('Middleware data:', data);
+            // Ensure dropdowns are populated before setting values
+            const defaultMode = populateModes();
+            const defaultModel = populateModels();
+
+            if (data.exp){
+                loginBtn.textContent = 'Login';
+                loginBtn.href = '/auth/login';
+                loginBtn.style.display = 'block';
+                messagesDiv.innerHTML = '';
+                const chatListDiv = document.getElementById('chatListEle');
+                chatListDiv.innerHTML = '<h3>Chat History</h3>';
+                if (modeSelector) modeSelector.value = defaultMode;
+                if (modelSelector) modelSelector.value = defaultModel;
+                return;
             }
         })
         .catch(error => {
             console.error('Error clearing chat:', error);
         });
+        messagesDiv.innerHTML = '';
         const chatListDiv = document.getElementById('chatListEle');
         const allChatItems = chatListDiv.querySelectorAll('.chat-item');
         allChatItems.forEach(item => item.classList.remove('active'));
@@ -224,18 +260,29 @@ userInput.addEventListener('input', function () {
 });
 
 async function sendMessage() {
+    const defaultMode = populateModes();
+    const defaultModel = populateModels();
     try {
-        const response = await fetch('api/get-middlewares');
-        const res = await response.json();
-      
-        console.log(res);
-      
-        if (res.exp === true) {
-          console.log('Session expired');
-          messagesDiv.innerHTML = ''; // Clear existing messages
-          const chatListDiv = document.getElementById('chatListEle');
-          chatListDiv.innerHTML = '<h3>Chat History</h3>'; // Clear existing chat list
-        }
+        await fetch(`/api/get-middlewares`)
+        .then(response => response.json())
+        .then(data => {
+            console.log('Middleware data:', data);
+            // Ensure dropdowns are populated before setting values
+            const defaultMode = populateModes();
+            const defaultModel = populateModels();
+
+            if (data.exp){
+                loginBtn.textContent = 'Login';
+                loginBtn.href = '/auth/login';
+                loginBtn.style.display = 'block';
+                messagesDiv.innerHTML = '';
+                const chatListDiv = document.getElementById('chatListEle');
+                chatListDiv.innerHTML = '<h3>Chat History</h3>';
+                if (modeSelector) modeSelector.value = defaultMode;
+                if (modelSelector) modelSelector.value = defaultModel;
+                return;
+            }
+        });
       } catch (err) {
         console.error('Error fetching middleware status:', err);
       }
@@ -251,7 +298,12 @@ async function sendMessage() {
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ message: messageText })
+        body: JSON.stringify({
+            message: messageText,
+            // Always include selected mode and model from dropdowns
+            mode: modeSelector ? modeSelector.value : defaultMode, // Send current selection or default
+            model: modelSelector ? modelSelector.value : defaultModel // Send current selection or default
+        })
     })
     .then(response => response.json())
     .then(data => {
@@ -260,7 +312,7 @@ async function sendMessage() {
             console.log(data.response);
             displayMarkdownMessage(data.response, 'agent-message')
         } else if (data.error) {
-            displayMessagsocket.emit('register', { userId: data.userId });e('Error: ' + data.error, 'agent-message');
+            // displayMessagsocket.emit('register', { userId: data.userId });e('Error: ' + data.error, 'agent-message');
         }
     })
     .catch(error => {
@@ -274,6 +326,21 @@ async function sendMessage() {
                if (data.loggedIn) {
                    if (data.chatIds) {
                        displayChatList(data.chatIds);
+                       const currChatId = data.currChatId;
+
+                        // Highlight the active chat item
+                        if (currChatId) {
+                            const chatListDiv = document.getElementById('chatListEle');
+                            const allChatItems = chatListDiv.querySelectorAll('.chat-item');
+                            allChatItems.forEach(item => item.classList.remove('active'));
+                            const targetText = `Chat ${currChatId}`;
+                            const targetItem = Array.from(allChatItems).find(item => item.getElementsByClassName('chat-title')[0].textContent?.trim() === targetText);
+                            if (targetItem) {
+                                targetItem.classList.add('active');
+                            } else {
+                                console.warn('Chat item not found for currentChatId:', targetText);
+                            }
+                        }
                    }
                    if (data.userId) {
                        socket.emit('register', { userId: data.userId });
@@ -284,13 +351,6 @@ async function sendMessage() {
            .catch(error => {
                console.error('Error checking session status:', error);
            });
-        const chatListDiv = document.getElementById('chatListEle');
-        const allChatItems = chatListDiv.querySelectorAll('.chat-item');
-        if (allChatItems.length > 0){
-        allChatItems.forEach(item => item.classList.remove('active'));
-        const chatElement = allChatItems[allChatItems.length - 1];
-        chatElement.classList.add('active');
-    }
 
 }
 
@@ -386,12 +446,29 @@ function displayMarkdownMessage(text, className) {
     }
 }
 
-function loadChatHistory(chatId) {
-    fetch(`/api/chat-history?chatId=${chatId}`)
+async function loadChatHistory(chatId) {
+    await fetch(`/api/chat-history?chatId=${chatId}`)
         .then(response => response.json())
         .then(data => {
+            console.log('Load chat history data:', data);
+            // Ensure dropdowns are populated before setting values
+            const defaultMode = populateModes();
+            const defaultModel = populateModels();
+
+            if (data.exp){
+                loginBtn.textContent = 'Login';
+                loginBtn.href = '/auth/login';
+                loginBtn.style.display = 'block';
+                messagesDiv.innerHTML = '';
+                const chatListDiv = document.getElementById('chatListEle');
+                chatListDiv.innerHTML = '<h3>Chat History</h3>';
+                if (modeSelector) modeSelector.value = defaultMode;
+                if (modelSelector) modelSelector.value = defaultModel;
+                return;
+            }
+
             messagesDiv.innerHTML = ''; // Clear existing messages
-            if (data.chatHistory && data.chatHistory.length > 0) {
+            if (data.chatHistory && data.chatHistory.length >= 0) { // Allow empty history array
                 data.chatHistory.forEach(message => {
                     if (message.startsWith('user:')) {
                         displayMessage(message.substring(5).trim(), 'user-message');
@@ -399,11 +476,179 @@ function loadChatHistory(chatId) {
                         displayMarkdownMessage(message.substring(11).trim(), 'agent-message');
                     }
                 });
+
+                // Validate and set Mode dropdown
+                if (modeSelector) {
+                    if (data.chatMode && modeSelector.querySelector(`option[value="${data.chatMode}"]`)) {
+                        modeSelector.value = data.chatMode;
+                        console.log(`Mode set from loadChatHistory: ${data.chatMode}`);
+                    } else {
+                        modeSelector.value = defaultMode; // Reset to default if null/invalid
+                        console.log(`Mode reset to default from loadChatHistory: ${defaultMode}`);
+                    }
+                }
+                 // Validate and set Model dropdown
+                if (modelSelector) {
+                    if (data.chatModel && modelSelector.querySelector(`option[value="${data.chatModel}"]`)) {
+                        modelSelector.value = data.chatModel;
+                        console.log(`Model set from loadChatHistory: ${data.chatModel}`);
+                    } else {
+                        modelSelector.value = defaultModel; // Reset to default if null/invalid
+                        console.log(`Model reset to default from loadChatHistory: ${defaultModel}`);
+                    }
+                }
             } else if (data.error) {
-                console.error('Error:', data.error);
+                console.error('Error loading chat history:', data.error);
+                // On error loading specific chat, maybe reset dropdowns to default?
+                if (modeSelector) modeSelector.value = defaultMode;
+                if (modelSelector) modelSelector.value = defaultModel;
             }
         })
         .catch(error => {
             console.error('Error fetching chat history:', error);
         });
+}
+
+// Function to populate the mode selector dropdown
+// Added returnDefault parameter to get the default value without modifying the DOM
+function populateModes(returnDefault = false) {
+    const modes = [
+        { id: 'code', name: 'Code' },
+        { id: 'ask', name: 'Ask' },
+        { id: 'architect', name: 'Architect' },
+        { id: 'debug', name: 'Debug' }
+    ];
+    const defaultValue = modes.length > 0 ? modes[0].id : null;
+
+    if (returnDefault) {
+        return defaultValue;
+    }
+
+    if (!modeSelector) return defaultValue; // Exit if element doesn't exist
+
+    const currentValue = modeSelector.value; // Store current value if exists
+    console.log('Modes:', currentValue);
+    modeSelector.innerHTML = ''; // Clear existing options
+
+    modes.forEach(mode => {
+        const option = document.createElement('option');
+        option.value = mode.id;
+        option.textContent = mode.name;
+        modeSelector.appendChild(option);
+    });
+    console.log('Modes:', currentValue);
+
+    // Try to restore previous value, otherwise set default
+    if (modes.some(mode => mode.id === currentValue)) {
+        modeSelector.value = currentValue;
+    } else if (defaultValue) {
+        modeSelector.value = defaultValue;
+    }
+    return modeSelector.value; // Return the final set value
+}
+
+// Function to populate the AI model selector dropdown
+// Added returnDefault parameter to get the default value without modifying the DOM
+function populateModels(returnDefault = false) {
+    const models = [
+        { id: 'gemini-2.5-pro-exp-03-25', name: 'gemini-2.5-pro-exp-03-25' },
+        { id: 'gemini-2.0-flash-001', name: 'gemini-2.0-flash-001' },
+        { id: 'gemini-2.0-flash-lite-preview-02-05', name: 'gemini-2.0-flash-lite-preview-02-05' },
+        { id: 'gemini-2.0-pro-exp-02-05', name: 'gemini-2.0-pro-exp-02-05' },
+        { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'gemini-2.0-flash-thinking-exp-01-21' },
+        { id: 'gemini-2.0-flash-thinking-exp-1219', name: 'gemini-2.0-flash-thinking-exp-1219' },
+        { id: 'gemini-2.0-flash-exp', name: 'gemini-2.0-flash-exp' },
+        { id: 'gemini-1.5-flash-002', name: 'gemini-1.5-flash-002' },
+        { id: 'gemini-1.5-flash-exp-0827', name: 'gemini-1.5-flash-exp-0827' },
+        { id: 'gemini-1.5-flash-8b-exp-0827', name: 'gemini-1.5-flash-8b-exp-0827' },
+        { id: 'gemini-1.5-pro-002', name: 'gemini-1.5-pro-002' },
+        { id: 'gemini-1.5-pro-exp-0827', name: 'gemini-1.5-pro-exp-0827' },
+        { id: 'gemini-exp-1206', name: 'gemini-exp-1206' }
+    ];
+    const defaultValue = models.length > 0 ? models[0].id : null;
+
+    if (returnDefault) {
+        return defaultValue;
+    }
+
+    if (!modelSelector) return defaultValue; // Exit if element doesn't exist
+
+    const currentValue = modelSelector.value; // Store current value if exists
+    console.log('Models:', currentValue);
+    modelSelector.innerHTML = ''; // Clear existing options
+
+    models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.id;
+        option.textContent = model.name;
+        modelSelector.appendChild(option);
+    });
+    console.log('Models:', currentValue);
+
+    // Try to restore previous value, otherwise set default
+    if (models.some(model => model.id === currentValue)) {
+        modelSelector.value = currentValue;
+    } else if (defaultValue) {
+        modelSelector.value = defaultValue;
+    }
+    return modelSelector.value; // Return the final set value
+}
+
+// Function to handle AI model change
+async function handleModelChange() {
+    if (!modelSelector) return;
+    const selectedModel = modelSelector.value;
+    console.log(`AI Model changed to: ${selectedModel}`);
+    
+    // Send the selected model to the backend
+    try {
+        const response = await fetch('/api/set-model', { // Use the correct endpoint
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: selectedModel }) // Send as 'model'
+        });
+        if (response.ok) {
+            const data = await response.json();
+            console.log('Model successfully set on backend:', data);
+        } else {
+            const errorData = await response.json();
+            console.error('Failed to set model on backend:', response.status, errorData);
+            // Optional: Revert dropdown or show error message
+            // populateModels(); // Re-fetch/reset if needed
+        }
+    } catch (error) {
+        console.error('Error sending model change request:', error);
+        // Optional: Show error message
+    }
+}
+
+// Function to handle mode change
+async function handleModeChange() {
+    if (!modeSelector) return;
+    const selectedMode = modeSelector.value;
+    console.log(`Mode changed to: ${selectedMode}`);
+
+    try {
+        const response = await fetch('/api/set-mode', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ mode: selectedMode })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            console.log('Mode successfully set on backend:', data);
+            // Optional: Display a confirmation to the user or update UI further
+        } else {
+            const errorData = await response.json();
+            console.error('Failed to set mode on backend:', response.status, errorData);
+            // Optional: Revert dropdown or show error message
+            // populateModes(); // Re-fetch/reset to actual current mode if setting failed
+        }
+    } catch (error) {
+        console.error('Error sending mode change request:', error);
+        // Optional: Show error message
+    }
 }

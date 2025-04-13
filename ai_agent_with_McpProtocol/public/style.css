@@ -16,7 +16,11 @@ body {
 .container {
     display: flex;
     width: 100%;
-    height: 100vh;
+    height: 100%;
+}
+
+thinking {
+    display: inline-block;
 }
 
 /* Sidebar chat history */
@@ -30,15 +34,21 @@ body {
     align-items: center;
     box-sizing: border-box;
     flex-shrink: 0; /* Prevent sidebar from shrinking */
+    transition: width 0.3s ease, padding 0.3s ease; /* Add transition for sliding */
+    overflow-x: hidden; /* Hide content when collapsed */
 }
 
 #chatListEle {
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 100%;
+    width: calc(100% - 15px); /* Adjust width to account for padding */
+    max-height: 100%;
     overflow-y: auto; /* Allow scrolling for chat list */
     flex-grow: 1; /* Allow list to take available space */
+    overflow-x: hidden; /* Hide content when collapsed */
+    white-space: nowrap;
+    text-overflow: clip;
 }
 
 #newChatButton {
@@ -52,15 +62,113 @@ body {
     width: 100%;
     font-size: 1em;
     transition: background-color 0.2s ease, transform 0.1s ease;
+    overflow-x: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
+
 }
 
 #newChatButton:hover {
     background-color: #005fa3; /* Darker blue on hover */
     transform: scale(1.02);
+    overflow-x: hidden;
 }
 
 #newChatButton:active {
     transform: scale(0.98);
+    overflow-x: hidden;
+}
+
+/* Mode Selector Styles */
+.mode-selector-container {
+    width: 100%;
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    overflow-x: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
+}
+
+.mode-selector-container label {
+    margin-bottom: 5px;
+    font-size: 0.9em;
+    color: #b0b0b0; /* Slightly lighter gray for label */
+    overflow-x: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
+}
+
+#modeSelector {
+    width: 100%;
+    padding: 8px 10px;
+    background-color: #3c3c3c; /* Match input field background */
+    color: #e0e0e0;
+    border: 1px solid #4a4a4a; /* Match input field border */
+    border-radius: 8px; /* Rounded corners */
+    font-size: 0.9em;
+    cursor: pointer;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
+}
+
+#modeSelector:focus {
+    outline: none;
+    border-color: #007acc; /* Highlight border on focus */
+}
+
+#modeSelector option {
+    background-color: #3c3c3c;
+    color: #e0e0e0;
+}
+
+/* Model Selector Styles (similar to mode selector) */
+.model-selector-container {
+    width: 100%;
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    overflow-x: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
+}
+
+.model-selector-container label {
+    margin-bottom: 5px;
+    font-size: 0.9em;
+    color: #b0b0b0;
+    overflow-x: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
+}
+
+#modelSelector {
+    width: 100%;
+    padding: 8px 10px;
+    background-color: #3c3c3c;
+    color: #e0e0e0;
+    border: 1px solid #4a4a4a;
+    border-radius: 8px;
+    font-size: 0.9em;
+    cursor: pointer;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
+}
+
+#modelSelector:focus {
+    outline: none;
+    border-color: #007acc;
+}
+
+#modelSelector option {
+    background-color: #3c3c3c;
+    color: #e0e0e0;
 }
 
 #chatListEle h3 {
@@ -70,6 +178,9 @@ body {
     font-weight: 600;
     width: 100%;
     text-align: center;
+    overflow-x: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
 }
 
 /* Chatbox area */
@@ -78,7 +189,9 @@ body {
     display: flex;
     flex-direction: column;
     background-color: #1e1e1e; /* Match body background */
-    height: 100%; /* Fill container height */
+    height: calc(100%); /* Fill container height */
+    max-height:calc(100%); /* Ensure it doesn't overflow */
+    max-width:calc(100%); /* Ensure it doesn't overflow */
     box-sizing: border-box;
     padding: 0; /* Remove padding, handle spacing internally */
     margin: 0; /* Remove margin */
@@ -95,6 +208,23 @@ body {
     font-weight: 600;
     background-color: #2a2a2a; /* Header background */
     border-bottom: 1px solid #3a3a3a; /* Separator line */
+    display: flex; /* Use flexbox to align button and title */
+    align-items: center; /* Center items vertically */
+}
+
+#toggleSidebarButton {
+    background: none;
+    border: none;
+    color: #e0e0e0;
+    font-size: 1.5em;
+    cursor: pointer;
+    margin-right: 10px; /* Space between button and title */
+    padding: 0 5px;
+    transition: color 0.2s ease;
+}
+
+#toggleSidebarButton:hover {
+    color: #007acc; /* Highlight on hover */
 }
 
 /* Messages container */
@@ -104,7 +234,7 @@ body {
     padding: 20px 15%; /* Adjust padding */
     background-color: #1e1e1e; /* Match body background */
     color: #e0e0e0;
-    width: 70%; /* Adjust width */
+    width: 80%; /* Adjust width */
     margin: 0 auto; /* Center messages */
     box-sizing: border-box;
 }
@@ -116,7 +246,7 @@ body {
     padding: 15px 15%; /* Adjust padding */
     background-color: #1e1e1e; /* Match sidebar background */
     border-top: 0px solid #3a3a3a; /* Separator line */
-    width: 70%; /* Adjust width */
+    width: 80%; /* Adjust width */
     margin: 0 auto; /* Center input */
     box-sizing: border-box;
 }
@@ -174,20 +304,21 @@ body {
     margin-bottom: 15px; /* Increase spacing */
     padding: 10px 15px; /* Adjust padding */
     border-radius: 15px; /* More rounded */
-    max-width: 80%; /* Limit message width */
+    max-width: fit-content; /* Adjust max width */
     line-height: 1.5; /* Improve readability */
     word-wrap: break-word; /* Ensure long words break */
 }
 
 .user-message {
-    background-color: #007acc; /* Accent color for user */
+    background-color: #2c2c2c; /* Darker background color for user */
     color: #fff;
     margin-left: auto; /* Align right */
     border-bottom-right-radius: 5px; /* Slightly different corner */
+    text-align: right;
 }
 
 .agent-message {
-    background-color: #3c3c3c; /* Slightly lighter gray for agent */
+    background-color: rgba(255, 255, 255, 0.0); /* Slightly lighter gray for agent */
     color: #e0e0e0;
     margin-right: auto; /* Align left */
     border-bottom-left-radius: 5px; /* Slightly different corner */
@@ -198,6 +329,10 @@ body {
     max-width: 100%; /* Ensure content stays within bubble */
 }
 
+div.agent-message pre.hljs {
+   border-radius: 10px;
+}
+
 /* Code Block Styles */
 .code-block-header {
   background-color: #3a3a3a; /* Darker header */
@@ -206,13 +341,16 @@ body {
   border-radius: 8px 8px 0 0; /* Match block rounding */
   font-weight: normal;
   font-size: 0.9em; /* Smaller font size */
-  display: flex;
+  /* display: flex; */
   justify-content: space-between;
   align-items: center;
 }
 
 .lang {
-    margin: 0; /* Remove extra margins */
+    margin: 5px; /* Remove extra margins */
+    background-color: transparent;
+    color: #f0f0f0; /* Lighter text for better contrast */
+    font-weight: bold; /* Make the text bolder */
 }
 
 pre.hljs {
@@ -237,7 +375,7 @@ pre.hljs * {
 
 code { /* Inline code */
     font-size: 0.9em; /* Slightly smaller */
-    background-color: #3c3c3c; /* Match agent message background */
+    background-color: #8585859f; /* Match agent message background */
     border-radius: 4px;
     padding: 2px 5px; /* Adjust padding */
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
@@ -325,7 +463,7 @@ strong {
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis; /* Add ellipsis for long titles */
+    text-overflow: clip; /* Add ellipsis for long titles */
     margin-right: 10px; /* Space before delete button */
 }
 
@@ -350,28 +488,66 @@ strong {
     transform: scale(0.95);
 }
 
+/* Collapsed state for sidebar */
+#chatList.collapsed {
+    width: 0;
+    padding: 15px 0; /* Remove horizontal padding when collapsed */
+    border-right: none; /* Hide border when collapsed */
+    overflow-x: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
+}
+#chatList.collapsed > *:not(#toggleSidebarButton) { /* Keep toggle button visible */
+    display: none; /* Hide children when collapsed */
+    /*
+    Alternative: Keep elements but hide content visually
+    opacity: 0;
+    pointer-events: none;
+    */
+}
+
 
 /* Responsive adjustments */
+@media (max-width: 1600px) {
+    #messages{
+        width: 90%;
+        max-width: 90%;
+    }
+
+    .input-container{
+        width: 90%;
+        max-width: 90%;
+    }
+}
+
 @media (max-width: 768px) {
+    html, body {
+        height: 100%; /* Ensure html and body take full height */
+        overflow: hidden; /* Prevent scrolling on body */
+    }
+
     body {
         flex-direction: column; /* Stack elements vertically */
     }
 
     .container {
         flex-direction: column;
-        height: auto; /* Adjust height for mobile */
+        height: 100%; /* Container should take full viewport height */
+        width: 100%;
     }
 
     #chatList {
         width: 100%;
-        height: auto; /* Adjust height */
+        height: auto; /* Adjust height based on content */
         border-right: none;
         border-bottom: 1px solid #3a3a3a;
         flex-direction: row; /* Arrange items horizontally */
-        justify-content: space-between; /* Space out items */
-        padding: 10px;
+        justify-content: flex-start; /* Align items to the start */
+        align-items: center; /* Center items vertically */
+        padding: 8px 10px; /* Slightly adjust padding */
         overflow-x: auto; /* Allow horizontal scroll if needed */
-        flex-shrink: 0;
+        flex-shrink: 0; /* Prevent shrinking */
+        box-sizing: border-box;
     }
 
     #chatListEle {
@@ -380,7 +556,8 @@ strong {
         overflow-x: auto; /* Allow scroll */
         flex-grow: 1;
         align-items: center;
-        padding-bottom: 5px; /* Space for scrollbar */
+        /* padding-bottom: 5px; */ /* Remove bottom padding, rely on parent padding */
+        white-space: nowrap; /* Prevent wrapping of chat items */
     }
 
     #newChatButton {
@@ -388,6 +565,7 @@ strong {
         margin-bottom: 0;
         margin-right: 10px; /* Space between button and list */
         flex-shrink: 0;
+        padding: 8px 12px; /* Adjust padding */
     }
 
      #chatListEle h3 {
@@ -399,32 +577,58 @@ strong {
         margin-right: 8px; /* Space between items */
         width: auto; /* Adjust width */
         flex-shrink: 0;
+        padding: 8px 12px; /* Adjust padding */
+    }
+    /* Ensure last chat item doesn't have margin */
+    .chat-item:last-child {
+        margin-right: 0;
     }
 
     #chatbox {
-        height: calc(100vh - 60px - 70px); /* Adjust height considering header and input */
-        padding: 0;
+        flex-grow: 1; /* Allow chatbox to fill remaining space */
+        display: flex; /* Ensure flex properties apply */
+        flex-direction: column; /* Stack header, messages, input */
+        overflow: hidden; /* Prevent chatbox itself from scrolling */
+        padding: 0; /* Remove padding */
+        height: auto; /* Remove fixed/calculated height */
     }
 
     #chatbox h1 {
-        padding: 10px 0;
+        padding: 12px 0; /* Adjust padding */
         font-size: 1.2em;
+        flex-shrink: 0; /* Prevent header from shrinking */
     }
 
     #messages {
         padding: 15px; /* Adjust padding */
         width: 100%; /* Full width */
         margin: 0;
+        flex-grow: 1; /* Allow messages to fill space */
+        overflow-y: auto; /* Keep vertical scroll */
+        box-sizing: border-box; /* Include padding in width */
     }
 
     .input-container {
-        padding: 10px; /* Adjust padding */
+        padding: 10px 15px; /* Adjust padding */
         width: 100%; /* Full width */
         margin: 0;
+        flex-shrink: 0; /* Prevent input area from shrinking */
+        box-sizing: border-box; /* Include padding in width */
+    }
+
+    .login-button {
+        position: static; /* Remove fixed positioning */
+        margin-left: auto; /* Push to the right end of the flex container */
+        margin-right: 0; /* Ensure no extra right margin */
+        padding: 8px 12px; /* Match other buttons in the bar */
+        flex-shrink: 0; /* Prevent shrinking */
+        display: inline-block; /* Allow it to be displayed if JS shows it */
+        /* top, right, z-index are no longer needed */
     }
 
     .user-message, .agent-message {
         max-width: 90%; /* Adjust max width */
+        margin-bottom: 12px; /* Adjust spacing */
     }
 }
 

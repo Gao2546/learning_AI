@@ -14,12 +14,24 @@
     <div class="container">
         <div id="chatList">
             <button id="newChatButton">New Chat</button>
+            <div class="mode-selector-container">
+                <label for="modeSelector">Mode:</label>
+                <select id="modeSelector">
+                    <!-- Options will be populated dynamically -->
+                </select>
+            </div>
+            <div class="model-selector-container">
+                <label for="modelSelector">Model:</label>
+                <select id="modelSelector">
+                    <!-- Options will be populated dynamically -->
+                </select>
+            </div>
             <div id="chatListEle">
                 <h3>Chat History</h3>
             </div>
         </div>
         <div id="chatbox">
-            <h1>AI Agent Interface</h1>
+            <h1><button id="toggleSidebarButton">☰</button> AI Agent Interface</h1>
             <div id="messages"></div>
             <div class="input-container">
                 <textarea id="userInput" placeholder="Enter your command..." rows="1"></textarea>

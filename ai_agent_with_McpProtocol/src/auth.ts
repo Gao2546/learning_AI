@@ -1,5 +1,6 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
+import { getChatMode, getChatModel } from './db.js'; // Import DB functions
 import pool, { createUser, getUserByUsername, getUserByEmail, listChatHistory, getCurrentChatId, readChatHistory, setCurrentChatId, setUserActiveStatus, deleteUserAndHistory } from './db.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -89,6 +90,24 @@ router.post('/login', async (req, res) => {
       console.error('Error fetching current chat during login:', err);
       (req.session.user as any).currentChatId = null;
     }
+    
+    // Fetch and set mode/model based on the determined currentChatId
+    const finalCurrentChatId = (req.session.user as any).currentChatId; // Get the ID set in session
+    if (finalCurrentChatId) {
+      try {
+        const chatMode = await getChatMode(finalCurrentChatId);
+        const chatModel = await getChatModel(finalCurrentChatId);
+        (req.session.user as any).currentChatMode = chatMode ?? null;
+        (req.session.user as any).currentChatModel = chatModel ?? null;
+      } catch (err) {
+        console.error('Error fetching chat mode/model during login:', err);
+        (req.session.user as any).currentChatMode = null;
+        (req.session.user as any).currentChatModel = null;
+      }
+    } else {
+      (req.session.user as any).currentChatMode = null;
+      (req.session.user as any).currentChatModel = null;
+    }
 
     res.redirect('/')
     // res.json({ success: true, userId: user.id, chatIds: userChatMap[user.id] });
@@ -175,7 +194,9 @@ router.get('/session', (req, res) => {
       userId: req.session.user.id,
       isGuest: (req.session.user as any).isGuest,
       chatIds: (req.session.user as any).chatIds ?? [],
-      currChatId: (req.session.user as any).currentChatId ?? null
+      currChatId: (req.session.user as any).currentChatId ?? null,
+      currentChatMode: (req.session.user as any).currentChatMode ?? null, // Return mode
+      currentChatModel: (req.session.user as any).currentChatModel ?? null // Return model
     });
   } else {
     res.json({ loggedIn: false });

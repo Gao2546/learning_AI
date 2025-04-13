@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS chat_history (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     message TEXT NOT NULL,
+    chat_mode VARCHAR(50) NULL, -- Added chat mode column
+    chat_model VARCHAR(50) NULL, -- Added chat model column
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -192,7 +194,7 @@ async function listChatHistory(userId: number) {
 }
 
 async function readChatHistory(chatId: number) {
-  const query = 'SELECT message, timestamp FROM chat_history WHERE id = $1';
+  const query = 'SELECT message, timestamp, chat_mode, chat_model FROM chat_history WHERE id = $1'; // Added chat_mode
   const values = [chatId];
 
   try {
@@ -216,6 +218,60 @@ async function deleteChatHistory(chatId: number) {
     throw error;
   }
 }
+
+async function setChatMode(chatId: number, chatMode: string) {
+  const query = 'UPDATE chat_history SET chat_mode = $1 WHERE id = $2';
+  const values = [chatMode, chatId];
+
+  try {
+    await pool.query(query, values);
+    console.log(`DB: Chat mode for history ${chatId} updated to ${chatMode}`);
+  } catch (error) {
+    console.error('Error setting chat mode:', error);
+    throw error;
+  }
+}
+
+async function getChatMode(chatId: number) {
+  const query = 'SELECT chat_mode FROM chat_history WHERE id = $1';
+  const values = [chatId];
+
+  try {
+    const result = await pool.query(query, values);
+    return result.rows[0]?.chat_mode ?? null; // Return chat_mode or null if not found/set
+  } catch (error) {
+    console.error('Error getting chat mode:', error);
+    throw error;
+  }
+}
+
+async function setChatModel(chatId: number, chatModel: string) {
+  const query = 'UPDATE chat_history SET chat_model = $1 WHERE id = $2';
+  const values = [chatModel, chatId];
+
+  try {
+    await pool.query(query, values);
+    console.log(`DB: Chat model for history ${chatId} updated to ${chatModel}`);
+  } catch (error) {
+    console.error('Error setting chat model:', error);
+    throw error;
+  }
+}
+
+async function getChatModel(chatId: number) {
+  const query = 'SELECT chat_model FROM chat_history WHERE id = $1';
+  const values = [chatId];
+
+  try {
+    const result = await pool.query(query, values);
+    return result.rows[0]?.chat_mode ?? null; // Return chat_mode or null if not found/set
+  } catch (error) {
+    console.error('Error getting chat model:', error);
+    throw error;
+  }
+}
+
+
 async function setUserActiveStatus(userId: number, isActive: boolean) {
   const query = 'UPDATE users SET is_active = $1 WHERE id = $2';
   const values = [isActive, userId];
@@ -355,5 +411,9 @@ export {
   setCurrentChatId,
   getCurrentChatId,
   deleteUserAndHistory,
-  deleteInactiveGuestUsersAndChats
+  deleteInactiveGuestUsersAndChats,
+  setChatMode, // Added export
+  getChatMode,  // Added export
+  setChatModel, // Added export
+  getChatModel,  // Added export
 };

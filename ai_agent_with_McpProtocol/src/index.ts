@@ -72,6 +72,8 @@ setInterval(async () => {
   }
 }, CLEANUP_INTERVAL_MS);
 
+const BypassSession = ["/auth/login", "/auth/register", "/auth/logout", "/auth/styleRL.css", "/api/message", "auth/login.js"];
+
 // Session timeout cleanup middleware
 app.use(async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
@@ -79,10 +81,17 @@ app.use(async (req: express.Request, res: express.Response, next: express.NextFu
 
     // If no user in session, treat as expired
     if (!user) {
+      if (BypassSession.includes(req.path)) {
+        next();
+        return;
+      }
+      else{
+        return res.json({ exp: true });
+      }
       // return res.status(440).json({ message: 'Session expired' });
-      next();
+      // next();
       // return res.status(440).json({ message: 'Session expired' });
-      return;
+      // return;
     }
 
     const now = Date.now();
@@ -117,13 +126,14 @@ app.use(async (req: express.Request, res: express.Response, next: express.NextFu
         console.error('Error during session timeout cleanup:', cleanupErr);
       }
 
-      req.session.destroy((err: any) => {
+      await req.session.destroy((err: any) => {
         if (err) {
           console.error('Error destroying expired session:', err);
         }
       });
       console.log('Session expired');
-      deleteInactiveGuestUsersAndChats();
+      await deleteInactiveGuestUsersAndChats();
+      // return res.redirect('/');
       return res.json({ exp: true });
     }
 
