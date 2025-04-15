@@ -5,6 +5,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
+from selenium.webdriver.common.alert import Alert
 import bs4
 from langchain import hub
 # from langchain_community.document_loaders import WebBaseLoader
@@ -174,7 +176,15 @@ def get_source_route():
     vector_store = InMemoryVectorStore(embeddings)
     # vector_store.delete()
     # print(time.time() - st,"ssssssssssssssssssssssssssss")
-    page_source = driver.find_element(By.TAG_NAME, "body").get_attribute('innerHTML')
+    # page_source = driver.find_element(By.TAG_NAME, "body").get_attribute('innerHTML')
+    try:
+        page_source = driver.find_element(By.TAG_NAME, "body").get_attribute('innerHTML')
+    except UnexpectedAlertPresentException:
+        alert = Alert(driver)
+        # print(f"Alert found: {alert.text}")
+        # alert.accept()  # or alert.dismiss()
+        # Optionally retry the operation
+        page_source = driver.find_element(By.TAG_NAME, "body").get_attribute('innerHTML')
     # print(time.time() - st,"ssssssssssssssssssssssssssss")
     soup = bs4.BeautifulSoup(page_source, "html.parser")
     # print(time.time() - st,"ssssssssssssssssssssssssssss")
@@ -258,7 +268,15 @@ def get_text():
     # embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
     vector_store = InMemoryVectorStore(embeddings)
     # vector_store.delete()
-    page_source = driver.find_element(By.TAG_NAME, "body").get_attribute('innerHTML')
+    # page_source = driver.find_element(By.TAG_NAME, "body").get_attribute('innerHTML')
+    try:
+        page_source = driver.find_element(By.TAG_NAME, "body").get_attribute('innerHTML')
+    except UnexpectedAlertPresentException:
+        alert = Alert(driver)
+        print(f"Alert found: {alert.text}")
+        alert.accept()  # or alert.dismiss()
+        # Optionally retry the operation
+        page_source = driver.find_element(By.TAG_NAME, "body").get_attribute('innerHTML')
     soup = bs4.BeautifulSoup(page_source, "html.parser")
     soup_text = soup.get_text()
     soup_text = soup_text.replace("\n", "")
