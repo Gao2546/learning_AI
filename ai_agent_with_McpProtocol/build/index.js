@@ -26,11 +26,12 @@ const sessionConfig = {
     cookie: {
         secure: false,
         sameSite: 'lax',
+        maxAge: 1 * 1 * 24 * 60 * 60 * 1000 // 1 day in milliseconds
     }
 };
 const sessionMiddleware = session(sessionConfig);
 app.use(sessionMiddleware);
-const CLEANUP_INTERVAL_MS = 1 * 1 * 60 * 1000; // 11 sec
+const CLEANUP_INTERVAL_MS = 1 * 1 * 1 * 3 * 60 * 1000; // 180 sec in milliseconds
 setInterval(async () => {
     // console.log('Starting periodic cleanup of inactive guest users and chats...');
     try {
@@ -41,7 +42,7 @@ setInterval(async () => {
         console.error('Error during periodic cleanup:', error);
     }
 }, CLEANUP_INTERVAL_MS);
-const BypassSession = ["/auth/login", "/auth/register", "/auth/logout", "/auth/styleRL.css", "/api/message"];
+const BypassSession = ["/auth/login", "/auth/register", "/auth/logout", "/auth/styleRL.css", "/api/message", "/auth/login.js", "/auth/register.js", "/auth/admin", "/auth/login?error=invalide_username_or_password", "/auth/login?success=registered", "/auth/login?error=server_error", "/auth/register?error=server_error", "/auth/register?error=username_exists", "/auth/register?error=email_exists"];
 // Session timeout cleanup middleware
 app.use(async (req, res, next) => {
     try {
@@ -61,7 +62,7 @@ app.use(async (req, res, next) => {
             // return;
         }
         const now = Date.now();
-        const TIMEOUT_DURATION = 1 * 1 * 1 * 30 * 1000; // 1 houre
+        const TIMEOUT_DURATION = 1 * 1 * 1 * 60 * 60 * 1000; // 1 houre in milliseconds
         // Initialize lastAccess if not set
         if (!req.session.lastAccess) {
             req.session.lastAccess = now;
@@ -105,7 +106,6 @@ app.use(async (req, res, next) => {
     catch (err) {
         console.error('Error in session timeout middleware:', err);
     }
-    console.log("next");
     next();
 });
 app.get('/', (req, res) => {
@@ -155,7 +155,7 @@ io.on('connection', (socket) => {
         try {
             await setUserActiveStatus(userId, true);
             socket.emit('ping');
-            console.log(`User ${userId} active`);
+            // console.log(`User ${userId} active`);
         }
         catch (err) {
             console.error('Error setting user active status:', err);
@@ -197,8 +197,8 @@ io.on('connection', (socket) => {
     // });
 });
 // Periodic check for inactive clients
-const CHECK_INTERVAL_MS = 10 * 1000; // 10 seconds
-const CLIENT_TIMEOUT_MS = 20 * 1000; // 20 seconds
+const CHECK_INTERVAL_MS = 1 * 1 * 1 * 1 * 40 * 1000; // 40 seconds in milliseconds
+const CLIENT_TIMEOUT_MS = 1 * 1 * 1 * 2.5 * 60 * 1000; // 150 seconds in milliseconds
 // Periodic ping and timeout disconnect
 setInterval(async () => {
     const now = Date.now();

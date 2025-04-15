@@ -19,11 +19,17 @@ const toggleSidebarButton = document.getElementById('toggleSidebarButton');
 const modeSelector = document.getElementById('modeSelector');
 const modelSelector = document.getElementById('modelSelector'); // Add reference for model selector
 const loginBtn = document.getElementById('loginBtn');
+// Get references to original parent containers for responsive repositioning
+const authContainer = document.querySelector('.auth-container');
+const chatboxHeader = document.querySelector('#chatbox h1');
+const chatbox = document.getElementById('chatbox');
+const btnsidebarcontainer = document.querySelector('.btn-sidebar-container');
 
 window.addEventListener('beforeunload', async (event) => {
     // event.preventDefault(); // Some browsers require this
     // alert('Are you sure you want to leave?');
     // event.returnValue = ""; // This shows the native confirmation prompt
+    console.log('beforeunload-page')
     await fetch('/auth/endsession')
         .then(response => {
             if (response.ok) {
@@ -115,7 +121,9 @@ document.addEventListener('DOMContentLoaded', async (event) => {
 
 
         const loginBtn = document.getElementById('loginBtn');
-        if (loginBtn) {
+        const usernameDisplay = document.getElementById('usernameDisplay'); // Get the new span
+
+        if (loginBtn && usernameDisplay) { // Check if both elements exist
             try {
                 const response = await fetch('/auth/session');
                 const data = await response.json();
@@ -127,7 +135,14 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                 if (data.loggedIn) {
                     loginBtn.textContent = data.isGuest ? 'Login' : 'Logout';
                     loginBtn.href = data.isGuest ? '/auth/login' : '/auth/logout';
-                    loginBtn.style.display = 'block';
+                    // loginBtn.style.display = 'inline-block'; // Use inline-block for button
+
+                    if (!data.isGuest && data.username) {
+                        usernameDisplay.textContent = `Welcome: ${data.username}`;
+                        usernameDisplay.style.display = 'inline'; // Show the span
+                    } else {
+                        usernameDisplay.style.display = 'none'; // Hide if guest or no username
+                    }
 
                     if (data.chatIds) {
                         await displayChatList(data.chatIds);
@@ -176,8 +191,10 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                     // Not logged in
                     loginBtn.textContent = 'Login';
                     loginBtn.href = '/auth/login';
-                    loginBtn.style.display = 'block';
+                    // loginBtn.style.display = 'inline-block';
+                    usernameDisplay.style.display = 'none'; // Hide username span
                     messagesDiv.innerHTML = '';
+                    usernameDisplay.innerHTML = '';
                     const chatListDiv = document.getElementById('chatListEle');
                     chatListDiv.innerHTML = '<h3>Chat History</h3>';
                     if (modeSelector) modeSelector.value = defaultMode;
@@ -187,7 +204,8 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                 console.error('Error checking session status:', error);
                 loginBtn.textContent = 'Login';
                 loginBtn.href = '/auth/login';
-                loginBtn.style.display = 'block';
+                // loginBtn.style.display = 'inline-block';
+                usernameDisplay.style.display = 'none'; // Hide username span on error
                 // Reset dropdowns on error too
                 if (modeSelector) modeSelector.value = populateModes();
                 if (modelSelector) modelSelector.value = populateModels();
@@ -204,14 +222,129 @@ document.addEventListener('DOMContentLoaded', async (event) => {
     if (modelSelector) {
         modelSelector.addEventListener('change', handleModelChange);
     }
+    // Initial check for responsive layout on load
+    handleResize();
 });
 
 // Sidebar toggle functionality
 if (toggleSidebarButton && chatList) {
-    toggleSidebarButton.addEventListener('click', () => {
+    toggleSidebarButton.addEventListener('click', async () => {
         chatList.classList.toggle('collapsed');
+        chatboxHeader.classList.toggle('collapsed');
+        chatbox.classList.toggle('collapsed');
+        // if(chatList.classList.contains('collapsed')){
+        //     setTimeout(() => {
+        //         chatbox.style.maxWidth = chatList.classList.contains('collapsed') ? '100%' : 'calc(100% - 250px)';
+        //     }, 300);
+        // }
+        // else{
+        //     chatbox.style.maxWidth = chatList.classList.contains('collapsed') ? '100%' : 'calc(100% - 250px)';  
+        // }
+        if (window.innerWidth > 768) {
+            chatbox.style.maxWidth = chatList.classList.contains('collapsed') ? '100%' : 'calc(100% - 250px)';
+        }
+        else{
+        chatbox.style.maxWidth = '100%';  
+        }
+        // After toggling, immediately check and reposition if on a small screen
+        await handleResize(); // Re-run handleResize to apply correct positioning based on new state
     });
 }
+
+// Function to handle responsive layout changes based on window width
+async function handleResize() {
+    // Ensure elements exist before manipulating them
+    const chatList = document.getElementById('chatList');
+    const loginBtn = document.getElementById('loginBtn');
+    const usernameDisplay = document.getElementById('usernameDisplay');
+    const toggleSidebarButton = document.getElementById('toggleSidebarButton');
+    // Re-fetch containers inside in case they weren't ready on initial load
+    const authContainer = document.querySelector('.auth-container');
+    const chatboxHeader = document.querySelector('#chatbox h1');
+
+    if (!chatList || !loginBtn || !usernameDisplay || !toggleSidebarButton || !authContainer || !chatboxHeader) {
+        console.warn("Responsive layout: One or more required elements not found.");
+        return; // Exit if elements are missing
+    }
+
+    const isSmallScreen = window.innerWidth < 768;
+
+    if (isSmallScreen) {
+        console.log("is call")
+        // Small screen layout
+        console.log("Responsive: Applying small screen layout (< 768px)");
+        chatList.style.zIndex = '1000'; // Bring sidebar to front
+        chatList.style.float = 'left'; // Float sidebar to the left
+
+        // Move auth elements into the sidebar
+        if (usernameDisplay.parentElement !== chatList) {
+            chatList.insertBefore(usernameDisplay, newChatButton);
+        }
+        if (loginBtn.parentElement !== btnsidebarcontainer) {
+            btnsidebarcontainer.prepend(loginBtn);
+        }
+
+        // Position toggle button based on sidebar state
+        if (chatList.classList.contains('collapsed')) {
+            // If sidebar is collapsed, move toggle button to header
+            if (toggleSidebarButton.parentElement !== chatboxHeader) {
+                toggleSidebarButton.style.marginRight = '10px';
+                toggleSidebarButton.style.marginLeft = '5px';
+                chatboxHeader.prepend(toggleSidebarButton);
+            }
+        } else {
+            // If sidebar is visible, move toggle button to auth container (left of login)
+            if (toggleSidebarButton.parentElement !== btnsidebarcontainer) {
+                 // Ensure loginBtn is also in authContainer or temporarily move it for insertBefore
+                 if (loginBtn.parentElement === btnsidebarcontainer) {
+                    // authContainer.insertBefore(toggleSidebarButton, loginBtn);
+                    console.log("Responsive: Moving toggle button to auth container");
+                    // btnsidebarcontainer.insertBefore(toggleSidebarButton, loginBtn);
+                    toggleSidebarButton.style.marginRight = '2px';
+                    toggleSidebarButton.style.marginLeft = '10px';
+                    btnsidebarcontainer.appendChild(toggleSidebarButton)
+                 } else {
+                    // If loginBtn isn't in authContainer yet (shouldn't happen often here), just append
+                    console.log("Responsive: Appending toggle button to auth container");
+                    chatboxHeader.appendChild(toggleSidebarButton);
+                 }
+            }
+        }
+
+    } else {
+        // Large screen layout
+        console.log("Responsive: Applying large screen layout (>= 768px)");
+        chatList.style.zIndex = ''; // Reset z-index
+
+        // Move elements back to their original positions
+        // Check if the element is not already in its original parent
+        if (toggleSidebarButton.parentElement !== chatboxHeader) {
+            toggleSidebarButton.style.marginRight = '10px';
+            toggleSidebarButton.style.marginLeft = '10px';
+            chatboxHeader.prepend(toggleSidebarButton); // Prepend toggle button back to h1
+        }
+        // Important: Append usernameDisplay *before* loginBtn in authContainer
+        if (usernameDisplay.parentElement !== authContainer) {
+             // Ensure loginBtn is also in authContainer or temporarily move it
+             if (loginBtn.parentElement === authContainer) {
+                authContainer.insertBefore(usernameDisplay, loginBtn);
+             } else {
+                authContainer.appendChild(usernameDisplay);
+             }
+        }
+        if (loginBtn.parentElement !== authContainer) {
+            authContainer.appendChild(loginBtn); // Append login button back
+        }
+
+        // Ensure sidebar is not collapsed when screen is large
+        // chatList.classList.remove('collapsed');
+    }
+}
+
+// Add resize event listener to apply layout changes dynamically
+window.addEventListener('resize', handleResize);
+
+// Note: The original 'windowResize' listener block (lines 227-234) is now replaced by the handleResize function and the 'resize' listener.
 
 const newChatButton = document.getElementById('newChatButton');
 newChatButton.addEventListener('click', createNewChat);
@@ -230,6 +363,7 @@ async function createNewChat() {
                 loginBtn.href = '/auth/login';
                 loginBtn.style.display = 'block';
                 messagesDiv.innerHTML = '';
+                usernameDisplay.innerHTML = '';
                 const chatListDiv = document.getElementById('chatListEle');
                 chatListDiv.innerHTML = '<h3>Chat History</h3>';
                 if (modeSelector) modeSelector.value = defaultMode;
@@ -260,98 +394,149 @@ userInput.addEventListener('input', function () {
 });
 
 async function sendMessage() {
-    const defaultMode = populateModes();
-    const defaultModel = populateModels();
+    const defaultMode = populateModes(true); // Get default without modifying DOM yet
+    const defaultModel = populateModels(true); // Get default without modifying DOM yet
+
+    // Check middleware status first
     try {
-        await fetch(`/api/get-middlewares`)
-        .then(response => response.json())
-        .then(data => {
-            console.log('Middleware data:', data);
-            // Ensure dropdowns are populated before setting values
-            const defaultMode = populateModes();
-            const defaultModel = populateModels();
-
-            if (data.exp){
-                loginBtn.textContent = 'Login';
-                loginBtn.href = '/auth/login';
-                loginBtn.style.display = 'block';
-                messagesDiv.innerHTML = '';
-                const chatListDiv = document.getElementById('chatListEle');
-                chatListDiv.innerHTML = '<h3>Chat History</h3>';
-                if (modeSelector) modeSelector.value = defaultMode;
-                if (modelSelector) modelSelector.value = defaultModel;
-                return;
-            }
-        });
-      } catch (err) {
-        console.error('Error fetching middleware status:', err);
-      }
-    const messageText = userInput.value.trim();
-    if (messageText === '') return;
-
-    displayMessage(messageText, 'user-message');
-    userInput.value = '';
-
-    // Send message to the backend
-    await fetch('/api/message', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            message: messageText,
-            // Always include selected mode and model from dropdowns
-            mode: modeSelector ? modeSelector.value : defaultMode, // Send current selection or default
-            model: modelSelector ? modelSelector.value : defaultModel // Send current selection or default
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.response) {
-            // displayMessage(data.response, 'agent-message');
-            console.log(data.response);
-            displayMarkdownMessage(data.response, 'agent-message')
-        } else if (data.error) {
-            // displayMessagsocket.emit('register', { userId: data.userId });e('Error: ' + data.error, 'agent-message');
+        const middlewareResponse = await fetch(`/api/get-middlewares`);
+        const middlewareData = await middlewareResponse.json();
+        console.log('Middleware data:', middlewareData);
+        if (middlewareData.exp) {
+            loginBtn.textContent = 'Login';
+            loginBtn.href = '/auth/login';
+            loginBtn.style.display = 'block';
+            messagesDiv.innerHTML = '';
+            usernameDisplay.innerHTML = '';
+            const chatListDiv = document.getElementById('chatListEle');
+            chatListDiv.innerHTML = '<h3>Chat History</h3>';
+            // if (modeSelector) modeSelector.value = defaultMode;
+            // if (modelSelector) modelSelector.value = defaultModel;
+            // return; // Stop execution if middleware check fails
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        displayMessage('Failed to get response from the agent.', 'agent-message');
-    });
+    } catch (err) {
+        console.error('Error fetching middleware status:', err);
+        // Optionally display an error to the user
+        return; // Stop if middleware check fails
+    }
 
-    await fetch('/auth/session')
-           .then(response => response.json())
-           .then(data => {
-               if (data.loggedIn) {
-                   if (data.chatIds) {
-                       displayChatList(data.chatIds);
-                       const currChatId = data.currChatId;
+    let currentMessage = userInput.value.trim();
+    if (currentMessage === '') return;
 
-                        // Highlight the active chat item
-                        if (currChatId) {
-                            const chatListDiv = document.getElementById('chatListEle');
-                            const allChatItems = chatListDiv.querySelectorAll('.chat-item');
-                            allChatItems.forEach(item => item.classList.remove('active'));
-                            const targetText = `Chat ${currChatId}`;
-                            const targetItem = Array.from(allChatItems).find(item => item.getElementsByClassName('chat-title')[0].textContent?.trim() === targetText);
-                            if (targetItem) {
-                                targetItem.classList.add('active');
-                            } else {
-                                console.warn('Chat item not found for currentChatId:', targetText);
-                            }
+    displayMessage(currentMessage, 'user-message'); // Display initial user message
+    userInput.value = ''; // Clear input field
+    userInput.style.height = 'auto'; // Reset height after sending
+
+    let agentResponse = ''; // Variable to hold the latest agent response
+    let attempt_completion = false;
+    let loopCount = 0; // Add a counter to prevent infinite loops in case of unexpected issues
+    const MAX_LOOPS = 10; // Set a maximum number of iterations
+    const selectedMode = modeSelector ? modeSelector.value : defaultMode; // Get selected mode *before* loop
+    const selectedModel = modelSelector ? modelSelector.value : defaultModel; // Get selected model *before* loop
+    let role = "user";
+
+    try { // Wrap the loop in a try-catch
+        do {
+            loopCount++;
+            if (loopCount > MAX_LOOPS) {
+                console.error("Loop limit reached. Breaking.");
+                displayMarkdownMessage("Loop limit reached. Please check the agent's response or try again.", 'agent-message');
+                break;
+            }
+
+            console.log(`Loop iteration ${loopCount}, Mode: ${selectedMode}, sending message:`, currentMessage.substring(0, 100) + "..."); // Log message start and mode
+
+            // Send message to the backend
+            const response = await fetch('/api/message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: currentMessage, // Use currentMessage for the loop
+                    // Use the actual current values from selectors or defaults captured *before* the loop
+                    mode: selectedMode,
+                    model: selectedModel,
+                    role: role,
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.response) {
+                agentResponse = data.response; // Store the response
+                attempt_completion = data.attempt_completion;
+                followup_question = data.followup_question;
+                // Display the agent's response, unless it's the final completion signal
+                if (followup_question) {
+                    displayMarkdownMessage(agentResponse, 'agent-message');
+                    console.log("Loop finished: 'ask_followup_question' received.");
+                    currentMessage = ""; // Update message for the next loop iteration (only relevant if looping)
+                
+                } else if (!attempt_completion) {
+                    displayMarkdownMessage(agentResponse, 'agent-message');
+                    currentMessage = ""; // Update message for the next loop iteration (only relevant if looping)
+                }
+                else {
+                    console.log("Loop finished: 'attempt_completion' received.");
+
+                    // Optionally display a final completion message here if needed
+                    displayMarkdownMessage(`Task completed. Result: ${agentResponse}`, 'agent-message');
+                    // displayMessage("Task completed.", 'agent-message');
+                }
+            } else if (data.error) {
+                // Display the error message received from the backend
+                const errorMessage = 'Error from agent: ' + data.error;
+                displayMarkdownMessage(errorMessage, 'agent-message error-message'); // Add an error class
+                console.error('Agent Error:', data.error);
+                agentResponse = "error"; // Set response to break loop on error
+            } else {
+                // Handle unexpected response format
+                displayMarkdownMessage('Unexpected response format from agent.', 'agent-message error-message');
+                console.error('Unexpected response format:', data);
+                agentResponse = "error"; // Set response to break loop
+            }
+        role = "assistance";
+        // Loop ONLY if mode is 'code' AND until completion signal, error, or max loops reached
+        } while ((selectedMode === 'code') && (!attempt_completion) && (!followup_question) && (agentResponse !== "error"));
+
+    } catch (error) {
+        console.error('Error during message loop:', error);
+        displayMarkdownMessage('Network error or issue communicating with the agent.', 'agent-message error-message');
+    } finally {
+        // This block executes regardless of whether the loop completed successfully or broke due to error/limit
+
+        // Update chat list and session info after the loop finishes
+        try {
+            const sessionResponse = await fetch('/auth/session');
+            const sessionData = await sessionResponse.json();
+            if (sessionData.loggedIn) {
+                if (sessionData.chatIds) {
+                    await displayChatList(sessionData.chatIds); // Ensure displayChatList is awaited if it becomes async
+                    const currChatId = sessionData.currChatId;
+
+                    // Highlight the active chat item
+                    if (currChatId) {
+                        const chatListDiv = document.getElementById('chatListEle');
+                        const allChatItems = chatListDiv.querySelectorAll('.chat-item');
+                        allChatItems.forEach(item => item.classList.remove('active'));
+                        const targetText = `Chat ${currChatId}`;
+                        const targetItem = Array.from(allChatItems).find(item => item.getElementsByClassName('chat-title')[0].textContent?.trim() === targetText);
+                        if (targetItem) {
+                            targetItem.classList.add('active');
+                        } else {
+                            console.warn('Chat item not found for currentChatId:', targetText);
                         }
-                   }
-                   if (data.userId) {
-                       socket.emit('register', { userId: data.userId });
-                   }
-               } else {
-               }
-           })
-           .catch(error => {
-               console.error('Error checking session status:', error);
-           });
-
+                    }
+                }
+                if (sessionData.userId) {
+                    socket.emit('register', { userId: sessionData.userId });
+                }
+            }
+        } catch (sessionError) {
+            console.error('Error checking session status after loop:', sessionError);
+        }
+    }
 }
 
 function displayMessage(text, className) {
@@ -460,6 +645,7 @@ async function loadChatHistory(chatId) {
                 loginBtn.href = '/auth/login';
                 loginBtn.style.display = 'block';
                 messagesDiv.innerHTML = '';
+                usernameDisplay.innerHTML = '';
                 const chatListDiv = document.getElementById('chatListEle');
                 chatListDiv.innerHTML = '<h3>Chat History</h3>';
                 if (modeSelector) modeSelector.value = defaultMode;

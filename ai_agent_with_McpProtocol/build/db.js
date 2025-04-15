@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     is_active BOOLEAN NOT NULL DEFAULT FALSE,
-    current_chat_id INTEGER NULL
+    current_chat_id INTEGER NULL,
+    role VARCHAR(10) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')) -- Added role column
     -- Remove foreign key for now
 );
 `;
@@ -345,8 +346,34 @@ async function deleteInactiveGuestUsersAndChats() {
         client.release();
     }
 }
+async function getUserRole(userId) {
+    const query = 'SELECT role FROM users WHERE id = $1';
+    const values = [userId];
+    try {
+        const result = await pool.query(query, values);
+        return result.rows[0]?.role ?? null;
+    }
+    catch (error) {
+        console.error('Error getting user role:', error);
+        throw error;
+    }
+}
+async function setUserRole(userId, role) {
+    const query = 'UPDATE users SET role = $1 WHERE id = $2';
+    const values = [role, userId];
+    try {
+        await pool.query(query, values);
+        console.log(`DB: Role for user ${userId} updated to ${role}`);
+    }
+    catch (error) {
+        console.error('Error setting user role:', error);
+        throw error;
+    }
+}
 export { createUser, createGuestUser, getUserByUsername, getUserByUserId, getUserByEmail, pool as default, newChatHistory, storeChatHistory, listChatHistory, readChatHistory, deleteChatHistory, setUserActiveStatus, getUserActiveStatus, setCurrentChatId, getCurrentChatId, deleteUserAndHistory, deleteInactiveGuestUsersAndChats, setChatMode, // Added export
 getChatMode, // Added export
 setChatModel, // Added export
 getChatModel, // Added export
+getUserRole, // Added export
+setUserRole, // Added export
  };

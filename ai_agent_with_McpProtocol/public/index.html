@@ -10,9 +10,13 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/monokai.min.css">
 </head>
 <body>
-    <a href="auth/login" class="login-button" id="loginBtn">Login</a>
+    <div class="auth-container">
+        <span id="usernameDisplay" style="display: none; margin-right: 10px;"></span>
+        <a href="auth/login" class="login-button" id="loginBtn">Login</a>
+    </div>
     <div class="container">
         <div id="chatList">
+            <div class="btn-sidebar-container" display="none"></div>
             <button id="newChatButton">New Chat</button>
             <div class="mode-selector-container">
                 <label for="modeSelector">Mode:</label>
@@ -31,7 +35,7 @@
             </div>
         </div>
         <div id="chatbox">
-            <h1><button id="toggleSidebarButton">☰</button> AI Agent Interface</h1>
+            <h1 class="header1"><button id="toggleSidebarButton"><i class="fas fa-bars"></i></button> AI Agent Interface</h1>
             <div id="messages"></div>
             <div class="input-container">
                 <textarea id="userInput" placeholder="Enter your command..." rows="1"></textarea>

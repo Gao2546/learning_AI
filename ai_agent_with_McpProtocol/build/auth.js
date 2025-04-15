@@ -12,24 +12,24 @@ router.post('/register', async (req, res) => {
         // Check if username already exists
         const existingUserByUsername = await getUserByUsername(username);
         if (existingUserByUsername) {
-            return res.redirect('/auth/register?error=username_exists');
+            return res.status(400).json({ error: 'username_exists' });
         }
         // Check if email already exists
         const existingUserByEmail = await getUserByEmail(email);
         if (existingUserByEmail) {
-            return res.redirect('/auth/register?error=email_exists');
+            return res.status(400).json({ error: 'email_exists' });
         }
         // Hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
         // Insert the user into the database
         const newUser = await createUser(username, hashedPassword, email);
         // Redirect to login page upon successful registration
-        res.redirect('/auth/login?success=registered');
+        res.status(201).json({ success: true }); // Send JSON success response
     }
     catch (error) {
         console.error('Error registering user:', error);
         // Redirect back to register page with a generic error
-        res.redirect('/auth/register?error=server_error');
+        res.status(500).json({ error: 'server_error' }); // Send JSON error response
     }
 });
 // Login endpoint
@@ -40,14 +40,14 @@ router.post('/login', async (req, res) => {
         const user = await getUserByUsername(username);
         if (!user) {
             // User not found
-            return res.redirect('/auth/login?error=invalid_credentials');
+            return res.status(401).json({ error: 'invalid_credentials' }); // Use 401 Unauthorized
         }
         await setUserActiveStatus(user.id, true);
         // Compare the password
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
             // Incorrect password
-            return res.redirect('/auth/login?error=invalid_credentials');
+            return res.status(401).json({ error: 'invalid_credentials' }); // Use 401 Unauthorized
         }
         if (req.session.user) {
             if (req.session.user.isGuest === true) {
@@ -95,13 +95,13 @@ router.post('/login', async (req, res) => {
             req.session.user.currentChatMode = null;
             req.session.user.currentChatModel = null;
         }
-        res.redirect('/');
-        // res.json({ success: true, userId: user.id, chatIds: userChatMap[user.id] });
+        // Login successful, send success response
+        res.status(200).json({ success: true, userId: user.id, username: user.username });
     }
     catch (error) {
         console.error('Error logging in:', error);
         // Redirect back to login page with a generic error
-        res.redirect('/auth/login?error=server_error');
+        res.status(500).json({ error: 'server_error' }); // Send JSON error response
     }
 });
 const __filename = fileURLToPath(import.meta.url);
@@ -146,6 +146,7 @@ router.get('/endsession', async (req, res) => {
         // await setUserActiveStatus(userId, false);
     }
     if (is_guest) {
+        console.log(`Deleting guest ${userId}`);
         await deleteUserAndHistory(userId);
         req.session.destroy((err) => {
             if (err) {

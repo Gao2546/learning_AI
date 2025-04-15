@@ -59,6 +59,15 @@ async function readFile(filename: string) {
 let setting_prompt : string = await readFile("./build/setting_prompt.txt") as string;
 
 interface MCPToolData {
+  attempt_completion: {
+    result: string[];
+  };
+  ask_followup_question: {
+    question: string[];
+    follow_up: {
+      suggest: string[];
+    }[];
+  };
   thinking: string[];
   use_mcp_tool: {
     server_name: string[];
@@ -83,6 +92,19 @@ const parseXML = async (xmlString: string): Promise<Record<string , any>> => {
     const toolName = result?.use_mcp_tool?.tool_name? result.use_mcp_tool.tool_name[0] : null;
     const argumentsText = result?.use_mcp_tool?.arguments? result.use_mcp_tool.arguments[0] : null;
 
+    const results = result?.attempt_completion?.result? result.attempt_completion.result[0] : null;
+
+    const followupQuestion = result?.ask_followup_question?.question? result.ask_followup_question.question[0] : null;
+    // Use nullish coalescing to default to an empty array if suggestions are missing
+    // Access the first element of the follow_up array before getting suggestions
+    const followupSuggestions: string[] = result?.ask_followup_question?.follow_up?.[0]?.suggest ?? [];
+
+    // Optional: Log a warning if a question exists but suggestions are empty
+    if (followupQuestion && followupSuggestions.length === 0) {
+      console.warn("Follow-up question received, but no suggestions were provided.");
+    }
+    // console.log("Follow-up Suggestions:", followupSuggestions); // Adjusted log if needed
+
     let argumentsObj: Record<string, any> = {}; // Default to empty object
     if (argumentsText) {
       try {
@@ -97,6 +119,9 @@ const parseXML = async (xmlString: string): Promise<Record<string , any>> => {
       serverName,
       toolName,
       arguments: argumentsObj,
+      results,
+      followupQuestion,
+      followupSuggestions,
     };
     return parsedData;
   } catch (error) {
@@ -121,11 +146,11 @@ const __dirname = path.dirname(__filename);
 // API endpoint to handle messages from the UI
 router.post('/message', async (req, res) => {
   try {
-    const { message: userMessage, model: selectedModel, mode: selectedMode } = req.body; // Get mode and model from body
+    const { message: userMessage, model: selectedModel, mode: selectedMode, role: selectedRole } = req.body; // Get mode and model from body
 
-    if (!userMessage) {
-      return res.status(400).json({ error: 'Message is required' });
-    }
+    // if (!userMessage) {
+    //   return res.status(400).json({ error: 'Message is required' });
+    // }
     // Basic validation for mode and model if provided in this specific request
     // Note: Mode/Model are primarily set via /set-mode and /set-model,
     // but we need them here for the *first* message of a *new* chat.
@@ -183,7 +208,13 @@ router.post('/message', async (req, res) => {
     }
 
     // Append user message
-    chatContent += (chatContent ? "\n<DATA_SECTION>\n" : "") + "user: " + userMessage + "\n";
+    if (selectedRole == "user"){
+      chatContent += (chatContent ? "\n<DATA_SECTION>\n" : "") + "user" + ": " + userMessage + "\n";
+    }
+    else if (selectedRole == "assistance"){
+      // chatContent += (chatContent ? "\n<DATA_SECTION>\n" : "") + "assistance" + ": " + userMessage + "\n";
+    }
+
 
     // Prepare prompt
     let question : string = "";
@@ -215,21 +246,48 @@ router.post('/message', async (req, res) => {
     let responsetext = "";
     let tool_u = null;
     if (response.text){
-      responsetext = (response.text).replace("</thinking>","</thinking>\n")
+      responsetext = (response.text).replace("<thinking>","\n<thinking>\n")
+                                    .replace("</thinking>","\n</thinking>\n")
                                     .replace("```xml","\n```xml")
+                                    .replace("```tool_code","\n```tool_code")
                                     .replace("TOOL USE\n```xml", "TOOL USE")
                                     .replace("TOOL USE", "TOOL USE\n```xml")
                                     .replace("</use_mcp_tool>\n```","</use_mcp_tool>")
-                                    .replace("</use_mcp_tool>","</use_mcp_tool>\n```");
+                                    .replace("</use_mcp_tool>","</use_mcp_tool>\n```")
+                                    .replace("</attempt_completion>\n```","</attempt_completion>")
+                                    .replace("</attempt_completion>","</attempt_completion>\n```")
+                                    .replace("</ask_followup_question>\n```","</ask_followup_question>")
+                                    .replace("</ask_followup_question>","</ask_followup_question>\n```");
       let rrs = response.text;
+      console.log("rrs");
       const rrss = rrs.match(/<use_mcp_tool>[\s\S]*?<\/use_mcp_tool>/);
-      if (rrss && rrss[0]){
-      const prepraseXML = rrss[0].replace(/\\n/g, '')                        // Remove \n
+      const rrss2 = rrs.match(/<attempt_completion>[\s\S]*?<\/attempt_completion>/);
+      const rrss3 = rrs.match(/<ask_followup_question>[\s\S]*?<\/ask_followup_question>/);
+      let rrss4 : string[] | null = [""];
+
+      const val1 = rrss?.[0]?.toString() ?? "";
+      const val2 = rrss2?.[0]?.toString() ?? "";
+      const val3 = rrss3?.[0]?.toString() ?? "";
+      rrss4 = [val1 + val2 + val3];
+      console.log(rrss4);
+      // if (rrss && rrss[0] && rrss2 && rrss2[0]){
+      //   rrss4 = [rrss[0].toString() + rrss2[0].toString()];
+      //   console.log(rrss4);
+      // }
+      // else if (rrss){
+      //   rrss4 = rrss;
+      // }
+      // else if (rrss2){
+      //   rrss4 = rrss2;
+      // }
+      if (rrss4 && rrss4[0]){
+      const prepraseXML = rrss4[0].replace(/\\n/g, '')                        // Remove \n
                                        .replace(/\(\\?`[^)]*\\?`\)/g, '')          // Remove (`...`) including escaped backticks
                                        .replace(/\\`/g, '`')                       // Unescape backticks (just in case)
                                        .replace(/\\\\/g, '\\')
                                        .replace(/\\/g, '');      
                                                   // Fix double backslashes
+      console.log(prepraseXML);
       const xmloutput = await parseXML(prepraseXML);
       console.log(xmloutput);
       tool_u = xmloutput;
@@ -239,23 +297,30 @@ router.post('/message', async (req, res) => {
 
 
 
-
-    if (tool_u?.toolName === "attempt_completion") {
+    let resultText = "";
+    if (tool_u?.results) {
       // console.log("Tool Name is attempt_completion.\n=============================================");
-      return res.json({ response: "attempt_completion" }); // Return "attempt_completion";
+      // return res.json({ response: `attempt_completion : ${tool_u.results}`, attempt_completion : true, followup_question : false }); // Return "attempt_completion";
+      responsetext += `\n\nattempt_completion : ${tool_u.results}`
     }
-    else if (tool_u?.serverName.trim() === "mcp_BrowserBase") {
+    if (tool_u?.followupQuestion) {
+      // return res.json({ response: `**ask_followup_question :**  ${tool_u.followupQuestion} \n\n ${tool_u.followupSuggestions.map((item:string) => `* **suggest** ${tool_u.followupSuggestions.indexOf(item) + 1}: ${item}`).join('\n')} \n\nselect suggestion and send it back to me.`,attempt_completion : false ,followup_question : true }); // Return "attempt_completion";
+      responsetext += `\n\n**ask_followup_question :**  ${tool_u.followupQuestion} \n\n ${tool_u.followupSuggestions.map((item:string) => `* **suggest** ${tool_u.followupSuggestions.indexOf(item) + 1}: ${item}`).join('\n')} \n\nselect suggestion and send it back to me.`
+    }
+    else if (tool_u?.serverName?.trim() === "mcp_BrowserBase") {
       try {
         if (!client.transport) { // Check if transport is not set (i.e., not connected)
           await client.connect(transport_mcp_BrowserBase);
           console.log("Client connected.\n");
         }
         // Call a tool
-        const result = await client.callTool({
+        const response = await client.callTool({
             name: tool_u.toolName,
             arguments: tool_u.arguments,
         }) as resultsT;
-        console.log("RESPONSE:\n", result.content[0].text, "\n================================================");
+        console.log("RESPONSE:\n", response.content[0].text, "\n================================================");
+        // resultText = response.content[0].text;
+        resultText = `[use_mcp_tool for '${tool_u.serverName}'] Result:\n${response.content[0].text}\n current step using ${tool_u.toolName} is complete move to next step if task complete use tool <attempt_completion>`
         // res.json({ response: `[use_mcp_tool for '${tool_u.serverName}'] Result:\n${result.content[0].text}\n current step using ${tool_u.toolName} is complete move to next step if task complete use tool <attempt_completion>` }); // Return the result of the tool call
       } catch (toolError) {
           console.error("Error during MCP tool connection or call:", tool_u.toolName, toolError);
@@ -284,9 +349,18 @@ router.post('/message', async (req, res) => {
 
 
 
+    let all_response = "";
 
     // Append AI response
-    chatContent += "\n<DATA_SECTION>\n" + "assistance: " + response.text + "\n";
+    if (resultText) {
+      chatContent += "\n<DATA_SECTION>\n" + "assistance: " + responsetext + "\n" + "mcp_tool_response: \n" + resultText + "\n";
+      all_response = responsetext + "\n\n" + resultText;
+    }
+    else{
+      console.log("no data from mcp_tool_response");
+      chatContent += "\n<DATA_SECTION>\n" + "assistance: " + responsetext + "\n";
+      all_response = responsetext;
+    }
 
     if (userId) {
       if (!currentChatId) {
@@ -323,7 +397,14 @@ router.post('/message', async (req, res) => {
       }
     }
 
-    res.json({ response: responsetext });
+    if (tool_u?.results) {
+      // console.log("Tool Name is attempt_completion.\n=============================================");
+      return res.json({ response: all_response, attempt_completion : true, followup_question : false }); // Return "attempt_completion";
+    }
+    if (tool_u?.followupQuestion) {
+      return res.json({ response: all_response,attempt_completion : false ,followup_question : true }); // Return "attempt_completion";
+    }
+    res.json({ response: all_response, attempt_completion : false, followup_question : false });
   } catch (error) {
     console.error('Error handling message:', error);
     res.status(500).json({ error: 'Internal Server Error' });
