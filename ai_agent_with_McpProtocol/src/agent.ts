@@ -8,6 +8,7 @@ import { GoogleGenAI } from "@google/genai";
 import fetch from 'node-fetch'; // Import the node-fetch library
 import * as cheerio from 'cheerio';   // Import cheerio
 import { parseStringPromise } from 'xml2js';
+import { Ollama } from 'ollama';
 
 import bcrypt from 'bcrypt';
 import { setChatMode, setChatModel, getChatMode, getChatModel } from './db.js'; // Import necessary DB functions
@@ -43,6 +44,7 @@ const ai = new GoogleGenAI({apiKey:"AIzaSyAeKtGko-Vn8xNlOk3zVAuERcXPupOa_C8"});
 
 import readline = require('readline');
 import fs = require('fs');
+import { json } from 'stream/consumers';
 
 async function readFile(filename: string) {
   return new Promise((resolve, reject) => {
@@ -74,6 +76,14 @@ interface MCPToolData {
     tool_name: string[];
     arguments: string[];
   };
+}
+
+// Define an interface for the expected structure of the JSON response from Ollama
+interface OllamaResponse {
+  model: string;
+  created_at: string;
+  response: string;
+  done: boolean;
 }
 
 type resultsT = {
@@ -238,14 +248,73 @@ router.post('/message', async (req, res) => {
       res.status(500).json({ error: `${err}` });
     }
 
+
+    let response: { text: string } | null = null; // Variable to hold the response text compatible with later processing
     // Call AI model
-    const response = await ai.models.generateContent({
-      model: modelToUse, // Use the determined model
-      contents: question,
-    });
+    if (modelToUse.startsWith("gemini")){
+      const Geminiresponse = await ai.models.generateContent({
+        model: modelToUse, // Use the determined model
+        contents: question,
+      });
+      if (Geminiresponse && typeof(Geminiresponse.text) === 'string'){
+        response = { text: Geminiresponse.text };
+      }
+    } else if (modelToUse.startsWith("qwen")){
+    try {
+        console.log("Calling Ollama API...");
+        const ollamaFetchResponse = await fetch('http://127.0.0.1:11434/api/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: modelToUse,
+                prompt: question,
+                stream: false // Use boolean false for stream parameter
+            })
+        });
+
+        if (!ollamaFetchResponse.ok) {
+            const errorText = await ollamaFetchResponse.text();
+            console.error(`Ollama API error! status: ${ollamaFetchResponse.status}`, errorText);
+            // Send error response immediately if API call fails
+            return res.status(500).json({ error: `Ollama API error (${ollamaFetchResponse.status}): ${errorText}` });
+        }
+
+        // Use the OllamaResponse interface defined earlier (lines 81-87)
+        const ollamaData = await ollamaFetchResponse.json() as OllamaResponse; // Explicitly cast to OllamaResponse
+        console.log("Raw Ollama Response:", ollamaData);
+
+        if (ollamaData && typeof ollamaData.response === 'string') {
+            // Store the response text in the 'response' variable for later processing
+            response = { text: ollamaData.response };
+            console.log("Extracted Ollama Response Text:", response.text);
+        } else {
+            console.error("Invalid response format from Ollama:", ollamaData);
+            // Send error response immediately if format is invalid
+            return res.status(500).json({ error: "Invalid response format received from Ollama model" });
+        }
+
+    } catch (err) {
+        console.error('Error calling Ollama API or processing response:', err);
+        // Send error response immediately if fetch or JSON parsing fails
+        return res.status(500).json({ error: `Failed to communicate with Ollama model: ${err instanceof Error ? err.message : String(err)}` });
+    }
+    }
+
+    // let modelToUse_ollama = "qwen2.5-coder:1.5b";
+
+    
+    // Note: The code execution continues here ONLY if the try block succeeded
+    // and assigned a value to the 'response' variable.
+    if (!response){
+      console.error("No response received from AI model");
+      return res.status(500).json({ error: "No response received from AI model" });
+    }
+
     let responsetext = "";
     let tool_u = null;
-    if (response.text){
+    if (response && response.text){ // Check if response is not null before accessing text
       responsetext = (response.text).replace("<thinking>","\n<thinking>\n")
                                     .replace("</thinking>","\n</thinking>\n")
                                     .replace("```xml","\n```xml")

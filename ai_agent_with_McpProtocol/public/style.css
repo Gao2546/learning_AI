@@ -25,17 +25,24 @@ thinking {
 
 /* Sidebar chat history */
 #chatList {
+    position:relative; /* Position absolutely to float over */
+    top: 0;
+    left: 0;
     width: 250px; /* Slightly wider sidebar */
     padding: 15px;
     border-right: 1px solid #3a3a3a; /* Subtle border */
     background-color: #2a2a2a; /* Slightly lighter sidebar background */
-    display: flex;
-    flex-direction: column;
+    /* display: flex; */
+    /* flex-direction: column;
     align-items: center;
+    justify-content: center; */
     box-sizing: border-box;
     flex-shrink: 0; /* Prevent sidebar from shrinking */
     transition: width 0.3s ease, padding 0.3s ease; /* Add transition for sliding */
     overflow-x: hidden; /* Hide content when collapsed */
+    /* overflow-y: hidden; */
+    height: 100%;
+    max-height: 100%;
 }
 
 #chatListEle {
@@ -44,13 +51,16 @@ thinking {
     /* align-items: center; */
     /* justify-content: center; */
     width: calc(100% - 15px); /* Adjust width to account for padding */
-    max-height: 100%;
+    max-height: calc(100% - 210px - 65px);
+    min-height: 200px;
     overflow-y: auto; /* Allow scrolling for chat list */
     flex-grow: 1; /* Allow list to take available space */
     overflow-x: hidden; /* Hide content when collapsed */
     white-space: nowrap;
     text-overflow: clip;
     scrollbar-width: none;
+    margin: auto;
+    padding: auto
 }
 
 .btn-sidebar-container {
@@ -80,6 +90,7 @@ thinking {
     overflow-x: hidden;
     white-space: nowrap;
     text-overflow: clip;
+    /* height: 30px; */
 
 }
 
@@ -104,6 +115,7 @@ thinking {
     overflow-x: hidden;
     white-space: nowrap;
     text-overflow: clip;
+    /* height: 110px; */
 }
 
 .mode-selector-container label {
@@ -150,6 +162,7 @@ thinking {
     overflow-x: hidden;
     white-space: nowrap;
     text-overflow: clip;
+    /* height: 110px; */
 }
 
 .model-selector-container label {
@@ -215,9 +228,9 @@ thinking {
     transition: 0.3s ease;
 }
 
-chatbox.collapsed {
+/* chatbox.collapsed {
     max-width: calc(100% + 250px);
-}
+} */
 
 
 
@@ -228,7 +241,7 @@ chatbox.collapsed {
     padding: 15px 5px; /* Add padding */
     font-size: 1.5em; /* Adjust size */
     font-weight: 600;
-    width: 150%;
+    width: 100%;
     background-color: #2a2a2a; /* Header background */
     border-bottom: 1px solid #3a3a3a; /* Separator line */
     display: flex; /* Use flexbox to align button and title */
@@ -273,11 +286,11 @@ chatbox.collapsed {
 #messages {
     flex-grow: 1;
     overflow-y: auto;
-    padding: 20px 15%; /* Adjust padding */
+    padding: 20px calc(50% - 400px) 20px calc(50% - 400px); /* Adjust padding */
     background-color: #1e1e1e; /* Match body background */
     color: #e0e0e0;
-    width: 80%; /* Adjust width */
-    margin: 0 auto; /* Center messages */
+    width: 100%; /* Adjust width */
+    margin: 0 0; /* Center messages */
     box-sizing: border-box;
     scrollbar-width:none;
 }
@@ -286,11 +299,14 @@ chatbox.collapsed {
 .input-container {
     display: flex;
     align-items: center; /* Align items vertically */
-    padding: 15px 15%; /* Adjust padding */
+    /* padding: 15px 15%; Adjust padding */
     background-color: #1e1e1e; /* Match sidebar background */
     border-top: 0px solid #3a3a3a; /* Separator line */
-    width: 80%; /* Adjust width */
+    width: 100%; /* Adjust width */
+    padding: 15px calc(50% - 400px) 15px calc(50% - 400px); /* Adjust padding */
+    height: calc(46px + 15px + 15px);
     margin: 0 auto; /* Center input */
+    margin-bottom: 0px;
     box-sizing: border-box;
 }
 
@@ -303,12 +319,13 @@ chatbox.collapsed {
     color: #e0e0e0;
     resize: none;
     max-height: 150px;
-    height: 36px; /* Initial height for one line */
+    height: 46px; /* Initial height for one line */
     overflow-y: auto;
     margin: 0;
     font-size: 1em;
     line-height: 1.4; /* Improve readability */
     box-sizing: border-box;
+    font-size: 16px;
     scrollbar-width: none;
 }
 
@@ -483,6 +500,8 @@ strong {
     display: none; /* Keep hidden by default */
     padding: 8px 0; /* Add some vertical padding to align with button */
     font-style: italic; /* Add a bit of style */
+    overflow-wrap: normal;
+    word-wrap: normal;
 }
 
 .auth-container{
@@ -573,21 +592,101 @@ strong {
     */
 }
 
+#chathishead {
+    margin-bottom: 15px; /* Restore bottom margin */
+    margin-right: auto; /* Remove right margin */
+    margin-left: auto;
+    width:fit-content; /* Full width */
+    flex-shrink: 0;
+    padding: 10px 15px; /* Restore padding */
+}
+
+.warning {
+    color: #ff6b6b; /* Softer red */
+    font-size: 0.8em;
+    text-align: center;
+    margin-bottom: 15px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 
 /* Responsive adjustments */
 @media (max-width: 1600px) {
     #messages{
-        width: 90%;
-        max-width: 90%;
+        /* width: 90%;
+        max-width: 90%; */
+        padding: 20px calc(50% - 400px) 20px calc(50% - 400px); /* Adjust padding */
     }
 
     .input-container{
-        width: 90%;
-        max-width: 90%;
+        /* width: 90%;
+        max-width: 90%; */
+        padding: 15px calc(50% - 400px) 15px calc(50% - 400px); /* Adjust padding */
     }
 }
 
-@media (max-width: 768px) {
+/* Responsive adjustments */
+@media (max-width: 1400px) {
+    #messages{
+        /* width: 90%;
+        max-width: 90%; */
+        padding: 20px calc(50% - 350px) 20px calc(50% - 350px); /* Adjust padding */
+    }
+
+    .input-container{
+        /* width: 90%;
+        max-width: 90%; */
+        padding: 15px calc(50% - 350px) 15px calc(50% - 350px); /* Adjust padding */
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    #messages{
+        /* width: 90%;
+        max-width: 90%; */
+        padding: 20px calc(50% - 300px) 20px calc(50% - 300px); /* Adjust padding */
+    }
+
+    .input-container{
+        /* width: 90%;
+        max-width: 90%; */
+        padding: 15px calc(50% - 300px) 15px calc(50% - 300px); /* Adjust padding */
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 1000px) {
+    #messages{
+        /* width: 90%;
+        max-width: 90%; */
+        padding: 20px calc(50% - 300px) 20px calc(50% - 300px); /* Adjust padding */
+    }
+
+    .input-container{
+        /* width: 90%;
+        max-width: 90%; */
+        padding: 15px calc(50% - 300px) 15px calc(50% - 300px); /* Adjust padding */
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 950px) {
+    #messages{
+        /* width: 90%;
+        max-width: 90%; */
+        padding: 20px calc(50% - 250px) 20px calc(50% - 250px); /* Adjust padding */
+    }
+
+    .input-container{
+        /* width: 90%;
+        max-width: 90%; */
+        padding: 15px calc(50% - 250px) 15px calc(50% - 250px); /* Adjust padding */
+    }
+}
+
+@media (max-width: 868px) {
     html, body {
         height: 100%; /* Ensure html and body take full height */
         overflow: hidden; /* Prevent scrolling on body */
@@ -613,14 +712,26 @@ strong {
         background-color: #2a2a2a; /* Ensure background is opaque */
         border-right: 1px solid #3a3a3a;
         border-bottom: none;
-        padding: 10px 5px;
+        /* padding: 10px 5px; */
         box-sizing: border-box;
         z-index: 1000; /* Keep on top */
-        overflow-y: hidden; /* Allow scrolling within sidebar */
+        /* overflow-y: hidden; Allow scrolling within sidebar */
         overflow-x: hidden; /* Hide horizontal overflow */
         transform: translateX(0); /* Default position */
         transition: transform 0.3s ease; /* Animate sliding */
         /* Removed float: left, flex-shrink: 0 */
+
+        padding: 15px;
+        border-right: 1px solid #3a3a3a; /* Subtle border */
+        background-color: #2a2a2a; /* Slightly lighter sidebar background */
+        /* display: flex; */
+        /* flex-direction: column;
+        align-items: center;
+        justify-content: center; */
+        box-sizing: border-box;
+        flex-shrink: 0; /* Prevent sidebar from shrinking */
+        overflow-x: hidden; /* Hide content when collapsed */
+        /* overflow-y: hidden; */
     }
 
     /* Override global collapsed styles for small screens */
@@ -661,14 +772,33 @@ strong {
     #chatListEle {
         overflow-y: auto; /* Restore vertical scroll */
         overflow-x: hidden; /* Hide horizontal overflow */
-        flex-grow: 1;
+        display: flex;
+        flex-grow: 1; /* Allow list to take available space */
+        flex-direction: column;
         align-items: center;
         /* padding-bottom: 0; */ /* Reset */
         white-space: normal; /* Allow wrapping */
-        width: 100%; /* Ensure it takes full width of sidebar */
         height: fit-content; /* Ensure it takes full height of sidebar */
-        max-height: calc(100% - 221px - 60px);
+        max-height: calc(100% - 221px - 60px - 80px);
+        width: calc(100% - 15px); /* Adjust width to account for padding */
         scrollbar-width: none;
+
+        text-overflow: clip;
+        scrollbar-width: none;
+        margin: auto;
+        padding: auto
+        
+
+
+    }
+
+    #chathishead {
+        margin-bottom: 15px; /* Restore bottom margin */
+        margin-right: auto; /* Remove right margin */
+        margin-left: auto;
+        width:fit-content; /* Full width */
+        flex-shrink: 0;
+        padding: 10px 15px; /* Restore padding */
     }
 
     #newChatButton {
@@ -680,7 +810,7 @@ strong {
     }
 
      #chatListEle h3 {
-        display: none;
+        display: inline-block;
     }
 
     .chat-item {
@@ -699,6 +829,7 @@ strong {
         flex-direction: column; /* Stack header, messages, input */
         overflow: hidden; /* Prevent chatbox itself from scrolling */
         padding: 0;
+        margin: auto;
         max-width: 100%;
         /* height: 100%; */ /* Ensure it takes full height */
         /* Remove height: auto; */
@@ -731,11 +862,12 @@ strong {
 
     #messages {
         width: 100%; /* Full width */
-        flex-grow: 1; /* Allow messages to fill space */
-        overflow-y: auto; /* Keep vertical scroll */
-        box-sizing: border-box; /* Include padding in width */
-        padding: 15px; /* Adjust padding */
-        margin: auto; /* Remove margin */
+        /* flex-grow: 1; Allow messages to fill space */
+        /* overflow-y: auto; Keep vertical scroll */
+        /* box-sizing: border-box; Include padding in width */
+        /* padding: 15px; Adjust padding */
+        /* margin: auto; Remove margin */
+        padding: 15px calc(50% - 250px) 15px calc(50% - 250px); /* Adjust padding */
     }
 
     /* .chatbox #messages h1{
@@ -746,10 +878,10 @@ strong {
 
     .input-container {
         width: 100%; /* Full width */
-        flex-shrink: 0; /* Prevent input area from shrinking */
-        box-sizing: border-box; /* Include padding in width */
-        padding: 15px; /* Adjust padding */
-        margin: auto; /* Remove margin */
+        /* flex-shrink: 0; Prevent input area from shrinking */
+        /* box-sizing: border-box; Include padding in width */
+        /* padding: 15px; Adjust padding */
+        padding: 15px calc(50% - 250px) 15px calc(50% - 250px); /* Adjust padding */
     }
 
     /* .login-button styles are now handled inside the #chatList block when moved */

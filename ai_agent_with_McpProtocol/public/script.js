@@ -66,6 +66,18 @@ window.addEventListener('beforeunload', async (event) => {
 document.addEventListener('DOMContentLoaded', async (event) => {
     // socket.emit('pong');
     console.log('reload-page')
+    // Add this check: Collapse sidebar on load if screen is small
+    if (window.innerWidth < 868) {
+        const chatList = document.getElementById('chatList');
+        chatList.style.display = 'none';
+        if (chatList) { // Check if chatList exists
+            console.log("Reloading on small screen (< 868px), collapsing sidebar initially.");
+            chatList.classList.toggle('collapsed');
+            chatboxHeader.classList.toggle('collapsed');
+            chatbox.classList.toggle('collapsed');
+            // handleResize below will adjust other elements based on this collapsed state
+        }
+    }
     await fetch(`/api/reload-page`)
         .then(response => response.json())
         .then(data => {
@@ -196,7 +208,7 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                     messagesDiv.innerHTML = '';
                     usernameDisplay.innerHTML = '';
                     const chatListDiv = document.getElementById('chatListEle');
-                    chatListDiv.innerHTML = '<h3>Chat History</h3>';
+                    chatListDiv.innerHTML = '';
                     if (modeSelector) modeSelector.value = defaultMode;
                     if (modelSelector) modelSelector.value = defaultModel;
                 }
@@ -223,12 +235,35 @@ document.addEventListener('DOMContentLoaded', async (event) => {
         modelSelector.addEventListener('change', handleModelChange);
     }
     // Initial check for responsive layout on load
-    handleResize();
+    handleResize(); // This call will now respect the potentially collapsed state
+
+    // Add click listener to close sidebar on outside click (small screens)
+    document.addEventListener('click', (event) => {
+        const chatList = document.getElementById('chatList');
+        const toggleSidebarButton = document.getElementById('toggleSidebarButton');
+
+        // Ensure elements exist and screen is small
+        if (!chatList || !toggleSidebarButton || window.innerWidth >= 868) {
+            return;
+        }
+
+        // Check if chat list is visible (not collapsed) and click is outside chatList and not the toggle button itself or its children
+        if (!chatList.classList.contains('collapsed') &&
+            !chatList.contains(event.target) &&
+            event.target !== toggleSidebarButton &&
+            !toggleSidebarButton.contains(event.target)) {
+
+            console.log("Clicked outside sidebar on small screen, closing sidebar.");
+            // Simulate a click on the toggle button to close the sidebar
+            toggleSidebarButton.click();
+        }
+    });
 });
 
 // Sidebar toggle functionality
 if (toggleSidebarButton && chatList) {
     toggleSidebarButton.addEventListener('click', async () => {
+        chatList.style.display = 'inline-block';
         chatList.classList.toggle('collapsed');
         chatboxHeader.classList.toggle('collapsed');
         chatbox.classList.toggle('collapsed');
@@ -240,8 +275,9 @@ if (toggleSidebarButton && chatList) {
         // else{
         //     chatbox.style.maxWidth = chatList.classList.contains('collapsed') ? '100%' : 'calc(100% - 250px)';  
         // }
-        if (window.innerWidth > 768) {
-            chatbox.style.maxWidth = chatList.classList.contains('collapsed') ? '100%' : 'calc(100% - 250px)';
+        if (window.innerWidth > 868) {
+            // chatbox.style.maxWidth = chatList.classList.contains('collapsed') ? '100%' : 'calc(100% - 250px)';
+            chatbox.style.maxWidth = '100%';
         }
         else{
         chatbox.style.maxWidth = '100%';  
@@ -267,12 +303,12 @@ async function handleResize() {
         return; // Exit if elements are missing
     }
 
-    const isSmallScreen = window.innerWidth < 768;
+    const isSmallScreen = window.innerWidth < 868;
 
     if (isSmallScreen) {
         console.log("is call")
         // Small screen layout
-        console.log("Responsive: Applying small screen layout (< 768px)");
+        console.log("Responsive: Applying small screen layout (< 868px)");
         chatList.style.zIndex = '1000'; // Bring sidebar to front
         chatList.style.float = 'left'; // Float sidebar to the left
 
@@ -313,7 +349,7 @@ async function handleResize() {
 
     } else {
         // Large screen layout
-        console.log("Responsive: Applying large screen layout (>= 768px)");
+        console.log("Responsive: Applying large screen layout (>= 868px)");
         chatList.style.zIndex = ''; // Reset z-index
 
         // Move elements back to their original positions
@@ -365,7 +401,7 @@ async function createNewChat() {
                 messagesDiv.innerHTML = '';
                 usernameDisplay.innerHTML = '';
                 const chatListDiv = document.getElementById('chatListEle');
-                chatListDiv.innerHTML = '<h3>Chat History</h3>';
+                chatListDiv.innerHTML = '';
                 if (modeSelector) modeSelector.value = defaultMode;
                 if (modelSelector) modelSelector.value = defaultModel;
                 return;
@@ -409,7 +445,7 @@ async function sendMessage() {
             messagesDiv.innerHTML = '';
             usernameDisplay.innerHTML = '';
             const chatListDiv = document.getElementById('chatListEle');
-            chatListDiv.innerHTML = '<h3>Chat History</h3>';
+            chatListDiv.innerHTML = '';
             // if (modeSelector) modeSelector.value = defaultMode;
             // if (modelSelector) modelSelector.value = defaultModel;
             // return; // Stop execution if middleware check fails
@@ -430,7 +466,7 @@ async function sendMessage() {
     let agentResponse = ''; // Variable to hold the latest agent response
     let attempt_completion = false;
     let loopCount = 0; // Add a counter to prevent infinite loops in case of unexpected issues
-    const MAX_LOOPS = 10; // Set a maximum number of iterations
+    const MAX_LOOPS = 1; // Set a maximum number of iterations
     const selectedMode = modeSelector ? modeSelector.value : defaultMode; // Get selected mode *before* loop
     const selectedModel = modelSelector ? modelSelector.value : defaultModel; // Get selected model *before* loop
     let role = "user";
@@ -549,7 +585,7 @@ function displayMessage(text, className) {
 
 async function displayChatList(chatIds) {
     const chatListDiv = document.getElementById('chatListEle');
-    chatListDiv.innerHTML = '<h3>Chat History</h3>'; // Clear existing list
+    chatListDiv.innerHTML = ''; // Clear existing list
 
     chatIds.forEach(chatId => {
         const chatElement = document.createElement('div');
@@ -749,7 +785,13 @@ function populateModels(returnDefault = false) {
         { id: 'gemini-1.5-flash-8b-exp-0827', name: 'gemini-1.5-flash-8b-exp-0827' },
         { id: 'gemini-1.5-pro-002', name: 'gemini-1.5-pro-002' },
         { id: 'gemini-1.5-pro-exp-0827', name: 'gemini-1.5-pro-exp-0827' },
-        { id: 'gemini-exp-1206', name: 'gemini-exp-1206' }
+        { id: 'gemini-exp-1206', name: 'gemini-exp-1206' },
+        { id: 'qwen2.5-coder:0.5b', name: 'qwen2.5-coder:0.5b' },
+        { id: 'qwen2.5-coder:1.5b', name: 'qwen2.5-coder:1.5b' },
+        { id: 'qwen2.5-coder:3b', name: 'qwen2.5-coder:3b' },
+        { id: 'qwen2.5-coder:7b', name: 'qwen2.5-coder:7b' },
+        { id: 'qwen2.5-coder:14b', name: 'qwen2.5-coder:14b' },
+        { id: 'qwen2.5-coder:32b', name: 'qwen2.5-coder:32b' },
     ];
     const defaultValue = models.length > 0 ? models[0].id : null;
 
