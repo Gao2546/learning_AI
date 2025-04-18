@@ -1,104 +1,150 @@
 #!/bin/bash
 
-if [!command -v "sudo" &> /dev/null]; then
-    apt-get sudo || sudo apt-get update || apt-get upgrade
+# Exit immediately if a command exits with a non-zero status.
+set -e
+
+# --- Helper Function for Package Installation ---
+# Usage: ensure_pkg_installed <command_to_check> [package_name]
+# If package_name is not provided, it defaults to command_to_check
+ensure_pkg_installed() {
+    local cmd_to_check="$1"
+    local pkg_name="${2:-$1}" # Use command name as package name if not specified
+    local install_cmd=""
+
+    # Check if command exists
+    if ! command -v "$cmd_to_check" &> /dev/null; then
+        echo "Command '$cmd_to_check' not found. Attempting to install package '$pkg_name'..."
+
+        # Determine if we need/can use sudo
+        if [[ $EUID -eq 0 ]]; then
+            install_cmd="apt-get update && apt-get install -y $pkg_name"
+        elif command -v sudo &> /dev/null; then
+            install_cmd="sudo apt-get update && sudo apt-get install -y $pkg_name"
+        else
+            echo "Error: Cannot install '$pkg_name'. Need to run as root or have sudo installed."
+            exit 1
+        fi
+
+        # Attempt installation
+        echo "Running: $install_cmd"
+        if ! eval "$install_cmd"; then
+             echo "Error: Failed to install '$pkg_name'."
+             exit 1
+        fi
+
+        # Verify command again after installation attempt
+        if ! command -v "$cmd_to_check" &> /dev/null; then
+            echo "Error: Package '$pkg_name' installed, but command '$cmd_to_check' still not found."
+            # Special case for pip potentially being pip3
+            if [[ "$cmd_to_check" == "pip" ]] && command -v "pip3" &> /dev/null; then
+                echo "Note: 'pip3' command found instead of 'pip'. Continuing..."
+            else
+              exit 1
+            fi
+        fi
+        echo "'$pkg_name' installation successful (command '$cmd_to_check' is available)."
+    else
+        echo "Command '$cmd_to_check' is already available."
+    fi
+}
+
+# --- Check and Install Prerequisites ---
+echo "Checking prerequisites..."
+# Note: We don't check for sudo itself here, the function handles it.
+ensure_pkg_installed curl
+ensure_pkg_installed git
+ensure_pkg_installed python3
+ensure_pkg_installed pip python3-pip # Check for pip command, install python3-pip package
+# Check for ca-certificates package status instead of command
+if ! dpkg -s ca-certificates &> /dev/null; then
+    echo "Package 'ca-certificates' not found. Attempting to install..."
+     if [[ $EUID -eq 0 ]]; then
+        apt-get update && apt-get install -y ca-certificates
+    elif command -v sudo &> /dev/null; then
+        sudo apt-get update && sudo apt-get install -y ca-certificates
+    else
+        echo "Error: Cannot install 'ca-certificates'. Need to run as root or have sudo installed."
+        exit 1
+    fi
+    echo "'ca-certificates' installed successfully."
+else
+    echo "Package 'ca-certificates' is already installed."
 fi
+echo "Prerequisite check complete."
+echo # Newline for readability
 
-if [!command -v "curl" &> /dev/null]; then
-    sudo apt-get install curl
-fi
+# --- Argument Parsing ---
+INSTALL_COMPONENT=""
 
-if [!command -v "git" &> /dev/null]; then
-    sudo apt-get install git
-fi
-
-if [!command -v "python3" &> /dev/null]; then
-    sudo apt-get install python3
-fi
-
-if [!command -v "pip" &> /dev/null]; then
-    sudo apt-get install python3-pip
-fi
-
-if [!command -v "ca-certificates" &> /dev/null]; then
-    sudo apt-get install ca-certificates
-fi
-
-# Initialize variables with default values
-# VERBOSE=false
-# OUTPUT_FILE=""
-# INPUT_FILE=""
-# REMAINING_ARGS=() # Array to hold non-option arguments
-INPUT=false
-
-# Loop while there are still arguments ($# is greater than 0)
 while [[ $# -gt 0 ]]; do
-  # Get the first argument
   key="$1"
-
-  # Use a case statement to check the argument
   case $key in
     -i|--install)
-    #   INPUT_FILE="$2" # The option's value is the *next* argument
-      INPUT=true
-      shift # Remove the option (-i or --input)
-    #   shift # Remove the value (the filename)
+      # Check if the value ($2) exists
+      if [[ -z "$2" ]]; then
+        echo "Error: Option '$1' requires an argument." >&2
+        exit 1
+      fi
+      INSTALL_COMPONENT="$2"
+      shift # past argument (-i)
+      shift # past value (e.g., "all")
       ;;
-    # -o|--output)
-    #   OUTPUT_FILE="$2"
-    #   shift # Remove -o or --output
-    #   shift # Remove the filename
-    #   ;;
-    # -v|--verbose)
-    #   VERBOSE=true
-    #   shift # Remove -v or --verbose (it has no value)
-    #   ;;
     --) # End of options marker
       shift # Remove the --
-      break # Stop processing options, remaining args are positional
+      break # Stop processing options
       ;;
     -*)
       # Unknown option
-      echo "Error: Unknown option '$1'"
+      echo "Error: Unknown option '$1'" >&2
       exit 1
       ;;
     *)
-      # Not an option, save it as a remaining argument
-      if [$INPUT = true]; then
-        if [$1 = "all"]; then
-            . installenv.sh
-            . installdocker.sh
-            . installpostgres.sh
-            . installnode.sh
-            INPUT=false
-            break
-        else
-            install_key = $1
-            
-            case $install_key in
-                "env")
-                    . installenv.sh
-                    ;;
-                "docker")
-                    . installdocker.sh
-                    ;;
-                "postgres")
-                    . installpostgres.sh
-                    ;;
-                "node")
-                    . installnode.sh
-                    ;;
-                *)
-                    echo "Error: Unknown option '$1'"
-                    exit 1
-                    ;;
-            esac
-        fi
-      fi
-        # INPUT_FILE="$1"
-        # INPUT=false
-    #   REMAINING_ARGS+=("$1")
-      shift # Remove the processed argument
+      # Handle unexpected positional arguments if necessary
+      echo "Error: Unexpected argument '$1'" >&2
+      exit 1
       ;;
   esac
 done
+
+# --- Perform Installation Based on Argument ---
+if [[ -n "$INSTALL_COMPONENT" ]]; then
+    echo "Processing installation for component: $INSTALL_COMPONENT"
+    case "$INSTALL_COMPONENT" in
+        all)
+            echo "Installing all components..."
+            # Use . ./scriptname.sh to source from current dir explicitly
+            if [ -f ./installenv.sh ]; then . ./installenv.sh; else echo "Warning: ./installenv.sh not found."; fi
+            if [ -f ./installdocker.sh ]; then . ./installdocker.sh; else echo "Warning: ./installdocker.sh not found."; fi
+            if [ -f ./installpostgres.sh ]; then . ./installpostgres.sh; else echo "Warning: ./installpostgres.sh not found."; fi
+            if [ -f ./installnode.sh ]; then . ./installnode.sh; else echo "Warning: ./installnode.sh not found."; fi
+            echo "Installation of all components attempted."
+            ;;
+        env)
+            echo "Installing env component..."
+            if [ -f ./installenv.sh ]; then . ./installenv.sh; else echo "Error: ./installenv.sh not found."; exit 1; fi
+            ;;
+        docker)
+             echo "Installing docker component..."
+            if [ -f ./installdocker.sh ]; then . ./installdocker.sh; else echo "Error: ./installdocker.sh not found."; exit 1; fi
+            ;;
+        postgres)
+             echo "Installing postgres component..."
+            if [ -f ./installpostgres.sh ]; then . ./installpostgres.sh; else echo "Error: ./installpostgres.sh not found."; exit 1; fi
+            ;;
+        node)
+             echo "Installing node component..."
+            if [ -f ./installnode.sh ]; then . ./installnode.sh; else echo "Error: ./installnode.sh not found."; exit 1; fi
+            ;;
+        *)
+            echo "Error: Unknown installation component '$INSTALL_COMPONENT'" >&2
+            echo "Available components: all, env, docker, postgres, node"
+            exit 1
+            ;;
+    esac
+else
+    echo "No installation component specified. Use -i or --install option (e.g., -i all)."
+    # Optionally exit with an error if the -i flag is mandatory
+    # exit 1
+fi
+
+echo "Script finished."
