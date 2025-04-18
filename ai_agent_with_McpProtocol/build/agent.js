@@ -192,7 +192,7 @@ router.post('/message', async (req, res) => {
                 response = { text: Geminiresponse.text };
             }
         }
-        else if (modelToUse.startsWith("qwen")) {
+        else if (modelToUse.startsWith("qwen") || modelToUse.startsWith("gemma3") || modelToUse.startsWith("deepseek") || modelToUse.startsWith("qwq") || modelToUse.startsWith("deepcoder") || modelToUse.startsWith("phi4") || modelToUse.startsWith("llama3.2") || modelToUse.startsWith("wizardlm") || modelToUse.startsWith("hhao")) {
             try {
                 console.log("Calling Ollama API...");
                 const ollamaFetchResponse = await fetch('http://127.0.0.1:11434/api/generate', {

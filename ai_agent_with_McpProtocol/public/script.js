@@ -466,7 +466,7 @@ async function sendMessage() {
     let agentResponse = ''; // Variable to hold the latest agent response
     let attempt_completion = false;
     let loopCount = 0; // Add a counter to prevent infinite loops in case of unexpected issues
-    const MAX_LOOPS = 1; // Set a maximum number of iterations
+    const MAX_LOOPS = 2; // Set a maximum number of iterations
     const selectedMode = modeSelector ? modeSelector.value : defaultMode; // Get selected mode *before* loop
     const selectedModel = modelSelector ? modelSelector.value : defaultModel; // Get selected model *before* loop
     let role = "user";
@@ -773,25 +773,43 @@ function populateModes(returnDefault = false) {
 // Added returnDefault parameter to get the default value without modifying the DOM
 function populateModels(returnDefault = false) {
     const models = [
-        { id: 'gemini-2.5-pro-exp-03-25', name: 'gemini-2.5-pro-exp-03-25' },
-        { id: 'gemini-2.0-flash-001', name: 'gemini-2.0-flash-001' },
-        { id: 'gemini-2.0-flash-lite-preview-02-05', name: 'gemini-2.0-flash-lite-preview-02-05' },
-        { id: 'gemini-2.0-pro-exp-02-05', name: 'gemini-2.0-pro-exp-02-05' },
-        { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'gemini-2.0-flash-thinking-exp-01-21' },
-        { id: 'gemini-2.0-flash-thinking-exp-1219', name: 'gemini-2.0-flash-thinking-exp-1219' },
-        { id: 'gemini-2.0-flash-exp', name: 'gemini-2.0-flash-exp' },
+        { id: 'deepcoder:1.5b', name: 'deepcoder:1.5b' },
+        { id: 'deepcoder:14b', name: 'deepcoder:14b' },
+        { id: 'deepseek-coder:1.3b', name: 'deepseek-coder:1.3b' },
+        { id: 'deepseek-coder:6.7b', name: 'deepseek-coder:6.7b' },
+        { id: 'deepseek-r1:1.5b', name: 'deepseek-r1:1.5b' },
+        { id: 'deepseek-r1:14b', name: 'deepseek-r1:14b' },
+        { id: 'deepseek-r1:32b', name: 'deepseek-r1:32b' },
+        { id: 'deepseek-r1:latest', name: 'deepseek-r1:latest' },
+        { id: 'gemma3:1b', name: 'gemma3:1b' },
+        { id: 'gemma3:4b', name: 'gemma3:4b' },
+        { id: 'gemma3:12b', name: 'gemma3:12b' },
+        { id: 'gemma3:27b', name: 'gemma3:27b' },
         { id: 'gemini-1.5-flash-002', name: 'gemini-1.5-flash-002' },
-        { id: 'gemini-1.5-flash-exp-0827', name: 'gemini-1.5-flash-exp-0827' },
         { id: 'gemini-1.5-flash-8b-exp-0827', name: 'gemini-1.5-flash-8b-exp-0827' },
+        { id: 'gemini-1.5-flash-exp-0827', name: 'gemini-1.5-flash-exp-0827' },
         { id: 'gemini-1.5-pro-002', name: 'gemini-1.5-pro-002' },
         { id: 'gemini-1.5-pro-exp-0827', name: 'gemini-1.5-pro-exp-0827' },
+        { id: 'gemini-2.0-flash-001', name: 'gemini-2.0-flash-001' },
+        { id: 'gemini-2.0-flash-exp', name: 'gemini-2.0-flash-exp' },
+        { id: 'gemini-2.0-flash-lite-preview-02-05', name: 'gemini-2.0-flash-lite-preview-02-05' },
+        { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'gemini-2.0-flash-thinking-exp-01-21' },
+        { id: 'gemini-2.0-flash-thinking-exp-1219', name: 'gemini-2.0-flash-thinking-exp-1219' },
+        { id: 'gemini-2.0-pro-exp-02-05', name: 'gemini-2.0-pro-exp-02-05' },
+        { id: 'gemini-2.5-pro-exp-03-25', name: 'gemini-2.5-pro-exp-03-25' },
         { id: 'gemini-exp-1206', name: 'gemini-exp-1206' },
+        { id: 'hhao/qwen2.5-coder-tools:7b', name: 'hhao/qwen2.5-coder-tools:7b' },
+        { id: 'hhao/qwen2.5-coder-tools:14b', name: 'hhao/qwen2.5-coder-tools:14b' },
+        { id: 'llama3.2:latest', name: 'llama3.2:latest' },
+        { id: 'phi4:14b', name: 'phi4:14b' },
+        { id: 'qwq:latest', name: 'qwq:latest' },
         { id: 'qwen2.5-coder:0.5b', name: 'qwen2.5-coder:0.5b' },
         { id: 'qwen2.5-coder:1.5b', name: 'qwen2.5-coder:1.5b' },
         { id: 'qwen2.5-coder:3b', name: 'qwen2.5-coder:3b' },
         { id: 'qwen2.5-coder:7b', name: 'qwen2.5-coder:7b' },
         { id: 'qwen2.5-coder:14b', name: 'qwen2.5-coder:14b' },
         { id: 'qwen2.5-coder:32b', name: 'qwen2.5-coder:32b' },
+        { id: 'wizardlm2:7b', name: 'wizardlm2:7b' },
     ];
     const defaultValue = models.length > 0 ? models[0].id : null;
 
