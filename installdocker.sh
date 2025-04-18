@@ -1,114 +1,176 @@
 #!/bin/bash
 
-# Exit immediately if a command exits with a non-zero status.
+# --- Script Setup ---
 set -e
+# set -u
+set -o pipefail
 
-# --- Helper Functions ---
-command_exists() {
-    command -v "$1" &> /dev/null
-}
+echo "--- Prerequisite Check Script Started ---"
 
-package_installed() {
-    dpkg -s "$1" &> /dev/null
-}
-
-# --- Configuration ---
-# List packages needed. Format: "type:name"
-# type can be 'cmd' (checked with command -v) or 'pkg' (checked with dpkg -s)
-# The actual package name for apt install follows the last colon if different
-REQUIRED_ITEMS=(
-    "cmd:curl:curl"
-    "pkg:ca-certificates:ca-certificates"
-    "cmd:docker-compose:docker-compose" # Installs V1 via apt - see note below
-    # Add other prerequisites here if needed
-)
-
-# --- Determine Package Manager and Sudo ---
+# --- Determine Package Manager & Sudo ---
+PKG_MANAGER=""
+INSTALL_CMD=""
+UPDATE_CMD=""
+CHECK_PKG_CMD=""
+INSTALL_OPTS="-y"
 SUDO_CMD=""
-if [[ "$(id -u)" -ne 0 ]]; then
-    echo "Not running as root. Checking for sudo..."
-    if ! command_exists sudo; then
-        echo "ERROR: sudo command not found. Please install sudo (e.g., 'apt update && apt install sudo' as root) or run this script as root." >&2
+NEEDS_UPDATE=false
+
+echo "Detecting package manager and checking for sudo..."
+
+# Check for sudo first
+if [[ $EUID -ne 0 ]]; then
+    if command -v sudo &> /dev/null; then
+        SUDO_CMD="sudo"
+        echo "Using sudo for privileged operations."
+        $SUDO_CMD -v
+    else
+        echo "ERROR: Running as non-root and 'sudo' command not found." >&2
         exit 1
     fi
-    SUDO_CMD="sudo"
-    echo "Using sudo for privileges."
 else
     echo "Running as root."
 fi
 
-PKG_MGR=""
-if command_exists apt; then
-    PKG_MGR="apt"
-elif command_exists apt-get; then
-    PKG_MGR="apt-get"
+# Detect package manager
+if command -v apt-get &> /dev/null; then
+    PKG_MANAGER="apt"
+    UPDATE_CMD="apt-get update"
+    INSTALL_CMD="apt-get install"
+    CHECK_PKG_CMD="dpkg -s" # Check command for apt
+    NEEDS_UPDATE=true
+    echo "Using apt-get (Debian/Ubuntu)."
+elif command -v dnf &> /dev/null; then
+    PKG_MANAGER="dnf"
+    UPDATE_CMD="dnf check-update"
+    INSTALL_CMD="dnf install"
+    CHECK_PKG_CMD="rpm -q" # Check command for dnf/yum
+    echo "Using dnf (Fedora/RHEL/CentOS Stream)."
+elif command -v yum &> /dev/null; then
+    PKG_MANAGER="yum"
+    UPDATE_CMD="yum check-update"
+    INSTALL_CMD="yum install"
+    CHECK_PKG_CMD="rpm -q"
+    echo "Using yum (Older RHEL/CentOS)."
 else
-    echo "ERROR: Neither 'apt' nor 'apt-get' found. Cannot proceed." >&2
+    echo "Error: Could not find a supported package manager (apt-get, dnf, or yum)." >&2
     exit 1
 fi
-echo "Using '$PKG_MGR' as package manager."
 
-# --- Check Prerequisites ---
-PACKAGES_TO_INSTALL=()
-NEEDS_UPDATE=false
+# --- Helper Function: Run command with sudo if needed ---
+run_cmd() {
+    local cmd_string="$*"
+    echo "Running: ${SUDO_CMD} ${cmd_string}"
+    if ! eval "${SUDO_CMD} ${cmd_string}"; then
+        echo "Error: Command failed: ${SUDO_CMD} ${cmd_string}" >&2
+        return 1
+    fi
+    return 0
+}
 
-echo "Checking prerequisites..."
-for item in "${REQUIRED_ITEMS[@]}"; do
-    IFS=':' read -r type name package_name <<< "$item"
-    # Default package_name to name if not specified
-    package_name=${package_name:-$name}
-
-    found=true
-    if [[ "$type" == "cmd" ]]; then
-        if ! command_exists "$name"; then
-            echo " - Command '$name' is missing."
-            found=false
-        else
-             echo " - Command '$name' is present."
+# --- Helper Function: Update package lists if needed ---
+update_package_lists_if_needed() {
+    if [[ "$NEEDS_UPDATE" == "true" ]]; then
+        echo "Running package list update ($UPDATE_CMD)..."
+        if ! run_cmd "$UPDATE_CMD"; then
+            echo "Error: Failed to update package lists." >&2
+            exit 1
         fi
-    elif [[ "$type" == "pkg" ]]; then
-        if ! package_installed "$package_name"; then
-            echo " - Package '$package_name' is missing."
-            found=false
-        else
-            echo " - Package '$package_name' is present."
+        NEEDS_UPDATE=false
+    fi
+}
+
+# --- Helper Function: Ensure a command is available ---
+# Usage: ensure_command_installed <command_to_check> <package_name>
+ensure_command_installed() {
+    local cmd_to_check="$1"
+    local pkg_name="$2"
+
+    echo "Checking for command '$cmd_to_check' (package '$pkg_name')..."
+    if ! command -v "$cmd_to_check" &> /dev/null; then
+        echo "Command '$cmd_to_check' not found. Attempting to install package '$pkg_name'..."
+        update_package_lists_if_needed || exit 1
+        if ! run_cmd "${INSTALL_CMD} ${INSTALL_OPTS} ${pkg_name}"; then
+            echo "ERROR: Failed to install package '$pkg_name'." >&2
+            exit 1
         fi
+        if ! command -v "$cmd_to_check" &> /dev/null; then
+             echo "ERROR: Package '$pkg_name' installed, but command '$cmd_to_check' still not found." >&2
+             exit 1
+        fi
+        echo "Command '$cmd_to_check' (package '$pkg_name') installed successfully."
     else
-        echo "WARN: Unknown check type '$type' for item '$name'."
+        echo "Command '$cmd_to_check' is already available."
     fi
+}
 
-    if ! $found; then
-        PACKAGES_TO_INSTALL+=("$package_name")
-        NEEDS_UPDATE=true # Need to update if anything is missing
+# --- Helper Function: Ensure a package is installed (using package name) ---
+# Usage: ensure_package_installed <package_name>
+ensure_package_installed() {
+    local pkg_name="$1"
+    local check_command="${CHECK_PKG_CMD} ${pkg_name}"
+
+    echo "Checking for package '$pkg_name'..."
+    # Run the check command, suppress output on success
+    if ! eval "$check_command" &> /dev/null; then
+        echo "Package '$pkg_name' not found. Attempting to install..."
+        update_package_lists_if_needed || exit 1
+        if ! run_cmd "${INSTALL_CMD} ${INSTALL_OPTS} ${pkg_name}"; then
+             echo "ERROR: Failed to install package '$pkg_name'." >&2
+             exit 1
+        fi
+        # Verify install
+        if ! eval "$check_command" &> /dev/null; then
+             echo "ERROR: Package '$pkg_name' installed, but check command still fails." >&2
+             exit 1
+        fi
+        echo "Package '$pkg_name' installed successfully."
+    else
+         echo "Package '$pkg_name' is already installed."
     fi
-done
+}
 
-# --- Install Missing Packages ---
-if [ ${#PACKAGES_TO_INSTALL[@]} -gt 0 ]; then
-    echo "The following packages need to be installed: ${PACKAGES_TO_INSTALL[*]}"
+# --- Check and Install Core Prerequisites ---
+echo "Checking core prerequisites..."
+ensure_command_installed curl curl
+ensure_package_installed ca-certificates
 
-    if [[ "$NEEDS_UPDATE" = true ]]; then
-        echo "Updating package lists ($PKG_MGR update)..."
-        $SUDO_CMD $PKG_MGR update || { echo "ERROR: Failed to update package lists." >&2; exit 1; }
-    fi
+# --- Check for Docker and Docker Compose (V2) ---
+# We will *not* install these automatically, just check and warn.
+echo "Checking for Docker and Docker Compose (V2)..."
+DOCKER_MISSING=false
+COMPOSE_MISSING=false
 
-    echo "Installing missing packages..."
-    # shellcheck disable=SC2086 # We want word splitting for $SUDO_CMD
-    $SUDO_CMD $PKG_MGR install -y "${PACKAGES_TO_INSTALL[@]}" || { echo "ERROR: Failed to install packages." >&2; exit 1; }
-
-    echo "Packages installed successfully."
+if ! command -v docker &> /dev/null; then
+    echo "WARNING: 'docker' command not found."
+    DOCKER_MISSING=true
 else
-    echo "All prerequisites are already met."
+    echo "'docker' command found."
 fi
 
-# --- Final Notes ---
-echo ""
-if command_exists docker-compose && ! command_exists docker || ! docker compose version &>/dev/null ; then
-    echo "NOTE: The 'docker-compose' package installed via apt/apt-get is likely Docker Compose V1." >&2
-    echo "      For modern Docker installations, consider using the 'docker compose' plugin (V2)." >&2
-    echo "      See: https://docs.docker.com/compose/install/" >&2
+# Check for 'docker compose' (V2 plugin)
+# Need to run 'docker compose version' as 'command -v docker compose' doesn't work reliably
+if ! docker compose version &> /dev/null; then
+     echo "WARNING: 'docker compose' (V2) command failed or not found."
+     COMPOSE_MISSING=true
+else
+    echo "'docker compose' (V2) command found."
+fi
+
+# Provide instructions if missing
+if [[ "$DOCKER_MISSING" = true || "$COMPOSE_MISSING" = true ]]; then
+    echo ""
+    echo "Docker Engine and/or Docker Compose V2 are missing."
+    echo "Please install Docker Engine for your distribution."
+    echo "See: https://docs.docker.com/engine/install/"
+    echo "Docker Compose V2 is typically included with Docker Desktop or can be installed as a plugin."
+    echo "See: https://docs.docker.com/compose/install/"
+    echo "This script will not attempt to install Docker automatically."
+    # Optionally exit if Docker is strictly required by subsequent steps
+    # echo "ERROR: Docker is required to proceed." >&2
+    # exit 1
 fi
 
 echo ""
-echo "Script finished successfully."
+echo "--- Prerequisite Check Script Finished ---"
 exit 0
