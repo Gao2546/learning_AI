@@ -6,7 +6,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgres://user:password@db:5432/mydatabase # Example URL, adjust as needed
+      - DATABASE_URL=postgres://athip:123456@db:5432/ai_agent # Example URL, adjust as needed
       # Add any other necessary environment variables here
     depends_on:
       - db
@@ -22,7 +22,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432" # Expose DB port to host (optional, for debugging)
+      - "5433:5433" # Expose DB port to host (optional, for debugging)
     networks:
       - app-network
 

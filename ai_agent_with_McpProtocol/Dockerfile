@@ -29,6 +29,8 @@ COPY --from=builder /app/node_modules ./node_modules
 # Copy the built application from the builder stage
 COPY --from=builder /app/build ./build
 
+COPY ./build/setting_prompt.txt ./build/setting_prompt.txt
+
 # Copy the public assets from the builder stage
 COPY --from=builder /app/public ./public
 
