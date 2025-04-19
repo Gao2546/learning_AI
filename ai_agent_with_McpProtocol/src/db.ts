@@ -1,12 +1,14 @@
 import pkg from 'pg';
+import dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
+
 const { Pool } = pkg;
 
+// Use the DATABASE_URL environment variable (loaded from .env or provided by Docker)
 const pool = new Pool({
-  user: 'athip', // Replace with your PostgreSQL user
-  host: 'localhost', // Replace with your PostgreSQL host if it's not localhost
-  database: 'ai_agent', // Replace with your PostgreSQL database name
-  password: '123456', // Replace with your PostgreSQL password
-  port: 5432, // Default PostgreSQL port
+  connectionString: process.env.DATABASE_URL,
 });
 
 const createUsersTableQuery = `
