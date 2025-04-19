@@ -329,7 +329,7 @@ else
     SQL_SAFE_PASSWORD=$(echo "$DB_PASSWORD" | sed "s/'/''/g")
 
     # Execute the CREATE USER command - Use double quotes for the username identifier
-    CREATE_SQL="CREATE USER \"${DB_USER}\" WITH PASSWORD '${SQL_SAFE_PASSWORD}';"
+    CREATE_SQL="CREATE USER \"${DB_USER}\" WITH PASSWORD '${SQL_SAFE_PASSWORD}' CREATEDB;"
     if run_psql_cmd "$CREATE_SQL"; then
         echo "PostgreSQL user '${DB_USER}' created successfully."
     else
