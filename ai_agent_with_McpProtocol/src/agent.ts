@@ -1,5 +1,9 @@
 import express from 'express';
 import path from 'path';
+import dotenv from "dotenv";
+
+dotenv.config();
+
 import { fileURLToPath } from 'url';
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -40,7 +44,7 @@ const client = new Client(
 );
 console.log("Agent: Client object initialized.\n");
 
-const ai = new GoogleGenAI({apiKey:"AIzaSyAeKtGko-Vn8xNlOk3zVAuERcXPupOa_C8"});
+const ai = new GoogleGenAI({apiKey:process.env.Google_API_KEY});
 
 import readline = require('readline');
 import fs = require('fs');
