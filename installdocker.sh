@@ -150,7 +150,7 @@ fi
 
 # Check for 'docker compose' (V2 plugin)
 # Need to run 'docker compose version' as 'command -v docker compose' doesn't work reliably
-if ! docker compose version &> /dev/null; then
+if ! docker-compose version &> /dev/null; then
      echo "WARNING: 'docker compose' (V2) command failed or not found."
      COMPOSE_MISSING=true
 else
@@ -159,6 +159,7 @@ fi
 
 # Provide instructions if missing
 if [[ "$DOCKER_MISSING" = true || "$COMPOSE_MISSING" = true ]]; then
+    sudo apt-get install docker-compose -y
     echo ""
     echo "Docker Engine and/or Docker Compose V2 are missing."
     echo "Please install Docker Engine for your distribution."
