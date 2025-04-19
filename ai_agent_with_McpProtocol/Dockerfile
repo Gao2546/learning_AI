@@ -31,6 +31,8 @@ COPY --from=builder /app/build ./build
 
 COPY ./build/setting_prompt.txt ./build/setting_prompt.txt
 
+COPY .env ./.env
+
 # Copy the public assets from the builder stage
 COPY --from=builder /app/public ./public
 
