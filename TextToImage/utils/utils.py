@@ -270,7 +270,7 @@ def generate_image_no_VQVAE(Denoise_model, CLIP_model, image_size, image_c, prom
         img = sample_timestep(img, t, time_step, Denoise_model, encode_text)
     img = torch.clamp(img, -1.0, 1.0)
     for p,i in zip(prompt.cpu().tolist(),img):
-        plt.imsave(f"/home/athip/psu/learning_AI/TextToImage/output/{p}_{datetime.datetime.now().strftime('%d_%m_%Y')}.png",show_tensor_image(i.cpu()))
+        plt.imsave(f"./TextToImage/output/{p}_{datetime.datetime.now().strftime('%d_%m_%Y')}.png",show_tensor_image(i.cpu()))
     return img
 
 def show_img_VAE(batch,recon,names):
