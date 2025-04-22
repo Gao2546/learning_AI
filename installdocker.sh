@@ -172,6 +172,78 @@ if [[ "$DOCKER_MISSING" = true || "$COMPOSE_MISSING" = true ]]; then
     # exit 1
 fi
 
+# --- Helper Function: Install NVIDIA Container Toolkit (Debian/Ubuntu only) ---
+install_nvidia_toolkit() {
+    if [[ "$PKG_MANAGER" != "apt" ]]; then
+        echo "Skipping NVIDIA Container Toolkit installation (not using apt)."
+        return 0
+    fi
+
+    echo "--- Installing NVIDIA Container Toolkit ---"
+
+    # Check if already installed using the standard check command
+    local check_command="${CHECK_PKG_CMD} nvidia-container-toolkit"
+    if eval "$check_command" &> /dev/null; then
+        echo "NVIDIA Container Toolkit is already installed."
+        return 0
+    fi
+
+    echo "Adding NVIDIA Container Toolkit repository..."
+    # Add GPG key using run_cmd
+    if ! run_cmd "curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg"; then
+        echo "ERROR: Failed to add NVIDIA GPG key." >&2
+        return 1 # Use return instead of exit inside function
+    fi
+
+    # Add repository source list
+    # Use a temporary file to avoid permission issues with tee inside pipe and handle sudo
+    local temp_list_file
+    temp_list_file=$(mktemp)
+    if ! curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+        sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' > "$temp_list_file"; then
+        echo "ERROR: Failed to download NVIDIA repository list." >&2
+        rm -f "$temp_list_file"
+        return 1
+    fi
+    # Use cat and pipe to tee within run_cmd to handle sudo correctly for the destination file
+    if ! run_cmd "tee /etc/apt/sources.list.d/nvidia-container-toolkit.list < $temp_list_file"; then
+         echo "ERROR: Failed to write NVIDIA repository list." >&2
+         rm -f "$temp_list_file"
+         return 1
+    fi
+    # Clean up the temporary file regardless of tee success/failure
+    rm -f "$temp_list_file"
+    echo "NVIDIA repository added."
+
+    echo "Updating package lists for NVIDIA repository..."
+    # Use run_cmd which already calls the correct update command
+    if ! run_cmd "$UPDATE_CMD"; then
+        echo "Error: Failed to update package lists after adding NVIDIA repo." >&2
+        return 1
+    fi
+
+    echo "Installing nvidia-container-toolkit package..."
+    # Use run_cmd which already calls the correct install command
+    if ! run_cmd "${INSTALL_CMD} ${INSTALL_OPTS} nvidia-container-toolkit"; then
+        echo "ERROR: Failed to install nvidia-container-toolkit." >&2
+        return 1
+    fi
+
+    # Verify install
+    if ! eval "$check_command" &> /dev/null; then
+         echo "ERROR: Package 'nvidia-container-toolkit' installed, but check command still fails." >&2
+         return 1
+    fi
+
+    echo "NVIDIA Container Toolkit installed successfully."
+    echo "--- NVIDIA Container Toolkit Installation Finished ---"
+    return 0
+}
+
+# --- Install NVIDIA Toolkit if applicable ---
+echo "Checking and installing NVIDIA Container Toolkit if needed..."
+install_nvidia_toolkit || exit 1 # Exit script if NVIDIA install fails
+
 echo ""
 echo "--- Prerequisite Check Script Finished ---"
 exit 0
