@@ -236,6 +236,26 @@ install_nvidia_toolkit() {
     fi
 
     echo "NVIDIA Container Toolkit installed successfully."
+    echo "Configuring NVIDIA Container Toolkit for Docker..."
+    # Check if nvidia-ctk is available
+    if ! command -v nvidia-ctk &> /dev/null; then
+        echo "ERROR: 'nvidia-ctk' command not found after installation." >&2
+        return 1
+    fi
+    # Configure the runtime for Docker
+    if ! run_cmd "nvidia-ctk runtime configure --runtime=docker"; then
+        echo "ERROR: Failed to configure NVIDIA Container Toolkit for Docker." >&2
+        return 1
+    fi
+    echo "NVIDIA Container Toolkit configured for Docker successfully."
+    # Restart Docker to apply changes
+    echo "Restarting Docker service..."
+    if ! run_cmd "systemctl restart docker"; then
+        echo "ERROR: Failed to restart Docker service." >&2
+        return 1
+    fi
+    echo "Docker service restarted."
+
     echo "--- NVIDIA Container Toolkit Installation Finished ---"
     return 0
 }
