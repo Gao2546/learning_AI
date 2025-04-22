@@ -375,9 +375,10 @@ def Search_By_DuckDuckGo():
 
 
 if __name__ == '__main__':
-    path_keys = os.popen("find ../ -name '.key'").read().split("\n")[0]
-    with open(path_keys, "r") as f:
-        key = f.read().strip()
+    # path_keys = os.popen("find ../ -name '.key'").read().split("\n")[0]
+    # with open(path_keys, "r") as f:
+    #     key = f.read().strip()
+    key = os.environ.get("OPENAI_API_KEY")
     if not os.environ.get("OPENAI_API_KEY"):
         os.environ["OPENAI_API_KEY"] = key
     # embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L12-v2") # *** ***
@@ -390,8 +391,8 @@ if __name__ == '__main__':
     # vector_store = InMemoryVectorStore(embeddings)
     image_c= 1
     img_size = 28
-    model_ckp = "/home/athip/psu/learning_AI/TextToImage/model/checkpoint/DDPM_T0.pth"
-    model_CLIP = "/home/athip/psu/learning_AI/TextToImage/model/checkpoint/CLIP0.pth"
+    model_ckp = "./TextToImage/model/checkpoint/DDPM_T0.pth"
+    model_CLIP = "./TextToImage/model/checkpoint/CLIP0.pth"
     Text_dim = 512
     n_class = 10
     model = diffusion_model_No_VQVAE(
@@ -415,4 +416,4 @@ if __name__ == '__main__':
                 n_class=n_class
 
             )
-    app.run(port=5001,debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

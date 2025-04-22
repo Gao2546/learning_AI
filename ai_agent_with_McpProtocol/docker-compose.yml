@@ -2,14 +2,18 @@ version: '3.8'
 
 services:
   app:
-    build: .
+    build:
+      context: ..
+      dockerfile: ai_agent_with_McpProtocol/Dockerfile
     ports:
       - "3000:3000"
     environment:
       - DATABASE_URL=postgres://athip:123456@db:5432/ai_agent # Example URL, adjust as needed
+      - API_SERVER_URL=http://api_server:5000
       # Add any other necessary environment variables here
     depends_on:
       - db
+      # - api_server
     networks:
       - app-network
 
@@ -23,6 +27,26 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5433:5433" # Expose DB port to host (optional, for debugging)
+    networks:
+      - app-network
+
+  api_server:
+    build:
+      context: ..
+      dockerfile: api_server/Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      # Pass the OpenAI API key from the host environment or a .env file
+      # Ensure OPENAI_API_KEY is set in your environment before running docker-compose up
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all # Or specify a specific number of GPUs
+              capabilities: [gpu]
     networks:
       - app-network
 

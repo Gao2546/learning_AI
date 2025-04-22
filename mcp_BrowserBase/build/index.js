@@ -10,6 +10,10 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, ListPromptsRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
+import dotenv from "dotenv";
+dotenv.config();
+const API_SERVER_URL = process.env.API_SERVER_URL;
+// const API_SERVER_URL = "http://api_server:5001";
 const server = new Server({
     name: "mcp_BrowserBase",
     version: "0.1.0",
@@ -195,7 +199,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     throw new Error("Text is required");
                 }
                 else {
-                    const response = await fetch('http://127.0.0.1:5001/Generate', {
+                    const response = await fetch(API_SERVER_URL + '/Generate', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -224,7 +228,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     throw new Error("URL is required");
                 }
                 else {
-                    const response = await fetch('http://127.0.1:5001/GetPage', {
+                    const response = await fetch(API_SERVER_URL + '/GetPage', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -253,7 +257,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     throw new Error("ID or Class is required");
                 }
                 else {
-                    const response = await fetch('http://127.0.1:5001/Click', {
+                    const response = await fetch(API_SERVER_URL + '/Click', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -277,7 +281,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             ;
         case "get_source":
             {
-                const response = await fetch('http://127.0.1:5001/GetSourcePage', {
+                const response = await fetch(API_SERVER_URL + '/GetSourcePage', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json'
@@ -294,7 +298,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             ;
         case "get_text":
             {
-                const response = await fetch('http://127.0.1:5001/GetTextPage', {
+                const response = await fetch(API_SERVER_URL + '/GetTextPage', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json'
@@ -317,7 +321,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     throw new Error("Prompt is required");
                 }
                 else {
-                    const response = await fetch("http://127.0.1:5001/GetData", {
+                    const response = await fetch(API_SERVER_URL + "/GetData", {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json"
@@ -347,7 +351,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 throw new Error("url id and text is required");
             }
             else {
-                const response = await fetch("http://127.0.1:5001/Search_By_ID", {
+                const response = await fetch(API_SERVER_URL + "/Search_By_ID", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json"
@@ -374,7 +378,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 throw new Error("url id and text is required");
             }
             else {
-                const response = await fetch("http://127.0.1:5001/Search_By_DuckDuckGo", {
+                const response = await fetch(API_SERVER_URL + "/Search_By_DuckDuckGo", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json"

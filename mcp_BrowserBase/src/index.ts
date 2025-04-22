@@ -20,6 +20,15 @@ import {
   GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { describe } from "node:test";
+import dotenv from "dotenv";
+import { stdout } from "process";
+
+dotenv.config();
+
+const API_SERVER_URL = process.env.API_SERVER_URL;
+// const API_SERVER_URL = "http://api_server:5001";
+
+
 
 const server = new Server(
   {
@@ -220,7 +229,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!prompt) {
         throw new Error("Text is required");
       } else {
-        const response = await fetch('http://127.0.0.1:5001/Generate', {
+        const response = await fetch(API_SERVER_URL + '/Generate', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -247,7 +256,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!url) {
         throw new Error("URL is required");
       } else {
-        const response = await fetch('http://127.0.1:5001/GetPage', {
+        const response = await fetch(API_SERVER_URL + '/GetPage', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -276,7 +285,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!Id && !Class && !TagName) {
         throw new Error("ID or Class is required");
       } else {
-        const response = await fetch('http://127.0.1:5001/Click', {
+        const response = await fetch(API_SERVER_URL + '/Click', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -301,7 +310,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
 
     case "get_source": {
-      const response = await fetch('http://127.0.1:5001/GetSourcePage', {
+      const response = await fetch(API_SERVER_URL + '/GetSourcePage', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -317,7 +326,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
 
     case "get_text": {
-      const response = await fetch('http://127.0.1:5001/GetTextPage', {
+      const response = await fetch(API_SERVER_URL + '/GetTextPage', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
@@ -338,7 +347,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!prompt) {
         throw new Error("Prompt is required");
       } else {
-        const response = await fetch("http://127.0.1:5001/GetData", {
+        const response = await fetch(API_SERVER_URL + "/GetData", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
@@ -366,7 +375,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!Id && !Class && !TagName && !text) {
         throw new Error("url id and text is required");
       } else {
-        const response = await fetch("http://127.0.1:5001/Search_By_ID", {
+        const response = await fetch(API_SERVER_URL + "/Search_By_ID", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
@@ -392,7 +401,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!query && !max_results) {
         throw new Error("url id and text is required");
       } else {
-        const response = await fetch("http://127.0.1:5001/Search_By_DuckDuckGo", {
+        const response = await fetch(API_SERVER_URL + "/Search_By_DuckDuckGo", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"

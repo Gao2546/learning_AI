@@ -20,10 +20,13 @@ import pool, { createUser, getUserByUsername, newChatHistory, storeChatHistory, 
 
 // Initialize transport
 const transport_mcp_BrowserBase = new StdioClientTransport({
-  "command": "bash",
-  "args": [
-      "-c",
-      "cd /home/athip/psu/learning_AI/mcp_BrowserBase/ && ./build/index.js"
+  // "command": "bash",
+  "command": "node"
+,  "args": [
+      // "-c",
+      //"cd /home/athip/psu/learning_AI/mcp_BrowserBase/ && ./build/index.js"
+      // path.join('/', 'app', 'mcp', 'mcp_BrowserBase', 'build', 'index.js')
+      path.join('.', 'mcp', 'mcp_BrowserBase', 'build', 'index.js')
     ],
 });
 console.log("Agent: Transport initialized.\n");
