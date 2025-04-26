@@ -74,6 +74,45 @@ class PositionalEncoding(nn.Module):
         return x + self.pe[:, :x.size(1)]
 
 
+class LearnablePositionalEmbedding(nn.Module):
+    def __init__(self, max_seq_len: int, d_model: int):
+        super().__init__()
+        self.pos_embedding = nn.Embedding(max_seq_len, d_model)
+
+    def forward(self, x):
+        """
+        x: (batch_size, seq_len, d_model)
+        """
+        batch_size, seq_len, _ = x.size()
+        positions = torch.arange(0, seq_len, device=x.device).unsqueeze(0).expand(batch_size, seq_len)
+        return x + self.pos_embedding(positions)
+
+
+class embedding(nn.Module):
+    def __init__(self, vocab_size, d_model, max_seq_len):
+        super().__init__()
+        self.word_embedding1 = nn.Embedding(vocab_size, d_model)
+        # self.layer_norm1 = torch.nn.LayerNorm(d_model)
+        # self.word_embedding2 = Linear(vocab_size//2, vocab_size//4)
+        # self.layer_norm2 = torch.nn.LayerNorm(vocab_size//4)
+        # self.word_embedding3 = Linear(vocab_size//4, d_model)
+        # self.layer_norm3 = torch.nn.LayerNorm(d_model)
+        # self.tanh = torch.nn.Tanh()
+        self.pos_embedding = LearnablePositionalEmbedding(max_seq_len, d_model)
+
+    def forward(self, x):
+        x = self.word_embedding1(x)
+        # x = self.layer_norm1(x)
+        # x = self.word_embedding2(x)
+        # x = self.layer_norm2(x)
+        # x = self.word_embedding3(x)
+        # x = self.layer_norm3(x)
+        # x = self.tanh(x)
+        x = self.pos_embedding(x)
+        # x = self.tanh(x)
+        return x
+
+
 class EncoderLayer(nn.Module):
     def __init__(self, d_model, num_heads, d_ff, dropout):
         super(EncoderLayer, self).__init__()
@@ -185,8 +224,10 @@ class TransformerM(nn.Module):
     def __init__(self, src_vocab_size, tgt_vocab_size, d_model, num_heads, num_layers, d_ff, max_seq_length, dropout, device):
         super(TransformerM, self).__init__()
         # self.encoder_embedding = nn.Embedding(src_vocab_size, d_model)
-        self.decoder_embedding = nn.Embedding(tgt_vocab_size, d_model)
-        self.positional_encoding = PositionalEncoding(d_model, max_seq_length)
+        # self.decoder_embedding = nn.Embedding(tgt_vocab_size, d_model)
+        self.decoder_embedding = embedding(tgt_vocab_size, d_model, max_seq_length)
+        # self.decoder_embedding.requires_grad_ = False
+        # self.positional_encoding = PositionalEncoding(d_model, max_seq_length)
 
         # self.encoder_layers = nn.ModuleList(
             # [EncoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
@@ -215,8 +256,10 @@ class TransformerM(nn.Module):
         tgt_mask = self.generate_mask(tgt)
         # src_embedded = self.dropout(
             # self.positional_encoding(self.encoder_embedding(src)))
+        # tgt_embedded = self.dropout(
+        #     self.positional_encoding(self.decoder_embedding(tgt)))
         tgt_embedded = self.dropout(
-            self.positional_encoding(self.decoder_embedding(tgt)))
+            self.decoder_embedding(tgt))
 
         # enc_output = src_embedded
         # for enc_layer in self.encoder_layers:

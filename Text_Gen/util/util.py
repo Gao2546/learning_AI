@@ -6,134 +6,219 @@ import pickle
 from dataclasses import dataclass
 from torch.utils.data import Dataset
 from torchvision import transforms
+from torch.nn import functional as F
 import pandas as pd
 import torch
 import random
 import os
+import sys
 import time
+import itertools
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
+
+from tokenizers import Tokenizer
+from tokenizers.models import BPE
+from tokenizers.trainers import BpeTrainer
+from tokenizers.pre_tokenizers import Whitespace, BertPreTokenizer, Metaspace
+from tokenizers.normalizers import Sequence as NormalizerSequence, Replace, NFKC, Lowercase # Added Replace, Sequence, etc.
+from tokenizers.pre_tokenizers import Sequence as PreTokenizerSequence, Metaspace, Split # Added Split, Sequence
+
 
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
 
 
-class BPE:
-    def __init__(self):
-        self.vocab = []
-        self.merges = {}
-        self.splits = {}
-        self.word_freqs = defaultdict(int)
+class BPEs:
+    def __init__(self, vocab_size=5120):
+        # Initialize tokenizer
+        self.tokenizer = Tokenizer(BPE(unk_token="<|unk|>"))
+        self.normalizer = NormalizerSequence([
+            # NFKC(), # Optional: Unicode normalization
+            # Lowercase(), # Optional: Convert to lowercase
+            Replace("\n", "Ċ") # Replace newline with Ċ
+        ])
+        self.tokenizer.normalizer = self.normalizer
+        # self.tokenizer.pre_tokenizer = Metaspace(replacement="Ġ")
+        self.pre_tokenizer = PreTokenizerSequence([
+            Split(pattern="Ċ", behavior="isolated"), # Treat Ċ as a separate pre-token
+            Metaspace(replacement="Ġ", prepend_scheme="never") # Handle spaces/prefixes for other parts
+        ])
+        self.tokenizer.pre_tokenizer = self.pre_tokenizer
 
-    def compute_pair_freqs(self):
-        pair_freqs = defaultdict(int)
-        for word, freq in self.word_freqs.items():
-            split = self.splits[word]
-            if len(split) == 1:
-                continue
-            for i in range(len(split) - 1):
-                pair = (split[i], split[i + 1])
-                pair_freqs[pair] += freq
-        return pair_freqs
+        # Define trainer with small vocab size
+        self.trainer = BpeTrainer(
+            vocab_size=vocab_size,
+            special_tokens=["<|pad|>", 
+                            "<|startoftext|>", 
+                            "<|unk|>", 
+                            "<|endoftext|>",
+                            "Ċ", # Add our custom newline token here
+                            ],
+            show_progress=True,
+        )
 
-    def merge_pair(self, a, b):
-        for word in self.word_freqs:
-            split = self.splits[word]
-            if len(split) == 1:
-                continue
+    def train(self, files):
+        # Train on a text corpus (plain text file paths)
+        self.tokenizer.train(files, self.trainer)
 
-            i = 0
-            while i < len(split) - 1:
-                if split[i] == a and split[i + 1] == b:
-                    split = split[:i] + [a + b] + split[i + 2:]
-                    i += 1
-                else:
-                    i += 1
-            self.splits[word] = split
-        return self.splits
+        # Save the tokenizer
+        self.tokenizer.save("./model/BPE_model/tokenizer-bpe-5k.json")
 
-    def train(self, corpus, vocab_size):
-        print("count word freq")
-        for text in tqdm(corpus):
-            words_with_offsets = tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(
-                text)
-            new_words = [word for word, offset in words_with_offsets]
-            for word in new_words:
-                self.word_freqs[word] += 1
+    def load(self, path):
+        # Load the tokenizer
+        self.tokenizer = Tokenizer.from_file(path)
+        # self.tokenizer.pre_tokenizer = Metaspace(replacement="Ġ")
+        self.tokenizer.normalizer = self.normalizer
+        self.tokenizer.pre_tokenizer = self.pre_tokenizer
+        # self.tokenizer.enable_truncation(5120)
+        # self.tokenizer.enable_padding(pad_id=0, pad_token="<|pad|>", length=5120)
 
-        alphabet = []
-        print("find alphabet")
-        for word in tqdm(self.word_freqs.keys()):
-            for letter in word:
-                if letter not in alphabet:
-                    alphabet.append(letter)
-        alphabet.sort()
-        self.vocab = ["<|pad|>", "<|startoftext|>", "<|endoftext|>"] + alphabet.copy()
-        self.splits = {word: [c for c in word]
-                       for word in self.word_freqs.keys()}
-        with tqdm(total=vocab_size) as pbar:
-            pbar.update(len(self.vocab))
-            while (len(self.vocab) < vocab_size):
-                pair_freqs = self.compute_pair_freqs()
-                if len(pair_freqs) == 0:
-                    break
-                best_pair = ""
-                max_freq = None
-                # best_pair = max(pair_freqs, key=pair_freqs.get)
-                # max_freq = pair_freqs[best_pair]
-                for pair, freq in pair_freqs.items():
-                    if max_freq is None or max_freq < freq:
-                        best_pair = pair
-                        max_freq = freq
-                self.splits = self.merge_pair(
-                    *best_pair)
-                self.merges[best_pair] = best_pair[0] + best_pair[1]
-                self.vocab.append(best_pair[0] + best_pair[1])
-                pbar.update(1)
+    def save(self, path):
+        # Save the tokenizer
+        self.tokenizer.save(path)
 
-    def tokenize(self, text):
-        pre_tokenize_result = tokenizer._tokenizer.pre_tokenizer.pre_tokenize_str(
-            text)
-        pre_tokenized_text = [word for word, offset in pre_tokenize_result]
-        splits = [[l for l in word] for word in pre_tokenized_text]
-        for pair, merge in self.merges.items():
-            for idx, split in enumerate(splits):
-                i = 0
-                while i < len(split) - 1:
-                    if split[i] == pair[0] and split[i + 1] == pair[1]:
-                        split = split[:i] + [merge] + split[i + 2:]
-                    else:
-                        i += 1
-                splits[idx] = split
+    def encode(self, text: str):
+        """Encodes a piece of text."""
+        return self.tokenizer.encode(text)
 
-        return sum(splits, [])
+    def decode(self, ids: list[int]):
+        """Decodes a list of token IDs back to text."""
+        # Note: This will decode 'Ċ' as 'Ċ'. If you need '\n' back,
+        # you'll need to replace it manually after decoding.
+        # The 'Ġ' characters will likely remain as well.
+        return self.tokenizer.decode(ids, skip_special_tokens=False)
+
+    def decode_clean(self, ids: list[int]):
+        """Decodes IDs and performs basic cleanup (Ċ -> \n, Ġ -> space)."""
+        decoded_text = self.tokenizer.decode(ids, skip_special_tokens=False)
+        # Replace the custom newline token back to a standard newline
+        # Replace the Metaspace prefix (often you want a space instead)
+        # Use strip() to remove leading/trailing whitespace potentially introduced
+        cleaned_text = decoded_text.replace(" ","").replace("Ċ", "\n").replace("Ġ", " ").strip()
+        # Handle potential double spaces resulting from replacements
+        # import re
+        # cleaned_text = re.sub(r' +', ' ', cleaned_text)
+        return cleaned_text
+
+
+
+# class BPE:
+#     def __init__(self):
+#         self.vocab = []
+#         self.merges = {}
+#         self.splits = {}
+#         self.word_freqs = defaultdict(int)
+
+#     def compute_pair_freqs(self):
+#         pair_freqs = defaultdict(int)
+#         for word, freq in self.word_freqs.items():
+#             split = self.splits[word]
+#             if len(split) == 1:
+#                 continue
+#             for i in range(len(split) - 1):
+#                 pair = (split[i], split[i + 1])
+#                 pair_freqs[pair] += freq
+#         return pair_freqs
+
+#     def merge_pair(self, a, b):
+#         for word in self.word_freqs:
+#             split = self.splits[word]
+#             if len(split) == 1:
+#                 continue
+
+#             i = 0
+#             while i < len(split) - 1:
+#                 if split[i] == a and split[i + 1] == b:
+#                     split = split[:i] + [a + b] + split[i + 2:]
+#                     i += 1
+#                 else:
+#                     i += 1
+#             self.splits[word] = split
+#         return self.splits
+
+#     def train(self, corpus, vocab_size):
+#         print("count word freq")
+#         for text in tqdm(corpus):
+#             words_with_offsets = tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(
+#                 text)
+#             new_words = [word for word, offset in words_with_offsets]
+#             for word in new_words:
+#                 self.word_freqs[word] += 1
+
+#         alphabet = []
+#         print("find alphabet")
+#         for word in tqdm(self.word_freqs.keys()):
+#             for letter in word:
+#                 if letter not in alphabet:
+#                     alphabet.append(letter)
+#         alphabet.sort()
+#         self.vocab = ["<|pad|>", "<|startoftext|>", "<|endoftext|>"] + alphabet.copy()
+#         self.splits = {word: [c for c in word]
+#                        for word in self.word_freqs.keys()}
+#         with tqdm(total=vocab_size) as pbar:
+#             pbar.update(len(self.vocab))
+#             while (len(self.vocab) < vocab_size):
+#                 pair_freqs = self.compute_pair_freqs()
+#                 if len(pair_freqs) == 0:
+#                     break
+#                 best_pair = ""
+#                 max_freq = None
+#                 # best_pair = max(pair_freqs, key=pair_freqs.get)
+#                 # max_freq = pair_freqs[best_pair]
+#                 for pair, freq in pair_freqs.items():
+#                     if max_freq is None or max_freq < freq:
+#                         best_pair = pair
+#                         max_freq = freq
+#                 self.splits = self.merge_pair(
+#                     *best_pair)
+#                 self.merges[best_pair] = best_pair[0] + best_pair[1]
+#                 self.vocab.append(best_pair[0] + best_pair[1])
+#                 pbar.update(1)
+
+#     def tokenize(self, text):
+#         pre_tokenize_result = tokenizer._tokenizer.pre_tokenizer.pre_tokenize_str(
+#             text)
+#         pre_tokenized_text = [word for word, offset in pre_tokenize_result]
+#         splits = [[l for l in word] for word in pre_tokenized_text]
+#         for pair, merge in self.merges.items():
+#             for idx, split in enumerate(splits):
+#                 i = 0
+#                 while i < len(split) - 1:
+#                     if split[i] == pair[0] and split[i + 1] == pair[1]:
+#                         split = split[:i] + [merge] + split[i + 2:]
+#                     else:
+#                         i += 1
+#                 splits[idx] = split
+
+#         return sum(splits, [])
     
-    def token2idx(self, token):
-        return [self.vocab.index(t) for t in token]
+#     def token2idx(self, token):
+#         return [self.vocab.index(t) for t in token]
     
-    def idx2token(self, idx):
-        return [self.vocab[ids] for ids in idx]
+#     def idx2token(self, idx):
+#         return [self.vocab[ids] for ids in idx]
 
-    def decode(self, tokens):
-        sentence = "".join(tokens).replace("Ġ", " ")
-        return sentence
+#     def decode(self, tokens):
+#         sentence = "".join(tokens).replace("Ġ", " ")
+#         return sentence
 
-    def load_pretrain(self, path):
-        with open(path, "rb") as f:
-            data = pickle.load(f)
-        self.vocab = data["vocab"]
-        self.merges = data["merges"]
-        self.splits = data["splits"]
-        self.word_freqs = data["word_freqs"]
+#     def load_pretrain(self, path):
+#         with open(path, "rb") as f:
+#             data = pickle.load(f)
+#         self.vocab = data["vocab"]
+#         self.merges = data["merges"]
+#         self.splits = data["splits"]
+#         self.word_freqs = data["word_freqs"]
 
-    def save_model(self, path):
-        data = {"vocab": self.vocab,
-                "merges": self.merges,
-                "splits": self.splits,
-                "word_freqs": self.word_freqs}
-        with open(path, 'wb') as f:
-            pickle.dump(data, f)
+#     def save_model(self, path):
+#         data = {"vocab": self.vocab,
+#                 "merges": self.merges,
+#                 "splits": self.splits,
+#                 "word_freqs": self.word_freqs}
+#         with open(path, 'wb') as f:
+#             pickle.dump(data, f)
 
-    def add_vocabs(self, new_vocabs: list):
-        self.vocab = new_vocabs + self.vocab
+#     def add_vocabs(self, new_vocabs: list):
+#         self.vocab = new_vocabs + self.vocab
 
 
 class dataloadercustom_Transformers(Dataset):
@@ -466,6 +551,79 @@ class dataloadercustom_Transformer(Dataset):
         return self.weight
     def get_sample(self):
         return ["".join(self.tokenizer.idx2token(tok)).replace("Ġ"," ").replace("Ċ","\n") for tok in self.answer_all[:self.amount_data]]
+    
+
+class data_loader(Dataset):
+    def __init__(self, path, new_tokenizer, max_len=512):
+        self.max_len = max_len
+        self.new_tokenizer = new_tokenizer
+        self.data_path = path
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        with open(self.data_path, "r") as f:
+            data = f.read(-1)
+            data = data.split("\n# ")
+            data = [data[0].strip("\n")] + [("# " + c).strip("\n") for c in data[1:] if len(c) >= 80]
+        self.pre_data = data
+        print(len(self.pre_data))
+        # self.tokens_data_new = new_tokenizer.tokenize(data)
+        # tt = [F.pad(torch.tensor(new_tokenizer.tokenizer.encode(dd).ids, dtype=torch.int), mode='constant', pad=(0, max(512 - len(new_tokenizer.tokenizer.encode(dd).tokens), 0)), value=0) for dd in self.pre_data]
+        # self.tokens_data_new = torch.stack(tt)
+    def __len__(self):
+        return len(self.pre_data)
+
+    def __getitem__(self, idx):
+        data_token = torch.tensor([1] + self.new_tokenizer.tokenizer.encode(self.pre_data[idx]).ids + [3], device=self.device)
+        data_token = data_token[0:random.randint(10, data_token.shape[0])]
+        data_token_in = data_token[:-1].clone()
+        data_token_out = data_token[:].clone()
+        data_token_in_pad = F.pad(data_token_in, mode='constant', pad=(0, max(self.max_len - len(data_token_in), -1000000)), value=0)
+        data_token_out_pad = F.pad(data_token_out, mode='constant', pad=(0, max(self.max_len - len(data_token_out), -1000000)), value=0)
+        return data_token_in_pad, data_token_out_pad
+    def get_sample(self):
+        rr = random.randint(0, len(self.pre_data)-1)
+        return self.pre_data[rr:rr+10]
+    def get_vocab(self):
+        return self.new_tokenizer.vocab
+    
+
+class data_loader2(Dataset):
+    def __init__(self, path, new_tokenizer, max_len=512):
+        self.max_len = max_len
+        self.new_tokenizer = new_tokenizer
+        self.data_path = path
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        with open(self.data_path, "r") as f:
+            data = f.read(-1)
+            data = data.split("\n\n# ")
+            data = [[1] + new_tokenizer.tokenizer.encode(dd).ids + [3] for dd in data]
+            data = [[new_tokenizer.decode_clean(dds[:r]) for r in range(2,min(len(dds),max_len),1 )] \
+                  + [new_tokenizer.decode_clean(dds[j:j + max_len]) for j in range(1,len(dds) - max_len, 1)] \
+                            for dds in data]
+            flattened_list = list(itertools.chain.from_iterable(data))
+            self.pre_data = flattened_list
+            # data = [data[0].strip("\n")] + [("# " + c).strip("\n") for c in data[1:] if len(c) >= 80]
+        print(len(self.pre_data))
+        # self.tokens_data_new = new_tokenizer.tokenize(data)
+        # tt = [F.pad(torch.tensor(new_tokenizer.tokenizer.encode(dd).ids, dtype=torch.int), mode='constant', pad=(0, max(512 - len(new_tokenizer.tokenizer.encode(dd).tokens), 0)), value=0) for dd in self.pre_data]
+        # self.tokens_data_new = torch.stack(tt)
+    def __len__(self):
+        return len(self.pre_data)
+
+    def __getitem__(self, idx):
+        # data_token = torch.tensor([1] + self.new_tokenizer.tokenizer.encode(self.pre_data[idx]).ids + [3], device=self.device)
+        data_token = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]).ids, device=self.device, dtype=torch.long)
+        # data_token = data_token[0:random.randint(10, data_token.shape[0])]
+        data_token_in = data_token[:-1].clone()
+        data_token_out = data_token[:].clone()
+        data_token_in_pad = F.pad(data_token_in, mode='constant', pad=(0, max(self.max_len - len(data_token_in), -1000000)), value=0)
+        data_token_out_pad = F.pad(data_token_out, mode='constant', pad=(0, max(self.max_len - len(data_token_out), -1000000)), value=0)
+        return data_token_in_pad, data_token_out_pad
+    def get_sample(self):
+        rr = random.randint(0, len(self.pre_data)-1)
+        return self.pre_data[rr:rr+10]
+    def get_vocab(self):
+        return self.new_tokenizer.vocab
+    
     
 
 class WarmupCosineScheduler:
