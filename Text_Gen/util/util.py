@@ -134,7 +134,7 @@ class BPEs2:
         if method == 1:
             self.tokenizer.train(path, self.trainer)
         elif method == 2:
-            if not os.path.isdir(path[0] if isinstance(path, list) else path):
+            if not os.path.isdir(path[0] + "train" if isinstance(path, list) else path + "train"):
                 print("Directory does not exist.")
                 load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(path[0] if isinstance(path, list) else path)
             data = load_dataset(path=path[0] if isinstance(path, list) else path, split="train")
