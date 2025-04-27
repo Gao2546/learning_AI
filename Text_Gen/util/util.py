@@ -729,7 +729,9 @@ class data_loader3(Dataset):
         question = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids, device=self.device)
         answer = torch.tensor([1] + self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["output"]).ids + [3], device=self.device)
         # print(answer.size())
-        answer = answer[0:random.randint(1, answer.shape[0])]
+        rr = random.randint(1, len(answer)-self.max_len if len(answer) - self.max_len > 0 else 1)
+        # answer = answer[0:random.randint(1, answer.shape[0])]
+        answer = answer[rr:rr+self.max_len]
         answer_in = answer[:-1].clone()
         answer_out = answer.clone()
 
