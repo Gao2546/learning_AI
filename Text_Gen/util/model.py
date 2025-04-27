@@ -22,7 +22,7 @@ class Transformers:
         self.save_model = True
         self.save_dir = "./model/Transformers/"
         self.load_path = None#"model/transformer/transformer03_00300.pth"
-        self.data_path = "./data/PythonCode500K"
+        self.data_path = "./data/PythonCode500K/"
         self.tokenizer_path = "./model/BPE_model/tokenizer-bpe-10k.json"
         self.save_file = "Transformers_V01_128_384_6_6_1536_10K_MQtest2e-4.pth"
         self.start_epoch = 0
