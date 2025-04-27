@@ -33,7 +33,7 @@ class Transformers:
         # self.train_data = dataloadercustom_Transformers()
         self.BPE_model = BPEs2(vocab_size=1024*5*2)
       
-        self.BPE_model.train([self.data_path])
+        # self.BPE_model.train([self.data_path])
         self.BPE_model.load(self.tokenizer_path)
         self.train_data = data_loader3(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)
@@ -197,7 +197,7 @@ class Transformers:
         self.Transformers.eval()
         output_list = []
         for question in questions:
-            question_pre = self.BPE_model.tokenizer.encode(question)
+            question_pre = self.BPE_model.tokenizer.encode(question).ids
             question_pre = torch.tensor(question_pre, device=self.device)
             question_pre = torch.nn.functional.pad(question_pre,(0,self.max_seq_length - len(question_pre)),"constant",0).unsqueeze(0)
             answer_output = torch.zeros((1,self.max_seq_length),device=self.device,dtype=torch.int32)
