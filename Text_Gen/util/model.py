@@ -162,7 +162,7 @@ class Transformers:
         filepath (str): The file path to save the state dictionaries.
         """
         checkpoint = {
-            'model_state_dict': self.Transformer.state_dict(),
+            'model_state_dict': self.Transformers.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'lr_schdule_step': self.schdule.current_step
         }
