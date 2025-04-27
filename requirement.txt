@@ -37,6 +37,7 @@ six
 stack-data
 sympy
 transformers
+datasets
 
 #Pytorch
 torch
