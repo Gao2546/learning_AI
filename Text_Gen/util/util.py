@@ -722,16 +722,16 @@ class data_loader3(Dataset):
         # tt = [F.pad(torch.tensor(new_tokenizer.tokenizer.encode(dd).ids, dtype=torch.int), mode='constant', pad=(0, max(512 - len(new_tokenizer.tokenizer.encode(dd).tokens), 0)), value=0) for dd in self.pre_data]
         # self.tokens_data_new = torch.stack(tt)
     def __len__(self):
-        return len(self.pre_data[:1000])
-
+        return 1000#len(self.pre_data)
     def __getitem__(self, idx):
-
+        # print(self.pre_data[idx]["instruction"])
         question = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids, device=self.device)
         answer = torch.tensor([1] + self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["output"]).ids + [3], device=self.device)
         # print(answer.size())
-        rr = random.randint(1, len(answer)-self.max_len if len(answer) - self.max_len > 0 else 1)
+        # rr = random.randint(0, len(answer)-self.max_len if len(answer) - self.max_len > 0 else 2)
+        rr = random.randint(0, min(len(answer), self.max_len))
         # answer = answer[0:random.randint(1, answer.shape[0])]
-        answer = answer[rr:rr+self.max_len]
+        answer = answer[0:rr]
         answer_in = answer[:-1].clone()
         answer_out = answer.clone()
 

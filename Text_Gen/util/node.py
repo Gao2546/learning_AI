@@ -188,6 +188,7 @@ class TransformersM(nn.Module):
         self.decoder_layers = nn.ModuleList(
             [DecoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
 
+        self.layer_norm = nn.LayerNorm(d_model)
         self.fc = nn.Linear(d_model, tgt_vocab_size)
         self.dropout = nn.Dropout(dropout)
         if device is not None:
@@ -223,7 +224,7 @@ class TransformersM(nn.Module):
         for dec_layer in self.decoder_layers:
             dec_output = dec_layer(dec_output, enc_output, src_mask, tgt_mask)
 
-        output = self.fc(dec_output)
+        output = self.fc(self.layer_norm(dec_output))
         return output
 
 
