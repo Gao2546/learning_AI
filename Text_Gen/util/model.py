@@ -164,7 +164,7 @@ class Transformers:
         checkpoint = {
             'model_state_dict': self.Transformers.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
-            'lr_schdule_step': self.schdule.current_step
+            'lr_scheduler_step': self.scheduler.current_step
         }
         torch.save(checkpoint, filepath)
         print(f"Model and optimizer state dictionaries saved to {filepath}")
@@ -184,12 +184,12 @@ class Transformers:
         tuple: The model and optimizer with loaded states.
         """
         checkpoint = torch.load(filepath, map_location=device)
-        if self.optimizer == None or self.schdule == None:
+        if self.optimizer == None or self.scheduler == None:
             self.model.load_state_dict(checkpoint['model_state_dict'])
         else:
             self.model.load_state_dict(checkpoint['model_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            self.schdule.current_step = checkpoint['lr_schdule_step']
+            self.scheduler.current_step = checkpoint['lr_scheduler_step']
         print(f"Model and optimizer state dictionaries loaded from {filepath}")
 
 
@@ -319,7 +319,7 @@ class Bert:
         checkpoint = {
             'model_state_dict': self.Transformer.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
-            'lr_schdule_step': self.schdule.current_step
+            'lr_scheduler_step': self.scheduler.current_step
         }
         torch.save(checkpoint, filepath)
         print(f"Model and optimizer state dictionaries saved to {filepath}")
@@ -339,12 +339,12 @@ class Bert:
         tuple: The model and optimizer with loaded states.
         """
         checkpoint = torch.load(filepath, map_location=device)
-        if self.optimizer == None or self.schdule == None:
+        if self.optimizer == None or self.scheduler == None:
             self.model.load_state_dict(checkpoint['model_state_dict'])
         else:
             self.model.load_state_dict(checkpoint['model_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            self.schdule.current_step = checkpoint['lr_schdule_step']
+            self.scheduler.current_step = checkpoint['lr_scheduler_step']
         print(f"Model and optimizer state dictionaries loaded from {filepath}")
 
 
@@ -543,7 +543,7 @@ class Bert:
 #         checkpoint = {
 #             'model_state_dict': self.Transformer.state_dict(),
 #             'optimizer_state_dict': self.optimizer.state_dict(),
-#             'lr_schdule_step': self.scheduler.current_step,
+#             'lr_scheduler_step': self.scheduler.current_step,
 #             'current_epoch': epoch
 #         }
 #         torch.save(checkpoint, filepath)
@@ -575,7 +575,7 @@ class Bert:
 #             else:
 #                 self.Transformer.load_state_dict(checkpoint['model_state_dict'])
 #                 self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-#                 self.scheduler.current_step = checkpoint['lr_schdule_step']
+#                 self.scheduler.current_step = checkpoint['lr_scheduler_step']
 #                 self.start_epoch = checkpoint['current_epoch'] + 1
 #             print(f"Model and optimizer state dictionaries loaded from {filepath}")
 #             # return self.start_epoch
