@@ -28,7 +28,7 @@ pdfminer.six
 beautifulsoup4
 ipykernel
 matplotlib
-numpy
+numpy==1.26.2
 pandas
 pillow
 scikit-learn
