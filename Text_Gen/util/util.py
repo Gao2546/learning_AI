@@ -722,7 +722,7 @@ class data_loader3(Dataset):
         # tt = [F.pad(torch.tensor(new_tokenizer.tokenizer.encode(dd).ids, dtype=torch.int), mode='constant', pad=(0, max(512 - len(new_tokenizer.tokenizer.encode(dd).tokens), 0)), value=0) for dd in self.pre_data]
         # self.tokens_data_new = torch.stack(tt)
     def __len__(self):
-        return 10#len(self.pre_data)
+        return 8#int(len(self.pre_data)*0.01)
     def __getitem__(self, idx):
         # print(self.pre_data[idx]["instruction"])
         question = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids, device=self.device)
@@ -748,6 +748,7 @@ class data_loader3(Dataset):
         return question_pad, answer_in_pad, answer_out_pad
     def get_sample(self):
         rr = random.randint(0, len(self.pre_data)-1)
+        rr = 0
         return self.pre_data.to_dict()['output'][rr:rr+3] + self.pre_data.to_dict()['instruction'][rr:rr+3]
     def get_vocab(self):
         return self.new_tokenizer.vocab
@@ -761,8 +762,8 @@ class WarmupCosineScheduler:
         self.start_max_steps = max_steps
         self.current_max_steps = max_steps
         self.base_lr = base_lr
-        # self.cosine_scheduler = CosineAnnealingLR(optimizer, T_max=max_steps, last_epoch=-1, eta_min=5e-6) #lr=5e-6 1e-6 5e-7
-        self.cosine_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=max_steps, T_mult=1, last_epoch=-1, eta_min=5e-6) 
+        self.cosine_scheduler = CosineAnnealingLR(optimizer, T_max=max_steps, last_epoch=-1, eta_min=1e-6) #lr=5e-6 1e-6 5e-7
+        # self.cosine_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=max_steps, T_mult=1, last_epoch=-1, eta_min=5e-6) 
         self.current_step = 0
         if start_step != None:
             self.current_step = start_step

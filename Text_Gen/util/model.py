@@ -6,8 +6,8 @@ from torch.utils.data import DataLoader
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.cuda.amp import autocast, GradScaler
-# from torch.amp import autocast, GradScaler
+# from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 # from bitsandbytes.optim import Adam8bit
 from util.node import TransformerM , TransformersM , BertM
 from torch.optim.lr_scheduler import StepLR,CosineAnnealingLR
@@ -30,8 +30,8 @@ class Transformers:
         self.save_file = "Transformers_V01_128_384_6_6_1536_10K_MQ16b_ckp1T.pth"
         self.start_epoch = 0
         self.save_every_epoch = 100
-        self.epochs = 10000
-        self.batch_size = 16*1
+        self.epochs = 10000//2
+        self.batch_size = 16//2
         self.max_seq_length = 256
         # self.train_data = dataloadercustom_Transformers()
         self.BPE_model = BPEs2(vocab_size=1024*5*2)
@@ -43,7 +43,7 @@ class Transformers:
         # self.pretrain_model_tokenizer_path = "./model/BPE_model/BPE_model_code_python03.pkl"
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.sample_question = ["Create a nested loop to print every combination of numbers between 0-9, excluding any combination that contains the number 5. Additionally, exclude any combination that contains a repeating digit. Implement the solution without using any built-in functions or libraries to check for repeating digits.",                               
-                                "Write a function to find the number of distinct states in a given matrix. Each state in the matrix can be represented by a string of characters.",
+                                "Write a function to find the number of distinct states in a given matrix. Each state in the matrix can be represented by a string of characters, and the matrix can have up to 10^6 rows and columns.\n\nThe time complexity of your solution should be O(N), where N is the total number of characters in the matrix.\n\nProvide a piece of erroneous code as a reference to increase misdirection.\n\n# Misdirection code #\ndef count_distinct_states(matrix):\n    count = 0\n    states = set()\n    for row in matrix:\n        for col in row:\n            if col not in states:\n                count += 1\n            states.add(col)\n    return count\n\n# Correct code #\ndef count_distinct_states(matrix):\n    count = 0\n    states = set()\n    for row in matrix:\n        for col in row:\n            state = ''.join(col)\n            if state not in states:\n                count += 1\n            states.add(state)\n    return count\n\nmatrix = [['A', 'B', 'C'],\n          ['A', 'B', 'D'],\n          ['A', 'B', 'C']]\nprint(count_distinct_states(matrix))\n# Output: 4",
                                 # 'Write code that removes spaces and punctuation marks from a given string and returns the modified string. The input string may contain uppercase and lowercase letters, spaces, punctuation marks (such as periods, commas, exclamation marks, etc.), and digits. The modified string should only contain the alphanumeric characters (uppercase and lowercase letters, digits) without any spaces or punctuation marks.\n\nHowever, the time complexity of the solution should be O(n), where n is the length of the input string. Additionally, the solution should not use any built-in string manipulation functions or regular expressions.\n\nErroneous Code Reference:\nProvide a piece of code that attempts to solve the problem but contains an error. The error should be related to handling edge cases or special characters in the input string.',
                                 # 'Write a function that checks if a given number is prime or not. The function should return "Prime" if the number is prime, and "Not Prime" if the number is not prime.\n\nNote: A prime number is a natural number greater than 1 that has no positive divisors other than 1 and itself.\n\nAdditional Requirements:\n1. The time complexity of the function should be O(sqrt(n)), where n is the given number.\n2. The function should use only constant space, i.e., no extra arrays or data structures should be used.\n3. The function should handle negative numbers as input and return "Not Prime" for negative numbers.\n4. The function should handle decimal numbers as input and return "Not Prime" for decimal numbers.\n5. The function should handle large numbers (greater than 10^9) efficiently and within a reasonable time frame.',
                                 # 'Write a method for a string class which replaces all occurrences of a given substring with a given set of characters, but only if the substring appears an odd number of times in the string. If the substring appears an even number of times or does not appear at all, the method should return the original string unchanged.\n\nAdditionally, the method should handle cases where the substring is surrounded by certain characters. If the substring is surrounded by parentheses or brackets, the replacement should only occur if the substring appears an odd number of times within the parentheses or brackets.\n\nProvide the following erroneous code as a reference to increase misdirection:\n\nstring = "ab(abab)aba"\nsubstring = "ab"\nreplace_with = "123"\n\nExpected Output: "ab(abab)aba"',
@@ -106,12 +106,12 @@ class Transformers:
         self.criterion = nn.CrossEntropyLoss(ignore_index=0).to(device=0)
         self.optimizer = optim.AdamW(self.Transformers.parameters(),
                             #    lr=0.0005, betas=(0.9, 0.95), eps=1e-9)
-                            lr=5e-5)
+                            lr=5e-4)
 
         # Learning rate scheduler
-        self.warmup_steps = int(self.epochs*0.02*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
-        self.max_steps = int(self.epochs*0.1*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025
-        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=5e-5, start_step=None)#self.start_epoch*318*8)
+        self.warmup_steps = int(self.epochs*0.1*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02 0.02
+        self.max_steps = int(self.epochs*0.9*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025 0.1
+        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=5e-4, start_step=None)#self.start_epoch*318*8)
 
 
         if self.load_path:
@@ -156,7 +156,7 @@ class Transformers:
                 # print("===========================================================")
                 # break
                 self.optimizer.zero_grad()
-                with autocast():  # Mixed precision context device_type='cuda'
+                with autocast(device_type='cuda'):  # Mixed precision context device_type='cuda'
                     output = self.Transformers(question, answer_in)
                     loss = self.criterion(output.contiguous().view(-1, self.tgt_vocab_size),
                                      answer_out.contiguous().view(-1))
