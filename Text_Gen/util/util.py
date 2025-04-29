@@ -722,7 +722,7 @@ class data_loader3(Dataset):
         # tt = [F.pad(torch.tensor(new_tokenizer.tokenizer.encode(dd).ids, dtype=torch.int), mode='constant', pad=(0, max(512 - len(new_tokenizer.tokenizer.encode(dd).tokens), 0)), value=0) for dd in self.pre_data]
         # self.tokens_data_new = torch.stack(tt)
     def __len__(self):
-        return 1000#len(self.pre_data)
+        return 10#len(self.pre_data)
     def __getitem__(self, idx):
         # print(self.pre_data[idx]["instruction"])
         question = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids, device=self.device)

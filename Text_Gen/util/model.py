@@ -6,6 +6,9 @@ from torch.utils.data import DataLoader
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.cuda.amp import autocast, GradScaler
+# from torch.amp import autocast, GradScaler
+# from bitsandbytes.optim import Adam8bit
 from util.node import TransformerM , TransformersM , BertM
 from torch.optim.lr_scheduler import StepLR,CosineAnnealingLR
 import logging
@@ -21,14 +24,14 @@ class Transformers:
     def __init__(self):
         self.save_model = True
         self.save_dir = "./model/Transformers/"
-        self.load_path = None#"model/transformer/transformer03_00300.pth"
+        self.load_path = None#"./model/Transformers/Transformers_V01_128_384_6_6_1536_10K_MQtest1e-4ckp1.pth"
         self.data_path = "./data/PythonCode500K/"
         self.tokenizer_path = "./model/BPE_model/tokenizer-bpe-10k.json"
-        self.save_file = "Transformers_V01_128_384_6_6_1536_10K_MQtest1e-4.pth"
+        self.save_file = "Transformers_V01_128_384_6_6_1536_10K_MQ16b_ckp1T.pth"
         self.start_epoch = 0
         self.save_every_epoch = 100
         self.epochs = 10000
-        self.batch_size = 16*10
+        self.batch_size = 16*1
         self.max_seq_length = 256
         # self.train_data = dataloadercustom_Transformers()
         self.BPE_model = BPEs2(vocab_size=1024*5*2)
@@ -99,20 +102,24 @@ class Transformers:
         # self.tokenizer.load_pretrain(self.pretrain_model_tokenizer_path)
         self.Transformers = TransformersM(self.src_vocab_size, self.tgt_vocab_size, self.d_model,
                                   self.num_heads, self.num_layers, self.d_ff, self.max_seq_length, self.dropout, device=0).to(device=0)
-        if self.load_path:
-            # self.load(self.load_path)
-            self.load_model_and_optimizer(self.load_path)
 
         self.criterion = nn.CrossEntropyLoss(ignore_index=0).to(device=0)
         self.optimizer = optim.AdamW(self.Transformers.parameters(),
                             #    lr=0.0005, betas=(0.9, 0.95), eps=1e-9)
-                            lr=1e-4)
+                            lr=5e-5)
 
         # Learning rate scheduler
         self.warmup_steps = int(self.epochs*0.02*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
         self.max_steps = int(self.epochs*0.1*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025
-        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=1e-4, start_step=None)#self.start_epoch*318*8)
+        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=5e-5, start_step=None)#self.start_epoch*318*8)
 
+
+        if self.load_path:
+            # self.load(self.load_path)
+            self.load_model_and_optimizer(self.load_path)
+            self.start_epoch = self.scheduler.current_step // (math.ceil(len(self.train_data)/self.batch_size))
+
+        
                 # Count total parameters
         total_params = sum(p.numel() for p in self.Transformers.parameters())
 
@@ -137,6 +144,8 @@ class Transformers:
 
 
     def train(self):
+        # Mixed precision scaler
+        scaler = GradScaler()
         self.Transformers.train()
         for epoch in tqdm(range(self.start_epoch,self.epochs)):
             self.loss_epoch = []
@@ -147,16 +156,20 @@ class Transformers:
                 # print("===========================================================")
                 # break
                 self.optimizer.zero_grad()
-                output = self.Transformers(question, answer_in)
-                loss = self.criterion(output.contiguous().view(-1, self.tgt_vocab_size),
-                                 answer_out.contiguous().view(-1))
-                loss.backward()
+                with autocast():  # Mixed precision context device_type='cuda'
+                    output = self.Transformers(question, answer_in)
+                    loss = self.criterion(output.contiguous().view(-1, self.tgt_vocab_size),
+                                     answer_out.contiguous().view(-1))
+                # loss.backward()
+                scaler.scale(loss).backward()
                 self.loss_epoch.append(loss.item())
                 torch.nn.utils.clip_grad_norm_(self.Transformers.parameters(), max_norm=self.max_norm)
-                self.optimizer.step()
+                # self.optimizer.step()
+                scaler.step(self.optimizer)
+                scaler.update()
                 self.scheduler.step()
             # break
-            if self.save and (((epoch + 1) % self.save_every_epoch) == 0):
+            if self.save_model and (((epoch + 1) % self.save_every_epoch) == 0):
                 # self.save(self.save_dir + f"Transformers04_{epoch + 1:0=5}.pth")
                 self.save_model_and_optimizer(self.save_dir + self.save_file)
                 output_eval = self.eval_model(self.sample_question)
@@ -165,8 +178,8 @@ class Transformers:
                     print(o)
                     logging.info(o)
                 self.Transformers.train()
-            print(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}")
-            logging.info(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}")
+            print(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")
+            logging.info(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")
 
     def save(self,path):
         torch.save(self.Transformers.state_dict(),path)
@@ -208,9 +221,9 @@ class Transformers:
         """
         checkpoint = torch.load(filepath, map_location=device)
         if self.optimizer == None or self.scheduler == None:
-            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.Transformers.load_state_dict(checkpoint['model_state_dict'])
         else:
-            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.Transformers.load_state_dict(checkpoint['model_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.scheduler.current_step = checkpoint['lr_scheduler_step']
         print(f"Model and optimizer state dictionaries loaded from {filepath}")
