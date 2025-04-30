@@ -951,7 +951,7 @@ class TransformerDecodeOnly:
         self.max_seq_length = 512
         print("self.max_seq_length: ", self.max_seq_length)
         # self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=3873)
-        self.BPE_model = BPEsQA(vocab_size=1024*5*2).to(device=0)
+        self.BPE_model = BPEsQA(vocab_size=1024*5*2)
       
         # self.BPE_model.train([self.data_path])
         self.BPE_model.load(self.tokenizer_path)

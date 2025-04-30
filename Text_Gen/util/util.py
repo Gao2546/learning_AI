@@ -847,7 +847,7 @@ class data_loaderQA(Dataset):
         if not os.path.isdir(self.data_path+"train"):
             print("Directory does not exist.")
             load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(self.data_path)
-        data = load_dataset(path=self.data_path, split="train").to(device=self.device)
+        data = load_dataset(path=self.data_path, split="train")
         # self.pre_data = data
         def is_valid(example):
             question = self.new_tokenizer.tokenizer.encode(example["instruction"]).ids
