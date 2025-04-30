@@ -943,13 +943,13 @@ class TransformerDecodeOnly:
         self.start_epoch = 0
         self.save_every_epoch = 100
         self.epochs = 10000//2
-        self.batch_size = 16*6
+        self.batch_size = 16//8
         self.max_seq_length = 512
         print("self.max_seq_length: ", self.max_seq_length)
         # self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=3873)
         self.BPE_model = BPEsQA(vocab_size=1024*5*2)
       
-        # self.BPE_model.train([self.data_path])
+        self.BPE_model.train([self.data_path])
         self.BPE_model.load(self.tokenizer_path)
         self.train_data = data_loaderQA(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length)
         #========================================================================================
@@ -958,11 +958,11 @@ class TransformerDecodeOnly:
         # self.pretrain_model_tokenizer_path = "./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl"
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.sample_question = ["Create a nested loop to print every combination of numbers between 0-9, excluding any combination that contains the number 5. Additionally, exclude any combination that contains a repeating digit. Implement the solution without using any built-in functions or libraries to check for repeating digits.",                               
-                                "Write a function to find the number of distinct states in a given matrix. Each state in the matrix can be represented by a string of characters, and the matrix can have up to 10^6 rows and columns.\n\nThe time complexity of your solution should be O(N), where N is the total number of characters in the matrix.\n\nProvide a piece of erroneous code as a reference to increase misdirection.\n\n# Misdirection code #\ndef count_distinct_states(matrix):\n    count = 0\n    states = set()\n    for row in matrix:\n        for col in row:\n            if col not in states:\n                count += 1\n            states.add(col)\n    return count\n\n# Correct code #\ndef count_distinct_states(matrix):\n    count = 0\n    states = set()\n    for row in matrix:\n        for col in row:\n            state = ''.join(col)\n            if state not in states:\n                count += 1\n            states.add(state)\n    return count\n\nmatrix = [['A', 'B', 'C'],\n          ['A', 'B', 'D'],\n          ['A', 'B', 'C']]\nprint(count_distinct_states(matrix))\n# Output: 4",
+                                # "Write a function to find the number of distinct states in a given matrix. Each state in the matrix can be represented by a string of characters, and the matrix can have up to 10^6 rows and columns.\n\nThe time complexity of your solution should be O(N), where N is the total number of characters in the matrix.\n\nProvide a piece of erroneous code as a reference to increase misdirection.\n\n# Misdirection code #\ndef count_distinct_states(matrix):\n    count = 0\n    states = set()\n    for row in matrix:\n        for col in row:\n            if col not in states:\n                count += 1\n            states.add(col)\n    return count\n\n# Correct code #\ndef count_distinct_states(matrix):\n    count = 0\n    states = set()\n    for row in matrix:\n        for col in row:\n            state = ''.join(col)\n            if state not in states:\n                count += 1\n            states.add(state)\n    return count\n\nmatrix = [['A', 'B', 'C'],\n          ['A', 'B', 'D'],\n          ['A', 'B', 'C']]\nprint(count_distinct_states(matrix))\n# Output: 4",
                                 # 'Write code that removes spaces and punctuation marks from a given string and returns the modified string. The input string may contain uppercase and lowercase letters, spaces, punctuation marks (such as periods, commas, exclamation marks, etc.), and digits. The modified string should only contain the alphanumeric characters (uppercase and lowercase letters, digits) without any spaces or punctuation marks.\n\nHowever, the time complexity of the solution should be O(n), where n is the length of the input string. Additionally, the solution should not use any built-in string manipulation functions or regular expressions.\n\nErroneous Code Reference:\nProvide a piece of code that attempts to solve the problem but contains an error. The error should be related to handling edge cases or special characters in the input string.',
                                 # 'Write a function that checks if a given number is prime or not. The function should return "Prime" if the number is prime, and "Not Prime" if the number is not prime.\n\nNote: A prime number is a natural number greater than 1 that has no positive divisors other than 1 and itself.\n\nAdditional Requirements:\n1. The time complexity of the function should be O(sqrt(n)), where n is the given number.\n2. The function should use only constant space, i.e., no extra arrays or data structures should be used.\n3. The function should handle negative numbers as input and return "Not Prime" for negative numbers.\n4. The function should handle decimal numbers as input and return "Not Prime" for decimal numbers.\n5. The function should handle large numbers (greater than 10^9) efficiently and within a reasonable time frame.',
                                 # 'Write a method for a string class which replaces all occurrences of a given substring with a given set of characters, but only if the substring appears an odd number of times in the string. If the substring appears an even number of times or does not appear at all, the method should return the original string unchanged.\n\nAdditionally, the method should handle cases where the substring is surrounded by certain characters. If the substring is surrounded by parentheses or brackets, the replacement should only occur if the substring appears an odd number of times within the parentheses or brackets.\n\nProvide the following erroneous code as a reference to increase misdirection:\n\nstring = "ab(abab)aba"\nsubstring = "ab"\nreplace_with = "123"\n\nExpected Output: "ab(abab)aba"',
-                                # 'Write code to find the sum of all prime numbers between 1 million and 2 million, excluding prime numbers that contain the digit 7.',
+                                'Write code to find the sum of all prime numbers between 1 million and 2 million, excluding prime numbers that contain the digit 7.',
                                 # 'Create an array of length N (where N is a positive integer) containing numbers divisible by M (where M is a positive integer) up to X (where X is a positive integer). Each number in the array must be unique and in ascending order. Additionally, the sum of all the numbers in the array should be a prime number.\n\nAdditional Requirements:\n1. The time complexity of the solution should be O(N).\n2. The space complexity of the solution should be O(1).\n3. The solution should be implemented without using any built-in functions or libraries to check for prime numbers.\n4. The solution should handle cases where no prime number can be obtained as the sum of the array elements. In such cases, the solution should return an empty array.\n5. The solution should also handle cases where multiple prime numbers can be obtained as the sum of the array elements. In such cases, the solution should return the array with the largest sum that is prime.\n6. The solution should be optimized to find the largest prime sum within the given constraints.',
                                 # 'Write a function to find the maximum difference between two prime numbers in a given array. The array can contain positive and negative integers, and can be unsorted. Additionally, the function should handle arrays of any length. The function should return the maximum difference as an absolute value. For example, for the array [5, 3, 17, 11, 9], the function should return 14.\n\nHowever, your function should have a time complexity of O(n), where n is the length of the array. Additionally, you should not use any built-in functions or libraries to check if a number is prime. You need to implement your own prime checking function.',
                                 # 'Write a program that calculates the height of a triangle given the angle, side lengths, opposite side length, and the ratio of the side lengths. The program should take into account the Law of Sines and the Law of Cosines. Additionally, the program should simulate the effect of air resistance on the trajectory of the triangle when it is thrown at a certain velocity.',
@@ -1004,10 +1004,10 @@ class TransformerDecodeOnly:
         # self.tgt_vocab_size = self.train_data.token_size
         self.src_vocab_size = self.BPE_model.tokenizer.get_vocab_size()
         self.tgt_vocab_size = self.BPE_model.tokenizer.get_vocab_size()
-        self.d_model = 128*6 #6
+        self.d_model = 128*3*2 #6
         self.num_heads = 6*2 #6*1 #2
         self.num_layers = 6*2 #2
-        self.d_ff = 128*4*6#512*2 #6
+        self.d_ff = 128*3*2#512*2 #6
         # self.max_seq_length = self.train_data.window_size
         self.dropout = 0.1
         self.max_norm = 1.0
@@ -1023,13 +1023,13 @@ class TransformerDecodeOnly:
         self.criterion = nn.CrossEntropyLoss(ignore_index=0).to(device=0)
         self.optimizer = optim.AdamW(self.Transformer.parameters(),
                                     #  lr=2e-4)
-                               lr=5e-4, betas=(0.9, 0.95), eps=1e-9) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
+                               lr=1e-4, betas=(0.9, 0.95), eps=1e-9) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
                                
 
         # Learning rate scheduler
         self.warmup_steps = int(self.epochs*0.1*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
         self.max_steps = int(self.epochs*0.9*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025
-        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=5e-4, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
+        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=1e-4, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
 
         if self.load_path:
             # self.load(self.load_path)
@@ -1055,6 +1055,7 @@ class TransformerDecodeOnly:
         print("Total steps: ", math.ceil(len(self.train_data)/self.batch_size))
         print("Warmup steps: ", self.warmup_steps)
         print("Epochs: ", self.epochs)
+        print("Vocab size: ", self.src_vocab_size)
         print("Example data: ")
         # for dd in self.train_data.get_sample()[0:self.train_data.amount_data:self.train_data.amount_data//10]: #get 10 sample data
         #     print(dd)
@@ -1190,7 +1191,7 @@ class TransformerDecodeOnly:
                     break
             answer_input[0,seq_idx] = answer_output.clone()[0,seq_idx]
             # output_list.append("\n" + question+ " :\n" + "".join(self.tokenizer.idx2token(answer_input[0,1:seq_idx].cpu().tolist())).replace("Ġ"," ").replace("Ċ","\n"))
-            output_list.append("\n" + question+ " :\n=============>" + self.BPE_model.decode_clean(answer_input[0,1:seq_idx].cpu().tolist()))
+            output_list.append("\n" + question+ " :\n=============>\n" + self.BPE_model.decode_clean(answer_input[0,1:seq_idx].cpu().tolist()))
         return output_list
     
 

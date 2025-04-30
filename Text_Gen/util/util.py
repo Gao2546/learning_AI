@@ -224,7 +224,7 @@ class BPEsQA:
             data = load_dataset(path=path[0] if isinstance(path, list) else path, split="train")
             data = data.to_dict()
             data = data["output"] + data["instruction"]
-            self.tokenizer.train_from_iterator(data)
+            self.tokenizer.train_from_iterator(data, trainer=self.trainer)
 
         # Save the tokenizer
         self.tokenizer.save(f"./model/BPE_model/tokenizer-bpe-{self.trainer.vocab_size // 1000}k.json")
@@ -848,13 +848,22 @@ class data_loaderQA(Dataset):
             print("Directory does not exist.")
             load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(self.data_path)
         data = load_dataset(path=self.data_path, split="train")
-        self.pre_data = data
-        print(len(self.pre_data))
+        # self.pre_data = data
+        def is_valid(example):
+            question = self.new_tokenizer.tokenizer.encode(example["instruction"]).ids
+            answer = self.new_tokenizer.tokenizer.encode(example["output"]).ids
+            QA_data = [1] + [5] + question + [6] + answer + [3]
+            return len(QA_data) <= self.max_len
+
+        self.pre_data = data.filter(is_valid)
+        print(f"Filtered dataset size: {len(self.pre_data)}")
+        # print(len(self.pre_data))
+        
         # self.tokens_data_new = new_tokenizer.tokenize(data)
         # tt = [F.pad(torch.tensor(new_tokenizer.tokenizer.encode(dd).ids, dtype=torch.int), mode='constant', pad=(0, max(512 - len(new_tokenizer.tokenizer.encode(dd).tokens), 0)), value=0) for dd in self.pre_data]
         # self.tokens_data_new = torch.stack(tt)
     def __len__(self):
-        return 2#int(len(self.pre_data)*0.01)
+        return 4#int(len(self.pre_data)*0.01)
     def __getitem__(self, idx):
         # print(self.pre_data[idx]["instruction"])
         # question = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids, device=self.device)
@@ -867,7 +876,7 @@ class data_loaderQA(Dataset):
 
         # print(answer.size())
         # rr = random.randint(0, len(answer)-self.max_len if len(answer) - self.max_len > 0 else 2)
-        rr = random.randint(len(question) + 2, min(len(QA_data), self.max_len))
+        rr = random.randint(len(question) + 3, min(len(QA_data), self.max_len))
         # answer = answer[0:random.randint(1, answer.shape[0])]
         QA_data = QA_data[0:rr]
         QA_in = QA_data[:-1].clone()
