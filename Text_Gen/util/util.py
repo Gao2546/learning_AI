@@ -844,6 +844,7 @@ class data_loaderQA(Dataset):
         self.max_len = max_len
         self.new_tokenizer = new_tokenizer
         self.data_path = path
+        self.data_path512 = data_path512
         if not os.path.isdir(self.data_path+"train"):
             print("Directory does not exist.")
             load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(self.data_path)
