@@ -78,7 +78,7 @@
 #         scheduler.step()
 #         print(f"Epoch: {epoch+1}, Loss: {loss.item()}")
 
-from util.model import Transformers, Transformer
+from util.model import Transformers, Transformer, TransformerDecodeOnly
 import torch
 
 # question = ["HOW AFRICAN AMERICANS WERE IMMIGRATED TO THE US",
@@ -105,7 +105,7 @@ question = ["# Write a program to check whether a number is prime or not",
 # import os
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
-model = Transformers()
+model = TransformerDecodeOnly()
 model.train()
 # output = model.eval_model(question)
 # for o in output:

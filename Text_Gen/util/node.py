@@ -84,7 +84,11 @@ class LearnablePositionalEmbedding(nn.Module):
         x: (batch_size, seq_len, d_model)
         """
         batch_size, seq_len, _ = x.size()
-        positions = torch.arange(0, seq_len, device=x.device).unsqueeze(0).expand(batch_size, seq_len)
+        # Clamp position indices to be within the valid range [0, max_seq_len - 1]
+        max_index = self.pos_embedding.num_embeddings - 1
+        raw_positions = torch.arange(0, seq_len, device=x.device)
+        clamped_positions = torch.clamp(raw_positions, max=max_index)
+        positions = clamped_positions.unsqueeze(0).expand(batch_size, seq_len)
         return x + self.pos_embedding(positions)
 
 
@@ -146,6 +150,26 @@ class DecoderLayer(nn.Module):
         x = self.norm1(x + self.dropout(attn_output))
         attn_output = self.cross_attn(x, enc_output, enc_output, src_mask)
         x = self.norm2(x + self.dropout(attn_output))
+        ff_output = self.feed_forward(x)
+        x = self.norm3(x + self.dropout(ff_output))
+        return x
+    
+class DecoderLayerOnly(nn.Module):
+    def __init__(self, d_model, num_heads, d_ff, dropout):
+        super(DecoderLayerOnly, self).__init__()
+        self.self_attn = MultiHeadAttention(d_model, num_heads)
+        # self.cross_attn = MultiHeadAttention(d_model, num_heads)
+        self.feed_forward = PositionWiseFeedForward(d_model, d_ff)
+        self.norm1 = nn.LayerNorm(d_model)
+        # self.norm2 = nn.LayerNorm(d_model)
+        self.norm3 = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, tgt_mask):
+        attn_output = self.self_attn(x, x, x, tgt_mask)
+        x = self.norm1(x + self.dropout(attn_output))
+        # attn_output = self.cross_attn(x, enc_output, enc_output, src_mask)
+        # x = self.norm2(x + self.dropout(attn_output))
         ff_output = self.feed_forward(x)
         x = self.norm3(x + self.dropout(ff_output))
         return x
@@ -240,7 +264,7 @@ class TransformerM(nn.Module):
         # self.encoder_layers = nn.ModuleList(
             # [EncoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
         self.decoder_layers = nn.ModuleList(
-            [DecoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
+            [DecoderLayerOnly(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
 
         self.layer_norm = nn.LayerNorm(d_model)
         self.fc = nn.Linear(d_model, tgt_vocab_size)

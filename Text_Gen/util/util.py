@@ -180,6 +180,90 @@ class BPEs2:
         # import re
         # cleaned_text = re.sub(r' +', ' ', cleaned_text)
         return cleaned_text
+    
+
+class BPEsQA:
+    def __init__(self, vocab_size=5120):
+        # Initialize tokenizer
+        self.tokenizer = Tokenizer(BPE(unk_token="<|unk|>"))
+        self.normalizer = NormalizerSequence([
+            # NFKC(), # Optional: Unicode normalization
+            # Lowercase(), # Optional: Convert to lowercase
+            Replace("\n", "Ċ") # Replace newline with Ċ
+        ])
+        self.tokenizer.normalizer = self.normalizer
+        # self.tokenizer.pre_tokenizer = Metaspace(replacement="Ġ")
+        self.pre_tokenizer = PreTokenizerSequence([
+            Split(pattern="Ċ", behavior="isolated"), # Treat Ċ as a separate pre-token
+            Metaspace(replacement="Ġ", prepend_scheme="never") # Handle spaces/prefixes for other parts
+        ])
+        self.tokenizer.pre_tokenizer = self.pre_tokenizer
+
+        # Define trainer with small vocab size
+        self.trainer = BpeTrainer(
+            vocab_size=vocab_size,
+            special_tokens=["<|pad|>", 
+                            "<|startoftext|>", 
+                            "<|unk|>", 
+                            "<|endoftext|>",
+                            "Ċ", # Add our custom newline token here
+                            "<|Q:|>",
+                            "<|A:|>"
+                            ],
+            show_progress=True,
+        )
+
+    def train(self, path, method = 2):
+        # Train on a text corpus (plain text file paths)
+        if method == 1:
+            self.tokenizer.train(path, self.trainer)
+        elif method == 2:
+            if not os.path.isdir(path[0] + "train" if isinstance(path, list) else path + "train"):
+                print("Directory does not exist.")
+                load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(path[0] if isinstance(path, list) else path)
+            data = load_dataset(path=path[0] if isinstance(path, list) else path, split="train")
+            data = data.to_dict()
+            data = data["output"] + data["instruction"]
+            self.tokenizer.train_from_iterator(data)
+
+        # Save the tokenizer
+        self.tokenizer.save(f"./model/BPE_model/tokenizer-bpe-{self.trainer.vocab_size // 1000}k.json")
+
+    def load(self, path):
+        # Load the tokenizer
+        self.tokenizer = Tokenizer.from_file(path)
+        # self.tokenizer.pre_tokenizer = Metaspace(replacement="Ġ")
+        self.tokenizer.normalizer = self.normalizer
+        self.tokenizer.pre_tokenizer = self.pre_tokenizer
+        # self.tokenizer.enable_truncation(5120)
+        # self.tokenizer.enable_padding(pad_id=0, pad_token="<|pad|>", length=5120)
+
+    def save(self, path):
+        # Save the tokenizer
+        self.tokenizer.save(path)
+
+    def encode(self, text: str):
+        """Encodes a piece of text."""
+        return self.tokenizer.encode(text)
+
+    def decode(self, ids: list[int]):
+        """Decodes a list of token IDs back to text."""
+        # Note: This will decode 'Ċ' as 'Ċ'. If you need '\n' back,
+        # you'll need to replace it manually after decoding.
+        # The 'Ġ' characters will likely remain as well.
+        return self.tokenizer.decode(ids, skip_special_tokens=False)
+
+    def decode_clean(self, ids: list[int]):
+        """Decodes IDs and performs basic cleanup (Ċ -> \n, Ġ -> space)."""
+        decoded_text = self.tokenizer.decode(ids, skip_special_tokens=False)
+        # Replace the custom newline token back to a standard newline
+        # Replace the Metaspace prefix (often you want a space instead)
+        # Use strip() to remove leading/trailing whitespace potentially introduced
+        cleaned_text = decoded_text.replace(" ","").replace("Ċ", "\n").replace("Ġ", " ").replace("<|Q:|>", "Q: ").replace("<|A:|>","\nA: ").strip()
+        # Handle potential double spaces resulting from replacements
+        # import re
+        # cleaned_text = re.sub(r' +', ' ', cleaned_text)
+        return cleaned_text
 
 
 
@@ -722,7 +806,7 @@ class data_loader3(Dataset):
         # tt = [F.pad(torch.tensor(new_tokenizer.tokenizer.encode(dd).ids, dtype=torch.int), mode='constant', pad=(0, max(512 - len(new_tokenizer.tokenizer.encode(dd).tokens), 0)), value=0) for dd in self.pre_data]
         # self.tokens_data_new = torch.stack(tt)
     def __len__(self):
-        return 8#int(len(self.pre_data)*0.01)
+        return 4#int(len(self.pre_data)*0.01)
     def __getitem__(self, idx):
         # print(self.pre_data[idx]["instruction"])
         question = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids, device=self.device)
@@ -753,6 +837,59 @@ class data_loader3(Dataset):
     def get_vocab(self):
         return self.new_tokenizer.vocab
     
+        
+class data_loaderQA(Dataset):
+    def __init__(self, path, new_tokenizer, max_len=512):
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.max_len = max_len
+        self.new_tokenizer = new_tokenizer
+        self.data_path = path
+        if not os.path.isdir(self.data_path+"train"):
+            print("Directory does not exist.")
+            load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(self.data_path)
+        data = load_dataset(path=self.data_path, split="train")
+        self.pre_data = data
+        print(len(self.pre_data))
+        # self.tokens_data_new = new_tokenizer.tokenize(data)
+        # tt = [F.pad(torch.tensor(new_tokenizer.tokenizer.encode(dd).ids, dtype=torch.int), mode='constant', pad=(0, max(512 - len(new_tokenizer.tokenizer.encode(dd).tokens), 0)), value=0) for dd in self.pre_data]
+        # self.tokens_data_new = torch.stack(tt)
+    def __len__(self):
+        return 2#int(len(self.pre_data)*0.01)
+    def __getitem__(self, idx):
+        # print(self.pre_data[idx]["instruction"])
+        # question = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids, device=self.device)
+        # answer = torch.tensor([1] + self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["output"]).ids + [3], device=self.device)
+
+        question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids
+        answer = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["output"]).ids
+
+        QA_data = torch.tensor([1] + [5] + question + [6] + answer + [3], device=self.device)
+
+        # print(answer.size())
+        # rr = random.randint(0, len(answer)-self.max_len if len(answer) - self.max_len > 0 else 2)
+        rr = random.randint(len(question) + 2, min(len(QA_data), self.max_len))
+        # answer = answer[0:random.randint(1, answer.shape[0])]
+        QA_data = QA_data[0:rr]
+        QA_in = QA_data[:-1].clone()
+        QA_out = QA_data.clone()
+
+        # question_pad = F.pad(question, mode='constant', pad=(0, max(self.max_len - len(question), -1000000)), value=0)
+        QA_in_pad = F.pad(QA_in, mode='constant', pad=(0, max(self.max_len - len(QA_in), -1000000)), value=0)
+        QA_out_pad = F.pad(QA_out, mode='constant', pad=(0, max(self.max_len - len(QA_out), -1000000)), value=0)
+
+        # data_token = torch.tensor([1] + self.new_tokenizer.tokenizer.encode(self.pre_data[idx]).ids + [3], device=self.device)
+        # data_token = data_token[0:random.randint(10, data_token.shape[0])]
+        # data_token_in = data_token[:-1].clone()
+        # data_token_out = data_token[:].clone()
+        # data_token_in_pad = F.pad(data_token_in, mode='constant', pad=(0, max(self.max_len - len(data_token_in), -1000000)), value=0)
+        # data_token_out_pad = F.pad(data_token_out, mode='constant', pad=(0, max(self.max_len - len(data_token_out), -1000000)), value=0)
+        return QA_in_pad, QA_out_pad
+    def get_sample(self):
+        rr = random.randint(0, len(self.pre_data)-1)
+        rr = 0
+        return self.pre_data.to_dict()['output'][rr:rr+3] + self.pre_data.to_dict()['instruction'][rr:rr+3]
+    def get_vocab(self):
+        return self.new_tokenizer.vocab
     
 
 class WarmupCosineScheduler:
