@@ -947,7 +947,7 @@ class TransformerDecodeOnly:
         self.start_epoch = 0
         self.save_every_epoch = 100
         self.epochs = 10000//2
-        self.batch_size = 16//8
+        self.batch_size = 16//4
         self.max_seq_length = 512
         print("self.max_seq_length: ", self.max_seq_length)
         # self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=3873)
@@ -1031,7 +1031,7 @@ class TransformerDecodeOnly:
                                
 
         # Learning rate scheduler
-        self.warmup_steps = int(self.epochs*0.1*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
+        self.warmup_steps = int(self.epochs*0.01*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
         self.max_steps = int(self.epochs*0.9*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025
         self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=1e-4, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
 

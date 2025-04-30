@@ -15,7 +15,7 @@ import sys
 import time
 import itertools
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
-from datasets import load_dataset
+from datasets import load_dataset, load_from_disk
 
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
@@ -855,11 +855,12 @@ class data_loaderQA(Dataset):
             answer = self.new_tokenizer.tokenizer.encode(example["output"]).ids
             QA_data = [1] + [5] + question + [6] + answer + [3]
             return len(QA_data) <= self.max_len
-        if not os.path.isdir(self.data_path512+"train"):
+        if not os.path.isdir(self.data_path512):
             self.pre_data = data.filter(is_valid)
-            self.pre_data.save_to_disk(self.data_path)
+            self.pre_data.save_to_disk(self.data_path512)
         else:
-            self.pre_data = data
+            data = None
+            self.pre_data = load_from_disk(self.data_path512)
         print(f"Filtered dataset size: {len(self.pre_data)}")
         # print(len(self.pre_data))
         
@@ -867,7 +868,7 @@ class data_loaderQA(Dataset):
         # tt = [F.pad(torch.tensor(new_tokenizer.tokenizer.encode(dd).ids, dtype=torch.int), mode='constant', pad=(0, max(512 - len(new_tokenizer.tokenizer.encode(dd).tokens), 0)), value=0) for dd in self.pre_data]
         # self.tokens_data_new = torch.stack(tt)
     def __len__(self):
-        return 4#int(len(self.pre_data)*0.01)
+        return 8#int(len(self.pre_data)*0.01)
     def __getitem__(self, idx):
         # print(self.pre_data[idx]["instruction"])
         # question = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids, device=self.device)
