@@ -839,7 +839,7 @@ class data_loader3(Dataset):
     
         
 class data_loaderQA(Dataset):
-    def __init__(self, path, new_tokenizer, max_len=512):
+    def __init__(self, path, new_tokenizer, max_len=512, data_path512=None):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.max_len = max_len
         self.new_tokenizer = new_tokenizer
@@ -847,15 +847,18 @@ class data_loaderQA(Dataset):
         if not os.path.isdir(self.data_path+"train"):
             print("Directory does not exist.")
             load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(self.data_path)
-        data = load_dataset(path=self.data_path, split="train")
+        data = load_dataset(path=self.data_path, split="train").to(device=self.device)
         # self.pre_data = data
         def is_valid(example):
             question = self.new_tokenizer.tokenizer.encode(example["instruction"]).ids
             answer = self.new_tokenizer.tokenizer.encode(example["output"]).ids
             QA_data = [1] + [5] + question + [6] + answer + [3]
             return len(QA_data) <= self.max_len
-
-        self.pre_data = data.filter(is_valid)
+        if not os.path.isdir(self.data_path512+"train"):
+            self.pre_data = data.filter(is_valid)
+            self.pre_data.save_to_disk(self.data_path)
+        else:
+            self.pre_data = data
         print(f"Filtered dataset size: {len(self.pre_data)}")
         # print(len(self.pre_data))
         
@@ -929,3 +932,9 @@ class WarmupCosineScheduler:
         #     self.cosine_scheduler.T_max = self.current_max_steps
         
         self.current_step += 1
+
+
+def check_and_create_folder(paths):
+    for path in paths:
+        if not os.path.exists(path):
+            os.makedirs(path)   

@@ -933,12 +933,16 @@ class TransformerDecodeOnly:
         self.load_path = None#"./model/Transformer/Transformer_V01_128_512_12_12_2048_10k_MQfulldataCKP1.pth" #DGood For Traning set
         self.load_embedding_path = None#"./model/Transformer/embedding_model.pth"
         self.data_path = "./data/PythonCode500K/"
+        self.data_path512 = "./data/PythonCode500K512/"
         # self.data_path_full = "./data/PythonCodeDataSmall_TextOnly/Python_code_data.txt"
         self.tokenizer_path = "./model/BPE_model/tokenizer-bpe-10k.json"
         self.save_file = "TransformerDecodeOnly_V01_512_768_12_12_3072_10K_MQcpk1.pth"
         #======================================================================================
         # self.load_path = None#"./model/Transformer/Transformer_V01_10KC.pth" #DGood For Traning set
         # self.save_file = "Transformer_VT01_10KA.pth"
+
+
+        check_and_create_folder([self.save_dir,self.data_path512,self.data_path])
         
         self.start_epoch = 0
         self.save_every_epoch = 100
@@ -947,11 +951,11 @@ class TransformerDecodeOnly:
         self.max_seq_length = 512
         print("self.max_seq_length: ", self.max_seq_length)
         # self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=3873)
-        self.BPE_model = BPEsQA(vocab_size=1024*5*2)
+        self.BPE_model = BPEsQA(vocab_size=1024*5*2).to(device=0)
       
-        self.BPE_model.train([self.data_path])
+        # self.BPE_model.train([self.data_path])
         self.BPE_model.load(self.tokenizer_path)
-        self.train_data = data_loaderQA(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length)
+        self.train_data = data_loaderQA(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512)
         #========================================================================================
         # self.train_data =  dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=10)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=False)
@@ -1023,13 +1027,13 @@ class TransformerDecodeOnly:
         self.criterion = nn.CrossEntropyLoss(ignore_index=0).to(device=0)
         self.optimizer = optim.AdamW(self.Transformer.parameters(),
                                     #  lr=2e-4)
-                               lr=1e-4, betas=(0.9, 0.95), eps=1e-9) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
+                               lr=5e-4, betas=(0.9, 0.95), eps=1e-9) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
                                
 
         # Learning rate scheduler
         self.warmup_steps = int(self.epochs*0.1*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
         self.max_steps = int(self.epochs*0.9*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025
-        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=1e-4, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
+        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=5e-4, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
 
         if self.load_path:
             # self.load(self.load_path)
