@@ -136,14 +136,16 @@ class BPEs2:
         elif method == 2:
             if not os.path.isdir(path[0] + "train" if isinstance(path, list) else path + "train"):
                 print("Directory does not exist.")
-                load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(path[0] if isinstance(path, list) else path)
+                # load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(path[0] if isinstance(path, list) else path)
+                load_dataset(path="papahawk/conversational-01", save_infos=True).save_to_disk(path[0] if isinstance(path, list) else path)
             data = load_dataset(path=path[0] if isinstance(path, list) else path, split="train")
             data = data.to_dict()
-            data = data["output"] + data["instruction"]
+            data = data["response"] + data["prompt"]
             self.tokenizer.train_from_iterator(data)
 
         # Save the tokenizer
-        self.tokenizer.save(f"./model/BPE_model/tokenizer-bpe-{self.trainer.vocab_size // 1000}k.json")
+        # self.tokenizer.save(f"./model/BPE_model/tokenizer-bpe-{self.trainer.vocab_size // 1000}k.json")
+        self.tokenizer.save(f"./model/BPE_model/tokenizer-bpe-conversational-{self.trainer.vocab_size // 1000}k.json")
 
     def load(self, path):
         # Load the tokenizer
@@ -220,14 +222,18 @@ class BPEsQA:
         elif method == 2:
             if not os.path.isdir(path[0] + "train" if isinstance(path, list) else path + "train"):
                 print("Directory does not exist.")
-                load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(path[0] if isinstance(path, list) else path)
-            data = load_dataset(path=path[0] if isinstance(path, list) else path, split="train")
+                # load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(path[0] if isinstance(path, list) else path)
+                load_dataset(path="papahawk/conversational-01", save_infos=True).save_to_disk(path[0] if isinstance(path, list) else path)
+            # data = load_dataset(path=path[0] if isinstance(path, list) else path, split="train")
+            data = load_from_disk(dataset_path = path[0] if isinstance(path, list) else path)["train"]
             data = data.to_dict()
-            data = data["output"] + data["instruction"]
+            print(data.keys())
+            data = data["response"] + data["prompt"]
             self.tokenizer.train_from_iterator(data, trainer=self.trainer)
 
         # Save the tokenizer
-        self.tokenizer.save(f"./model/BPE_model/tokenizer-bpe-{self.trainer.vocab_size // 1000}k.json")
+        # self.tokenizer.save(f"./model/BPE_model/tokenizer-bpe-{self.trainer.vocab_size // 1000}k.json")
+        self.tokenizer.save(f"./model/BPE_model/tokenizer-bpe-conversational-{self.trainer.vocab_size // 1000}k.json")
 
     def load(self, path):
         # Load the tokenizer
@@ -798,7 +804,8 @@ class data_loader3(Dataset):
         self.data_path = path
         if not os.path.isdir(self.data_path+"train"):
             print("Directory does not exist.")
-            load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(self.data_path)
+            # load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(self.data_path)
+            load_dataset(path="papahawk/conversational-01", save_infos=True).save_to_disk(self.data_path)
         data = load_dataset(path=self.data_path, split="train")
         self.pre_data = data
         print(len(self.pre_data))
@@ -847,15 +854,17 @@ class data_loaderQA(Dataset):
         self.data_path512 = data_path512
         if not os.path.isdir(self.data_path+"train"):
             print("Directory does not exist.")
-            load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(self.data_path)
-        data = load_dataset(path=self.data_path, split="train")
+            # load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(self.data_path)
+            load_dataset(path="papahawk/conversational-01", save_infos=True).save_to_disk(self.data_path)
+        # data = load_dataset(path=self.data_path, split="train")
+        data = load_from_disk(dataset_path = self.data_path)["train"]
         # self.pre_data = data
         def is_valid(example):
-            question = self.new_tokenizer.tokenizer.encode(example["instruction"]).ids
-            answer = self.new_tokenizer.tokenizer.encode(example["output"]).ids
+            question = self.new_tokenizer.tokenizer.encode(example["prompt"]).ids
+            answer = self.new_tokenizer.tokenizer.encode(example["response"]).ids
             QA_data = [1] + [5] + question + [6] + answer + [3]
             return len(QA_data) <= self.max_len
-        if not os.path.isdir(self.data_path512):
+        if len(os.listdir(self.data_path512)) <= 1:
             self.pre_data = data.filter(is_valid)
             self.pre_data.save_to_disk(self.data_path512)
         else:
@@ -868,14 +877,14 @@ class data_loaderQA(Dataset):
         # tt = [F.pad(torch.tensor(new_tokenizer.tokenizer.encode(dd).ids, dtype=torch.int), mode='constant', pad=(0, max(512 - len(new_tokenizer.tokenizer.encode(dd).tokens), 0)), value=0) for dd in self.pre_data]
         # self.tokens_data_new = torch.stack(tt)
     def __len__(self):
-        return 8#int(len(self.pre_data)*0.01)
+        return int(len(self.pre_data)*0.01)
     def __getitem__(self, idx):
         # print(self.pre_data[idx]["instruction"])
         # question = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids, device=self.device)
         # answer = torch.tensor([1] + self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["output"]).ids + [3], device=self.device)
 
-        question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids
-        answer = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["output"]).ids
+        question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["prompt"]).ids
+        answer = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["response"]).ids
 
         QA_data = torch.tensor([1] + [5] + question + [6] + answer + [3], device=self.device)
 
@@ -901,7 +910,7 @@ class data_loaderQA(Dataset):
     def get_sample(self):
         rr = random.randint(0, len(self.pre_data)-1)
         rr = 0
-        return self.pre_data.to_dict()['output'][rr:rr+3] + self.pre_data.to_dict()['instruction'][rr:rr+3]
+        return self.pre_data.to_dict()['response'][rr:rr+3] + self.pre_data.to_dict()['prompt'][rr:rr+3]
     def get_vocab(self):
         return self.new_tokenizer.vocab
     
