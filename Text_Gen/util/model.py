@@ -937,7 +937,7 @@ class TransformerDecodeOnly:
         # self.data_path256 = "./data/Conversational01_256/"
         # self.data_path_full = "./data/PythonCodeDataSmall_TextOnly/Python_code_data.txt"
         self.tokenizer_path = "./model/BPE_model/tokenizer-bpe-conversational-10k.json"
-        self.save_file = "TransformerDecodeOnly_V01_256_768_12_12_3072_10K_MQcpk1.pth"
+        self.save_file = "TransformerDecodeOnly_V01_256_768_12_12_3072_mn2_10K_MQcpk1.pth"
         #======================================================================================
         # self.load_path = None#"./model/Transformer/Transformer_V01_10KC.pth" #DGood For Traning set
         # self.save_file = "Transformer_VT01_10KA.pth"
@@ -948,7 +948,7 @@ class TransformerDecodeOnly:
         self.start_epoch = 0
         self.save_every_epoch = 100
         self.epochs = 10000
-        self.batch_size = 16//4
+        self.batch_size = 16*4
         self.max_seq_length = 256#512
         print("self.max_seq_length: ", self.max_seq_length)
         # self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=3873)
@@ -963,7 +963,8 @@ class TransformerDecodeOnly:
         # self.pretrain_model_tokenizer_path = "./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl"
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.sample_question = ["What’s the best way to fix my kitchen drain?",
-                                'Translate the phrase "Good Morning" to French',
+                                "What’s the best way to fix my kitchen drain?\n\n             1",
+                                # 'Translate the phrase "Good Morning" to French',
                                 "I'm just going to go to the store and whatever will happen it's going to happen.",
                                 "hello"]
         # self.sample_question = ["Create a nested loop to print every combination of numbers between 0-9, excluding any combination that contains the number 5. Additionally, exclude any combination that contains a repeating digit. Implement the solution without using any built-in functions or libraries to check for repeating digits.",                               
@@ -1013,10 +1014,10 @@ class TransformerDecodeOnly:
         # self.tgt_vocab_size = self.train_data.token_size
         self.src_vocab_size = self.BPE_model.tokenizer.get_vocab_size()
         self.tgt_vocab_size = self.BPE_model.tokenizer.get_vocab_size()
-        self.d_model = 128*3*2 #6
-        self.num_heads = 6*2 #6*1 #2
-        self.num_layers = 6*2 #2
-        self.d_ff = 128*3*2*4#512*2 #6
+        self.d_model = int(128*1.5*1) #6
+        self.num_heads = 6//2 #6*1 #2
+        self.num_layers = 6//2 #2
+        self.d_ff = int(128*1.5*1*4)#512*2 #6
         # self.max_seq_length = self.train_data.window_size
         self.dropout = 0.1
         self.max_norm = 1.0
@@ -1029,16 +1030,16 @@ class TransformerDecodeOnly:
         # self.class_weights = torch.tensor([0, 1/5000, 1/5000] + [1/self.tokenizer.word_freqs[i] if self.tokenizer.word_freqs[i] != 0 else 0 for i in self.tokenizer.vocab[3:]],device=0)
         # self.class_weights = self.train_data.get_weight().to(device=0)
         # self.criterion = nn.CrossEntropyLoss(ignore_index=0,weight=self.class_weights).to(device=0)
-        self.criterion = nn.CrossEntropyLoss(ignore_index=0).to(device=0)
+        self.criterion = nn.CrossEntropyLoss(ignore_index=0, reduction='none').to(device=0)
         self.optimizer = optim.AdamW(self.Transformer.parameters(),
                                     #  lr=2e-4)
-                               lr=1e-4, betas=(0.9, 0.95), eps=1e-9) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
+                               lr=5e-4, betas=(0.9, 0.95), eps=1e-9) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
                                
 
         # Learning rate scheduler
         self.warmup_steps = int(self.epochs*0.01*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
         self.max_steps = int(self.epochs*0.9*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025
-        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=1e-4, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
+        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=5e-4, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
 
         if self.load_path:
             # self.load(self.load_path)
@@ -1068,22 +1069,35 @@ class TransformerDecodeOnly:
         print("Example data: ")
         # for dd in self.train_data.get_sample()[0:self.train_data.amount_data:self.train_data.amount_data//10]: #get 10 sample data
         #     print(dd)
-        for dd in self.train_data.get_sample(): #get 10 sample data
-            print(dd)
-            print("----------------------------------------------")
+        answer,question = self.train_data.get_sample()
+        for a,q in zip(answer,question):
+                print("quetion: "+q)
+                logging.info("question: "+q)
+                print("answer: "+a)
+                logging.info("answer: "+a)
+                print("\n=====================================\n")
+            # print("----------------------------------------------")
 
     def train(self):
         scaler = GradScaler()
         self.Transformer.train()
         for epoch in tqdm(range(self.start_epoch,self.epochs)):
             self.loss_epoch = []
-            for answer_in, answer_out in tqdm(self.train_dataloader):
+            for answer_in, answer_out, length_answer in tqdm(self.train_dataloader):
+                # print(answer_in.shape)
+                # print(answer_out.shape)
+                # print(length_answer)
+                length_answer = length_answer/length_answer.max()
                 signal.signal(signal.SIGINT, signal_handler)
                 self.optimizer.zero_grad()
                 with autocast(device_type='cuda'):  # Mixed precision context device_type='cuda'
                     output = self.Transformer(answer_in)
                     loss = self.criterion(output.contiguous().view(-1, self.tgt_vocab_size),
                                      answer_out.contiguous().view(-1))
+                    loss = loss.view(answer_in.shape[0],-1)
+                    loss = loss.sum(dim=1)
+                    loss = loss*length_answer
+                    loss = loss.mean()
                 # loss.backward()
                 scaler.scale(loss).backward()
                 self.loss_epoch.append(loss.item())

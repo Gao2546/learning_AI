@@ -877,7 +877,7 @@ class data_loaderQA(Dataset):
         # tt = [F.pad(torch.tensor(new_tokenizer.tokenizer.encode(dd).ids, dtype=torch.int), mode='constant', pad=(0, max(512 - len(new_tokenizer.tokenizer.encode(dd).tokens), 0)), value=0) for dd in self.pre_data]
         # self.tokens_data_new = torch.stack(tt)
     def __len__(self):
-        return int(len(self.pre_data)*0.01)
+        return 8#int(len(self.pre_data)*0.001)
     def __getitem__(self, idx):
         # print(self.pre_data[idx]["instruction"])
         # question = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids, device=self.device)
@@ -910,7 +910,79 @@ class data_loaderQA(Dataset):
     def get_sample(self):
         rr = random.randint(0, len(self.pre_data)-1)
         rr = 0
-        return self.pre_data.to_dict()['response'][rr:rr+3] + self.pre_data.to_dict()['prompt'][rr:rr+3]
+        return self.pre_data.to_dict()['response'][rr:1] , self.pre_data.to_dict()['prompt'][rr:1]
+    def get_vocab(self):
+        return self.new_tokenizer.vocab
+    
+
+class data_loaderQA(Dataset):
+    def __init__(self, path, new_tokenizer, max_len=512, data_path512=None):
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.max_len = max_len
+        self.new_tokenizer = new_tokenizer
+        self.data_path = path
+        self.data_path512 = data_path512
+        if not os.path.isdir(self.data_path+"train"):
+            print("Directory does not exist.")
+            # load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(self.data_path)
+            load_dataset(path="papahawk/conversational-01", save_infos=True).save_to_disk(self.data_path)
+        # data = load_dataset(path=self.data_path, split="train")
+        data = load_from_disk(dataset_path = self.data_path)["train"]
+        # self.pre_data = data
+        def is_valid(example):
+            question = self.new_tokenizer.tokenizer.encode(example["prompt"]).ids
+            answer = self.new_tokenizer.tokenizer.encode(example["response"]).ids
+            QA_data = [1] + [5] + question + [6] + answer + [3]
+            return len(QA_data) <= self.max_len
+        if len(os.listdir(self.data_path512)) <= 1:
+            self.pre_data = data.filter(is_valid,num_proc=8)
+            self.pre_data.save_to_disk(self.data_path512)
+        else:
+            data = None
+            self.pre_data = load_from_disk(self.data_path512)
+        print(f"Filtered dataset size: {len(self.pre_data)}")
+        # print(len(self.pre_data))
+        
+        # self.tokens_data_new = new_tokenizer.tokenize(data)
+        # tt = [F.pad(torch.tensor(new_tokenizer.tokenizer.encode(dd).ids, dtype=torch.int), mode='constant', pad=(0, max(512 - len(new_tokenizer.tokenizer.encode(dd).tokens), 0)), value=0) for dd in self.pre_data]
+        # self.tokens_data_new = torch.stack(tt)
+    def __len__(self):
+        return int(len(self.pre_data)*0.01)
+    def __getitem__(self, idx):
+        # print(self.pre_data[idx]["instruction"])
+        # question = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids, device=self.device)
+        # answer = torch.tensor([1] + self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["output"]).ids + [3], device=self.device)
+
+        question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["prompt"]).ids
+        answer = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["response"]).ids
+
+        lenght_answer = torch.tensor([len(answer)], device=self.device)
+
+        QA_data = torch.tensor([1] + [5] + question + [6] + answer + [3], device=self.device)
+
+        # print(answer.size())
+        # rr = random.randint(0, len(answer)-self.max_len if len(answer) - self.max_len > 0 else 2)
+        rr = random.randint(len(question) + 3, min(len(QA_data), self.max_len))
+        # answer = answer[0:random.randint(1, answer.shape[0])]
+        QA_data = QA_data[0:rr]
+        QA_in = QA_data[:-1].clone()
+        QA_out = QA_data.clone()
+
+        # question_pad = F.pad(question, mode='constant', pad=(0, max(self.max_len - len(question), -1000000)), value=0)
+        QA_in_pad = F.pad(QA_in, mode='constant', pad=(0, max(self.max_len - len(QA_in), -1000000)), value=0)
+        QA_out_pad = F.pad(QA_out, mode='constant', pad=(0, max(self.max_len - len(QA_out), -1000000)), value=0)
+
+        # data_token = torch.tensor([1] + self.new_tokenizer.tokenizer.encode(self.pre_data[idx]).ids + [3], device=self.device)
+        # data_token = data_token[0:random.randint(10, data_token.shape[0])]
+        # data_token_in = data_token[:-1].clone()
+        # data_token_out = data_token[:].clone()
+        # data_token_in_pad = F.pad(data_token_in, mode='constant', pad=(0, max(self.max_len - len(data_token_in), -1000000)), value=0)
+        # data_token_out_pad = F.pad(data_token_out, mode='constant', pad=(0, max(self.max_len - len(data_token_out), -1000000)), value=0)
+        return QA_in_pad, QA_out_pad, lenght_answer
+    def get_sample(self):
+        rr = random.randint(0, len(self.pre_data)-1)
+        rr = 0
+        return self.pre_data.to_dict()['response'][rr:1] , self.pre_data.to_dict()['prompt'][rr:1]
     def get_vocab(self):
         return self.new_tokenizer.vocab
     
