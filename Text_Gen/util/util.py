@@ -1006,7 +1006,7 @@ class data_loaderQA_SEQ(Dataset):
             return len(QA_data) <= self.max_len
         
         def gen_seq():
-            for data in self.pre_data:
+            for data in tqdm(self.pre_data):
                 question = self.new_tokenizer.tokenizer.encode(data["prompt"]).ids
                 answer = self.new_tokenizer.tokenizer.encode(data["response"]).ids
                 QA_data = [1] + [5] + question + [6] + answer + [3]
@@ -1064,7 +1064,8 @@ class data_loaderQA_SEQ(Dataset):
     def get_sample(self):
         rr = random.randint(0, len(self.pre_data)-1)
         rr = 0
-        return self.pre_data.to_dict()['response'][rr:1] , self.pre_data.to_dict()['prompt'][rr:1]
+        # return self.pre_data.to_dict()['response'][rr:1] , self.pre_data.to_dict()['prompt'][rr:1]
+        return self.pre_data[rr:rr+10]
     def get_vocab(self):
         return self.new_tokenizer.vocab
     
