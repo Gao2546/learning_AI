@@ -930,7 +930,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
     def __init__(self): #loss == 0.02 0.006
         self.save_model = False
         self.save_dir = "./model/TransformerDecodeOnly/"
-        self.load_path = "./model/TransformerDecodeOnly/TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk1s.pth" #DGood For Traning set
+        self.load_path = None#"./model/TransformerDecodeOnly/TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk1s.pth" #DGood For Traning set
         self.load_embedding_path = None#"./model/Transformer/embedding_model.pth"
         self.data_path = "./data/Conversational01/"
         self.data_path512 = "./data/Conversational01_256_10K/"
@@ -947,7 +947,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         check_and_create_folder([self.save_dir,self.data_path512,self.data_path512_seq,self.data_path])
         
         self.start_epoch = 0
-        self.save_every_epoch = 100
+        self.save_every_epoch = 2
         self.epochs = 10000
         self.batch_size = 16*2
         self.max_seq_length = 256#512
@@ -1032,7 +1032,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         # self.class_weights = torch.tensor([0, 1/5000, 1/5000] + [1/self.tokenizer.word_freqs[i] if self.tokenizer.word_freqs[i] != 0 else 0 for i in self.tokenizer.vocab[3:]],device=0)
         # self.class_weights = self.train_data.get_weight().to(device=0)
         # self.criterion = nn.CrossEntropyLoss(ignore_index=0,weight=self.class_weights).to(device=0)
-        self.criterion = nn.CrossEntropyLoss(ignore_index=0, reduction='none').to(device=0)
+        self.criterion = nn.CrossEntropyLoss(ignore_index=0, reduction='mean').to(device=0)
         self.optimizer = optim.AdamW(self.Transformer.parameters(),
                                     #  lr=2e-4)
                                lr=5e-4, betas=(0.9, 0.95), eps=1e-9) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
@@ -1071,13 +1071,13 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         print("Example data: ")
         # for dd in self.train_data.get_sample()[0:self.train_data.amount_data:self.train_data.amount_data//10]: #get 10 sample data
         #     print(dd)
-        answer,question = self.train_data.get_sample()
-        for a,q in zip(answer,question):
-                print("quetion: "+q)
-                logging.info("question: "+q)
-                print("answer: "+a)
-                logging.info("answer: "+a)
-                print("\n=====================================\n")
+        # answer,question = self.train_data.get_sample()
+        # for a,q in zip(answer,question):
+        #         print("quetion: "+q)
+        #         logging.info("question: "+q)
+        #         print("answer: "+a)
+        #         logging.info("answer: "+a)
+        #         print("\n=====================================\n")
             # print("----------------------------------------------")
 
     def train(self):
@@ -1085,21 +1085,21 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.Transformer.train()
         for epoch in tqdm(range(self.start_epoch,self.epochs)):
             self.loss_epoch = []
-            for answer_in, answer_out, length_answer in tqdm(self.train_dataloader):
+            for answer_in, answer_out in tqdm(self.train_dataloader):
                 # print(answer_in.shape)
                 # print(answer_out.shape)
                 # print(length_answer)
-                length_answer = length_answer/length_answer.max()
+                # length_answer = length_answer/length_answer.max()
                 signal.signal(signal.SIGINT, signal_handler)
                 self.optimizer.zero_grad()
                 with autocast(device_type='cuda'):  # Mixed precision context device_type='cuda'
                     output = self.Transformer(answer_in)
                     loss = self.criterion(output.contiguous().view(-1, self.tgt_vocab_size),
                                      answer_out.contiguous().view(-1))
-                    loss = loss.view(answer_in.shape[0],-1)
-                    loss = loss.sum(dim=1)
-                    loss = loss*length_answer
-                    loss = loss.mean()
+                    # loss = loss.view(answer_in.shape[0],-1)
+                    # loss = loss.sum(dim=1)
+                    # loss = loss*length_answer
+                    # loss = loss.mean()
                 # loss.backward()
                 scaler.scale(loss).backward()
                 self.loss_epoch.append(loss.item())
@@ -1121,7 +1121,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
             print(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")
             logging.info(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")  
 
-            if (epoch + 1) % 100 == 0:
+            if (epoch + 1) % 2 == 0:
                 # self.save_model_and_optimizer(self.save_dir + "cpk/" + f"epoch_{epoch}_{self.save_file}", epoch = epoch)
                 output_eval = self.eval_model(self.sample_question)
                 for o in output_eval:

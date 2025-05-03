@@ -15,7 +15,8 @@ import sys
 import time
 import itertools
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
-from datasets import load_dataset, load_from_disk, Dataset, concatenate_datasets
+from datasets import load_dataset, load_from_disk, concatenate_datasets
+from datasets import Dataset as DatasetLoad
 
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
@@ -948,7 +949,7 @@ class data_loaderQA(Dataset):
         # self.tokens_data_new = torch.stack(tt)
     def __len__(self):
         return int(len(self.pre_data)*0.01)
-    def __getitem__(self, idx):
+    def __getitem__(self, idx:int):
         # print(self.pre_data[idx]["instruction"])
         # question = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids, device=self.device)
         # answer = torch.tensor([1] + self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["output"]).ids + [3], device=self.device)
@@ -962,7 +963,7 @@ class data_loaderQA(Dataset):
 
         # print(answer.size())
         # rr = random.randint(0, len(answer)-self.max_len if len(answer) - self.max_len > 0 else 2)
-        rr = random.randint(len(question) + 3, min(len(QA_data), self.max_len))
+        rr = random.randint(len(question) + 4, min(len(QA_data)+1, self.max_len))
         # answer = answer[0:random.randint(1, answer.shape[0])]
         QA_data = QA_data[0:rr]
         QA_in = QA_data[:-1].clone()
@@ -1010,15 +1011,15 @@ class data_loaderQA_SEQ(Dataset):
                 question = self.new_tokenizer.tokenizer.encode(data["prompt"]).ids
                 answer = self.new_tokenizer.tokenizer.encode(data["response"]).ids
                 QA_data = [1] + [5] + question + [6] + answer + [3]
-                for i in range(len(question)+3,len(QA_data)):
-                    yield {'prompt':QA_data[:i-1], 'response':QA_data[i:i]}
+                for i in range(len(question)+4,len(QA_data) + 1):
+                    yield {'prompt':QA_data[:i-1], 'response':QA_data[0:i]}
         if (len(os.listdir(self.data_path512)) <= 1) and (len(os.listdir(self.data_path512_seq)) <= 1):
             self.pre_data = data.filter(is_valid,num_proc=8)
             self.pre_data.save_to_disk(self.data_path512)
         if len(os.listdir(self.data_path512)) > 1 and len(os.listdir(self.data_path512_seq)) <= 1:
             data = None
             self.pre_data = load_from_disk(self.data_path512)
-            self.pre_data = Dataset.from_generator(gen_seq,num_proc=8)
+            self.pre_data = DatasetLoad.from_generator(gen_seq,num_proc=8)
             self.pre_data.save_to_disk(self.data_path512_seq)
         if len(os.listdir(self.data_path512)) > 1 and len(os.listdir(self.data_path512_seq)) > 1:
             data = None
@@ -1053,6 +1054,13 @@ class data_loaderQA_SEQ(Dataset):
         # QA_data = QA_data[0:rr]
         # QA_in = QA_data[:-1].clone()
         # QA_out = QA_data.clone()
+
+        # test = torch.tensor([i for i in range(30)], device=self.device)
+        # data_in = [int(i) for i in self.pre_data[idx]["prompt"][0]]
+        # data_out = [int(i) for i in self.pre_data[idx]["response"][0]]
+        # [print(i) for i in self.pre_data[0]["prompt"]]
+        # print("++++++++++++++++++++++++++")
+        # print(idx)
 
         QA_in = torch.tensor(self.pre_data[idx]["prompt"], device=self.device)
         QA_out = torch.tensor(self.pre_data[idx]["response"], device=self.device)
