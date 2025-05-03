@@ -89,15 +89,17 @@ import torch
 #             "how old is alicia in 2009",
 #             "how can i open a usda slaughterhouse",
 #             "how deadly are brain tumors"]
-question = ["# Write a program to check whether a number is prime or not",
-            "# Write a program to find the factorial of a number",
-            "# Write a program to check whether a number is positive, negative or zero",
-            "# Write a python function to print whether a number is negative, positive or zero",
-            "# write a program to find and print the largest among three numbers",
-            "# Write a functin that returns the LCM of two input numbers",
-            "# Write a function that returns the GCD of two input numbers",
-            "# Write a program to check whether a number is a palindrome or not",
-            "# Write a program to find the sum of natural numbers",]
+question = ["I'm just going to go to the store and whatever will happen it's going to happen.",
+            # "# Write a program to check whether a number is prime or not",
+            # "# Write a program to find the factorial of a number",
+            # "# Write a program to check whether a number is positive, negative or zero",
+            # "# Write a python function to print whether a number is negative, positive or zero",
+            # "# write a program to find and print the largest among three numbers",
+            # "# Write a functin that returns the LCM of two input numbers",
+            # "# Write a function that returns the GCD of two input numbers",
+            # "# Write a program to check whether a number is a palindrome or not",
+            # "# Write a program to find the sum of natural numbers",
+            ]
 # a = torch.zero((1,10))
 # model = Transformers()
 # model.train()

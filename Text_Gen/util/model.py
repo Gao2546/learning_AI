@@ -926,14 +926,15 @@ class Transformer:
 
 
 
-class TransformerDecodeOnly:
+class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
     def __init__(self): #loss == 0.02 0.006
-        self.save_model = True
+        self.save_model = False
         self.save_dir = "./model/TransformerDecodeOnly/"
-        self.load_path = None#"./model/Transformer/Transformer_V01_128_512_12_12_2048_10k_MQfulldataCKP1.pth" #DGood For Traning set
+        self.load_path = "./model/TransformerDecodeOnly/TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk1s.pth" #DGood For Traning set
         self.load_embedding_path = None#"./model/Transformer/embedding_model.pth"
         self.data_path = "./data/Conversational01/"
-        self.data_path512 = "./data/Conversational01_256/"
+        self.data_path512 = "./data/Conversational01_256_10K/"
+        self.data_path512_seq = "./data/Conversational01_256_10K_seq/"
         # self.data_path256 = "./data/Conversational01_256/"
         # self.data_path_full = "./data/PythonCodeDataSmall_TextOnly/Python_code_data.txt"
         self.tokenizer_path = "./model/BPE_model/tokenizer-bpe-conversational-10k.json"
@@ -943,12 +944,12 @@ class TransformerDecodeOnly:
         # self.save_file = "Transformer_VT01_10KA.pth"
 
 
-        check_and_create_folder([self.save_dir,self.data_path512,self.data_path])
+        check_and_create_folder([self.save_dir,self.data_path512,self.data_path512_seq,self.data_path])
         
         self.start_epoch = 0
         self.save_every_epoch = 100
         self.epochs = 10000
-        self.batch_size = 16*4
+        self.batch_size = 16*2
         self.max_seq_length = 256#512
         print("self.max_seq_length: ", self.max_seq_length)
         # self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=3873)
@@ -956,15 +957,16 @@ class TransformerDecodeOnly:
       
         # self.BPE_model.train([self.data_path])
         self.BPE_model.load(self.tokenizer_path)
-        self.train_data = data_loaderQA(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512)
+        self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq)
         #========================================================================================
         # self.train_data =  dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=10)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=False)
         # self.pretrain_model_tokenizer_path = "./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl"
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.sample_question = ["What’s the best way to fix my kitchen drain?",
+        self.sample_question = [
+                                # "What’s the best way to fix my kitchen drain?",
                                 "What’s the best way to fix my kitchen drain?\n\n             1",
-                                # 'Translate the phrase "Good Morning" to French',
+                                'Translate the phrase "Good Morning" to French',
                                 "I'm just going to go to the store and whatever will happen it's going to happen.",
                                 "hello"]
         # self.sample_question = ["Create a nested loop to print every combination of numbers between 0-9, excluding any combination that contains the number 5. Additionally, exclude any combination that contains a repeating digit. Implement the solution without using any built-in functions or libraries to check for repeating digits.",                               
@@ -1014,10 +1016,10 @@ class TransformerDecodeOnly:
         # self.tgt_vocab_size = self.train_data.token_size
         self.src_vocab_size = self.BPE_model.tokenizer.get_vocab_size()
         self.tgt_vocab_size = self.BPE_model.tokenizer.get_vocab_size()
-        self.d_model = int(128*1.5*1) #6
-        self.num_heads = 6//2 #6*1 #2
-        self.num_layers = 6//2 #2
-        self.d_ff = int(128*1.5*1*4)#512*2 #6
+        self.d_model = int(128*3*1) #6
+        self.num_heads = 6*1 #6*1 #2
+        self.num_layers = 6*1 #2
+        self.d_ff = int(128*3*1*4)#512*2 #6
         # self.max_seq_length = self.train_data.window_size
         self.dropout = 0.1
         self.max_norm = 1.0
