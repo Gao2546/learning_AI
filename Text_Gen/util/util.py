@@ -1066,6 +1066,7 @@ class data_loaderQA_SEQ(Dataset):
         rr = 0
         # return self.pre_data.to_dict()['response'][rr:1] , self.pre_data.to_dict()['prompt'][rr:1]
         return self.pre_data[rr:rr+10]
+    
     def get_vocab(self):
         return self.new_tokenizer.vocab
     
