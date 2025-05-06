@@ -89,7 +89,18 @@ import torch
 #             "how old is alicia in 2009",
 #             "how can i open a usda slaughterhouse",
 #             "how deadly are brain tumors"]
-question = ["I'm just going to go to the store and whatever will happen it's going to happen.",
+question = ["What’s the best way to fix my kitchen drain?",
+            "I'm just going to go to the store and whatever will happen it's going to happen.",
+            "What contribution did Samurai warriors make to Japanese culture?",
+            "Yeah, maybe you're right.",
+            "Output a list of a different kind of fruits ",
+            "How can I naturally sweeten a recipe for a cake?",
+            "I want to get my neighbors evicted.",
+            "It's fine, I can't wait for him to grow up and become better so I can punch him.",
+            "How can I diagnose problems with the Mac OS I'm using?",
+            "Simple. My girlfriend doesn't do the chores she is supposed to do in the apartment.",
+            'How can I raise my credit score.',
+            'I do not feel comfortable explaining this to you.',
             # "# Write a program to check whether a number is prime or not",
             # "# Write a program to find the factorial of a number",
             # "# Write a program to check whether a number is positive, negative or zero",
@@ -111,4 +122,4 @@ model = TransformerDecodeOnly()
 model.train()
 # output = model.eval_model(question)
 # for o in output:
-#     print(o)
+    # print(o)

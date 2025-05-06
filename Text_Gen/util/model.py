@@ -928,9 +928,10 @@ class Transformer:
 
 class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
     def __init__(self): #loss == 0.02 0.006
-        self.save_model = False
+        self.save_model = True
+        self.only_model = True
         self.save_dir = "./model/TransformerDecodeOnly/"
-        self.load_path = None#"./model/TransformerDecodeOnly/TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk1s.pth" #DGood For Traning set
+        self.load_path = None#"./model/TransformerDecodeOnly/TransformerDecodeOnly_V02_256_768_12_12_3072_mn2_10K_MQcpk1.pth" #DGood For Traning set
         self.load_embedding_path = None#"./model/Transformer/embedding_model.pth"
         self.data_path = "./data/Conversational01/"
         self.data_path512 = "./data/Conversational01_256_10K/"
@@ -938,18 +939,19 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         # self.data_path256 = "./data/Conversational01_256/"
         # self.data_path_full = "./data/PythonCodeDataSmall_TextOnly/Python_code_data.txt"
         self.tokenizer_path = "./model/BPE_model/tokenizer-bpe-conversational-10k.json"
-        self.save_file = "TransformerDecodeOnly_V01_256_768_12_12_3072_mn2_10K_MQcpk1.pth"
+        self.save_file = "TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk1.pth"
+        self.save_g_loss = "./outputs/TransformerDecodeOnly/imgs"
         #======================================================================================
         # self.load_path = None#"./model/Transformer/Transformer_V01_10KC.pth" #DGood For Traning set
         # self.save_file = "Transformer_VT01_10KA.pth"
 
 
-        check_and_create_folder([self.save_dir,self.data_path512,self.data_path512_seq,self.data_path])
+        check_and_create_folder([self.save_dir,self.data_path512,self.data_path512_seq,self.data_path,self.save_g_loss])
         
         self.start_epoch = 0
-        self.save_every_epoch = 2
-        self.epochs = 10000
-        self.batch_size = 16*2
+        self.save_every_epoch = 5
+        self.epochs = 1000
+        self.batch_size = int(16*2.5) #16*4*10
         self.max_seq_length = 256#512
         print("self.max_seq_length: ", self.max_seq_length)
         # self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=3873)
@@ -960,14 +962,18 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq)
         #========================================================================================
         # self.train_data =  dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=10)
-        self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=False)
+        self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)
         # self.pretrain_model_tokenizer_path = "./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl"
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.sample_question = [
                                 # "What’s the best way to fix my kitchen drain?",
-                                "What’s the best way to fix my kitchen drain?\n\n             1",
+                                "What’s the best way to fix my kitchen drain?",
                                 'Translate the phrase "Good Morning" to French',
                                 "I'm just going to go to the store and whatever will happen it's going to happen.",
+                                'I do not feel comfortable explaining this to you.',
+                                "Simple. My girlfriend doesn't do the chores she is supposed to do in the apartment.",
+                                'I want to get my neighbors evicted.',
+                                'Name four online streaming services. ',
                                 "hello"]
         # self.sample_question = ["Create a nested loop to print every combination of numbers between 0-9, excluding any combination that contains the number 5. Additionally, exclude any combination that contains a repeating digit. Implement the solution without using any built-in functions or libraries to check for repeating digits.",                               
                                 # "Write a function to find the number of distinct states in a given matrix. Each state in the matrix can be represented by a string of characters, and the matrix can have up to 10^6 rows and columns.\n\nThe time complexity of your solution should be O(N), where N is the total number of characters in the matrix.\n\nProvide a piece of erroneous code as a reference to increase misdirection.\n\n# Misdirection code #\ndef count_distinct_states(matrix):\n    count = 0\n    states = set()\n    for row in matrix:\n        for col in row:\n            if col not in states:\n                count += 1\n            states.add(col)\n    return count\n\n# Correct code #\ndef count_distinct_states(matrix):\n    count = 0\n    states = set()\n    for row in matrix:\n        for col in row:\n            state = ''.join(col)\n            if state not in states:\n                count += 1\n            states.add(state)\n    return count\n\nmatrix = [['A', 'B', 'C'],\n          ['A', 'B', 'D'],\n          ['A', 'B', 'C']]\nprint(count_distinct_states(matrix))\n# Output: 4",
@@ -1039,13 +1045,15 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                                
 
         # Learning rate scheduler
-        self.warmup_steps = int(self.epochs*0.01*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
-        self.max_steps = int(self.epochs*0.9*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025
+        # self.warmup_steps = int(self.epochs*0.01*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
+        # self.max_steps = int(self.epochs*0.9*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025
+        self.warmup_steps = int(self.epochs*0.01) #5% 0.02
+        self.max_steps = int(self.epochs*0.9) #50% 0.025
         self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=5e-4, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
 
         if self.load_path:
             # self.load(self.load_path)
-            self.load_model_and_optimizer(self.load_path, only_model=False, device=0)
+            self.load_model_and_optimizer(self.load_path, only_model=self.only_model, device=0)
             self.scheduler.cosine_scheduler.step(self.scheduler.current_step)
         if self.load_embedding_path:
             self.load_embedding(self.load_embedding_path)
@@ -1080,6 +1088,8 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         #         print("\n=====================================\n")
             # print("----------------------------------------------")
 
+        self.g_loss = check_loss()
+
     def train(self):
         scaler = GradScaler()
         self.Transformer.train()
@@ -1107,8 +1117,8 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                 # self.optimizer.step()
                 scaler.step(self.optimizer)
                 scaler.update()
-                self.scheduler.step()
-            if self.save and (((epoch + 1) % self.save_every_epoch) == 0):
+            self.scheduler.step()
+            if self.save_model and (((epoch + 1) % self.save_every_epoch) == 0):
                 # self.save(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
                 # self.save_model_and_optimizer(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
                 self.save_model_and_optimizer(self.save_dir + f"{self.save_file}", epoch = epoch)
@@ -1120,14 +1130,16 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                 # self.Transformer.train()
             print(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")
             logging.info(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")  
+            self.g_loss.add(loss=sum(self.loss_epoch)/len(self.loss_epoch), epoch=self.scheduler.current_step)
 
-            if (epoch + 1) % 2 == 0:
+            if (epoch + 1) % 5 == 0:
                 # self.save_model_and_optimizer(self.save_dir + "cpk/" + f"epoch_{epoch}_{self.save_file}", epoch = epoch)
                 output_eval = self.eval_model(self.sample_question)
                 for o in output_eval:
                     print(o)
                     logging.info(o)
                     print("\n=====================================\n")
+                self.g_loss.plot_save(file_path=self.save_g_loss, para=self.save_file.replace(".pth",""))
                 self.Transformer.train()
 
     def save(self,path):

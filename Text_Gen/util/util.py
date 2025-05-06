@@ -25,6 +25,8 @@ from tokenizers.pre_tokenizers import Whitespace, BertPreTokenizer, Metaspace
 from tokenizers.normalizers import Sequence as NormalizerSequence, Replace, NFKC, Lowercase # Added Replace, Sequence, etc.
 from tokenizers.pre_tokenizers import Sequence as PreTokenizerSequence, Metaspace, Split # Added Split, Sequence
 
+from matplotlib import pyplot as plt
+
 
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
 
@@ -1040,7 +1042,7 @@ class data_loaderQA_SEQ(Dataset):
         #         a_list.append(QA_data[i:i])
 
     def __len__(self):
-        return int(len(self.pre_data)*0.01)
+        return int(len(self.pre_data)*0.0001) #int(len(self.pre_data)*0.1)
     def __getitem__(self, idx):
 
         # question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["prompt"]).ids
@@ -1113,3 +1115,19 @@ def check_and_create_folder(paths):
     for path in paths:
         if not os.path.exists(path):
             os.makedirs(path)   
+
+class check_loss:
+    def __init__(self):
+        self.his_loss = []
+        self.his_epochs = []
+        self.curr_loss = 0
+        self.curr_epoch = 0
+    def add(self,loss,epoch):
+        self.curr_loss = loss
+        self.curr_epoch = epoch
+        self.his_loss.append(self.curr_loss)
+        self.his_epochs.append(self.curr_epoch)
+    def plot_save(self,file_path,para):
+        fig = plt.figure(0)
+        plt.plot(self.his_epochs, self.his_loss)
+        fig.savefig(fname=f"{os.path.join(file_path,para)}.png")
