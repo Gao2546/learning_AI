@@ -928,18 +928,18 @@ class Transformer:
 
 class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
     def __init__(self): #loss == 0.02 0.006
-        self.save_model = True
-        self.only_model = True
+        self.save_model = True ############################################################>>>>>>>>>>>>>>>>>>>>>>>>>
+        self.only_model = True #False
         self.save_dir = "./model/TransformerDecodeOnly/"
-        self.load_path = None#"./model/TransformerDecodeOnly/TransformerDecodeOnly_V02_256_768_12_12_3072_mn2_10K_MQcpk1.pth" #DGood For Traning set
+        self.load_path = "./model/TransformerDecodeOnly/TransformerDecodeOnly_V01_128_768_12_12_3072_10K_mn2_MQcpk3.pth" #DGood For Traning set ./model/TransformerDecodeOnly/TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk1.pth
         self.load_embedding_path = None#"./model/Transformer/embedding_model.pth"
         self.data_path = "./data/Conversational01/"
-        self.data_path512 = "./data/Conversational01_256_10K/"
-        self.data_path512_seq = "./data/Conversational01_256_10K_seq/"
+        self.data_path512 = "./data/Conversational01_128_10K/" # ./data/Conversational01_256_10K/
+        self.data_path512_seq = "./data/Conversational01_128_10K_seq/" # ./data/Conversational01_256_10K_seq/
         # self.data_path256 = "./data/Conversational01_256/"
         # self.data_path_full = "./data/PythonCodeDataSmall_TextOnly/Python_code_data.txt"
         self.tokenizer_path = "./model/BPE_model/tokenizer-bpe-conversational-10k.json"
-        self.save_file = "TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk1.pth"
+        self.save_file = "TransformerDecodeOnly_V01_128_768_12_12_3072_10K_mn2_MQcpk4.pth" # TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk2.pth
         self.save_g_loss = "./outputs/TransformerDecodeOnly/imgs"
         #======================================================================================
         # self.load_path = None#"./model/Transformer/Transformer_V01_10KC.pth" #DGood For Traning set
@@ -949,17 +949,18 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         check_and_create_folder([self.save_dir,self.data_path512,self.data_path512_seq,self.data_path,self.save_g_loss])
         
         self.start_epoch = 0
-        self.save_every_epoch = 5
+        self.save_every_epoch = 1
+        self.sample_every_epoch = 1
         self.epochs = 1000
-        self.batch_size = int(16*2.5) #16*4*10
-        self.max_seq_length = 256#512
+        self.batch_size = int(16*6) #16*4*10 16*6 16*2.5
+        self.max_seq_length = 128#512 256
         print("self.max_seq_length: ", self.max_seq_length)
         # self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=3873)
         self.BPE_model = BPEsQA(vocab_size=1024*10)
       
         # self.BPE_model.train([self.data_path])
         self.BPE_model.load(self.tokenizer_path)
-        self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq)
+        self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_sector=0)
         #========================================================================================
         # self.train_data =  dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=10)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)
@@ -1132,7 +1133,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
             logging.info(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")  
             self.g_loss.add(loss=sum(self.loss_epoch)/len(self.loss_epoch), epoch=self.scheduler.current_step)
 
-            if (epoch + 1) % 5 == 0:
+            if (epoch + 1) % self.sample_every_epoch == 0:
                 # self.save_model_and_optimizer(self.save_dir + "cpk/" + f"epoch_{epoch}_{self.save_file}", epoch = epoch)
                 output_eval = self.eval_model(self.sample_question)
                 for o in output_eval:
@@ -1168,6 +1169,26 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         print(f"Model and optimizer state dictionaries saved to {filepath}")
 
 
+    def load_change_model(self, checkpoint):
+        # Get the model's current state dict
+        model_state_dict = self.Transformer.state_dict()
+
+        # Filter out parameters that do not match in size
+        filtered_state_dict = {
+            k: v for k, v in checkpoint['model_state_dict'].items()
+            if k in model_state_dict and v.size() == model_state_dict[k].size()
+        }
+        print("================No Match===============")
+        [print(k) for k, v in checkpoint['model_state_dict'].items() if k in model_state_dict and v.size() != model_state_dict[k].size()]
+        print("================No Match===============")
+
+        # Update the model state dict with the filtered one
+        model_state_dict.update(filtered_state_dict)
+
+        # Load the updated state dict into the model
+        self.Transformer.load_state_dict(model_state_dict)
+
+
     def load_model_and_optimizer(self, filepath, only_model, device='cpu'):
         """
         Loads the state dictionaries of a model and its optimizer from a file.
@@ -1183,20 +1204,24 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         """
         if only_model:
             checkpoint = torch.load(filepath)
-            self.Transformer.load_state_dict(checkpoint['model_state_dict'])
+            self.load_change_model(checkpoint)
+            # self.Transformer.load_state_dict(checkpoint['model_state_dict'])
             print(f"Model state dictionary loaded from {filepath}")
             return 0
         else:
             checkpoint = torch.load(filepath)
             if self.optimizer == None or self.scheduler == None:
-                self.Transformer.load_state_dict(checkpoint['model_state_dict'])
+                self.load_change_model(checkpoint)
+                # self.Transformer.load_state_dict(checkpoint['model_state_dict'])
             else:
-                self.Transformer.load_state_dict(checkpoint['model_state_dict'])
+                self.load_change_model(checkpoint)
+                # self.Transformer.load_state_dict(checkpoint['model_state_dict'])
                 self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
                 self.scheduler.current_step = checkpoint['lr_schdule_step']
                 self.start_epoch = checkpoint['current_epoch'] + 1
             print(f"Model and optimizer state dictionaries loaded from {filepath}")
             # return self.start_epoch
+
 
     def load_embedding(self, path):
         state_dict = torch.load(path)

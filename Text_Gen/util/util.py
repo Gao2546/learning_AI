@@ -991,13 +991,14 @@ class data_loaderQA(Dataset):
     
 
 class data_loaderQA_SEQ(Dataset):
-    def __init__(self, path, new_tokenizer, max_len=512, data_path512=None, data_path512_seq=None):
+    def __init__(self, path, new_tokenizer, max_len=512, data_path512=None, data_path512_seq=None, data_sector = 0):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.max_len = max_len
         self.new_tokenizer = new_tokenizer
         self.data_path = path
         self.data_path512 = data_path512
         self.data_path512_seq = data_path512_seq
+        self.data_sector = data_sector
         if not os.path.isdir(self.data_path+"train"):
             print("Directory does not exist.")
             load_dataset(path="papahawk/conversational-01", save_infos=True).save_to_disk(self.data_path)
@@ -1042,7 +1043,7 @@ class data_loaderQA_SEQ(Dataset):
         #         a_list.append(QA_data[i:i])
 
     def __len__(self):
-        return int(len(self.pre_data)*0.0001) #int(len(self.pre_data)*0.1)
+        return int(len(self.pre_data)*0.1) #int(len(self.pre_data)*0.1)
     def __getitem__(self, idx):
 
         # question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["prompt"]).ids
@@ -1063,7 +1064,7 @@ class data_loaderQA_SEQ(Dataset):
         # [print(i) for i in self.pre_data[0]["prompt"]]
         # print("++++++++++++++++++++++++++")
         # print(idx)
-
+        idx = idx + int(len(self.pre_data)*0.01)*self.data_sector
         QA_in = torch.tensor(self.pre_data[idx]["prompt"], device=self.device)
         QA_out = torch.tensor(self.pre_data[idx]["response"], device=self.device)
 
