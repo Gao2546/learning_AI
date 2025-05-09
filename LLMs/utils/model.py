@@ -1,5 +1,5 @@
 import pandas as pd
-from util.util import *
+from utils.util import *
 from transformers import AutoTokenizer
 import random
 from torch.utils.data import DataLoader
@@ -9,7 +9,7 @@ import torch.optim as optim
 # from torch.cuda.amp import autocast, GradScaler
 from torch.amp import autocast, GradScaler
 # from bitsandbytes.optim import Adam8bit
-from util.node import TransformerDecodeM , TransformersM , BertM
+from utils.node import TransformerDecodeM , TransformersM , BertM
 from torch.optim.lr_scheduler import StepLR,CosineAnnealingLR
 import logging
 import time
