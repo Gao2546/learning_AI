@@ -14,10 +14,13 @@ import { setChatMode, setChatModel } from './db.js'; // Import necessary DB func
 import { newChatHistory, storeChatHistory, readChatHistory, deleteChatHistory, setCurrentChatId, listChatHistory, setUserActiveStatus } from './db.js';
 // Initialize transport
 const transport_mcp_BrowserBase = new StdioClientTransport({
-    "command": "bash",
+    // "command": "bash",
+    "command": "node",
     "args": [
-        "-c",
-        "cd /home/athip/psu/learning_AI/mcp_BrowserBase/ && ./build/index.js"
+        // "-c",
+        //"cd /home/athip/psu/learning_AI/mcp_BrowserBase/ && ./build/index.js"
+        // path.join('/', 'app', 'mcp', 'mcp_BrowserBase', 'build', 'index.js')
+        path.join('.', 'mcp', 'mcp_BrowserBase', 'build', 'index.js')
     ],
 });
 console.log("Agent: Transport initialized.\n");
@@ -224,6 +227,44 @@ router.post('/message', async (req, res) => {
                 }
                 else {
                     console.error("Invalid response format from Ollama:", ollamaData);
+                    // Send error response immediately if format is invalid
+                    return res.status(500).json({ error: "Invalid response format received from Ollama model" });
+                }
+            }
+            catch (err) {
+                console.error('Error calling Ollama API or processing response:', err);
+                // Send error response immediately if fetch or JSON parsing fails
+                return res.status(500).json({ error: `Failed to communicate with Ollama model: ${err instanceof Error ? err.message : String(err)}` });
+            }
+        }
+        else if (modelToUse.startsWith('01')) {
+            try {
+                console.log("Calling MyModel API...");
+                const MyModelFetchResponse = await fetch('http://127.0.0.1:5000/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                    })
+                });
+                if (!MyModelFetchResponse.ok) {
+                    const errorText = await MyModelFetchResponse.text();
+                    console.error(`Ollama API error! status: ${MyModelFetchResponse.status}`, errorText);
+                    // Send error response immediately if API call fails
+                    return res.status(500).json({ error: `Ollama API error (${MyModelFetchResponse.status}): ${errorText}` });
+                }
+                // Use the OllamaResponse interface defined earlier (lines 81-87)
+                const MyModelData = await MyModelFetchResponse.json(); // Explicitly cast to OllamaResponse
+                console.log("Raw Ollama Response:", MyModelData);
+                if (MyModelData && typeof MyModelData.answer === 'string') {
+                    // Store the response text in the 'response' variable for later processing
+                    response = { text: MyModelData.answer };
+                    console.log("Extracted Ollama Response Text:", response.text);
+                }
+                else {
+                    console.error("Invalid response format from Ollama:", MyModelData);
                     // Send error response immediately if format is invalid
                     return res.status(500).json({ error: "Invalid response format received from Ollama model" });
                 }

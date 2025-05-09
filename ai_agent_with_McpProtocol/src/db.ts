@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const { Pool } = pkg;
-
+console.log(process.env.DATABASE_URL)
 // Use the DATABASE_URL environment variable (loaded from .env or provided by Docker)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,

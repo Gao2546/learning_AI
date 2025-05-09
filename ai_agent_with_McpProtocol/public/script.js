@@ -773,6 +773,7 @@ function populateModes(returnDefault = false) {
 // Added returnDefault parameter to get the default value without modifying the DOM
 function populateModels(returnDefault = false) {
     const models = [
+        { id: '01:18m', name: '01:18m' },
         { id: 'deepcoder:1.5b', name: 'deepcoder:1.5b' },
         { id: 'deepcoder:14b', name: 'deepcoder:14b' },
         { id: 'deepseek-coder:1.3b', name: 'deepseek-coder:1.3b' },
