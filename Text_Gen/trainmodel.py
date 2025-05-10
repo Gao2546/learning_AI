@@ -101,6 +101,7 @@ question = ["What’s the best way to fix my kitchen drain?",
             "Simple. My girlfriend doesn't do the chores she is supposed to do in the apartment.",
             'How can I raise my credit score.',
             'I do not feel comfortable explaining this to you.',
+            'Hello'
             # "# Write a program to check whether a number is prime or not",
             # "# Write a program to find the factorial of a number",
             # "# Write a program to check whether a number is positive, negative or zero",
@@ -120,6 +121,6 @@ question = ["What’s the best way to fix my kitchen drain?",
 
 model = TransformerDecodeOnly()
 model.train()
-# output = model.eval_model(question)
+# output = model.eval_modelQ(question)
 # for o in output:
 #     print(o)

@@ -27,6 +27,8 @@ from tokenizers.pre_tokenizers import Sequence as PreTokenizerSequence, Metaspac
 
 from matplotlib import pyplot as plt
 
+import json
+
 
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
 
@@ -848,100 +850,120 @@ class data_loader3(Dataset):
         return self.new_tokenizer.vocab
     
         
-class data_loaderQA(Dataset):
-    def __init__(self, path, new_tokenizer, max_len=512, data_path512=None):
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.max_len = max_len
-        self.new_tokenizer = new_tokenizer
-        self.data_path = path
-        self.data_path512 = data_path512
-        if not os.path.isdir(self.data_path+"train"):
-            print("Directory does not exist.")
-            # load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(self.data_path)
-            load_dataset(path="papahawk/conversational-01", save_infos=True).save_to_disk(self.data_path)
-        # data = load_dataset(path=self.data_path, split="train")
-        data = load_from_disk(dataset_path = self.data_path)["train"]
-        # self.pre_data = data
-        def is_valid(example):
-            question = self.new_tokenizer.tokenizer.encode(example["prompt"]).ids
-            answer = self.new_tokenizer.tokenizer.encode(example["response"]).ids
-            QA_data = [1] + [5] + question + [6] + answer + [3]
-            return len(QA_data) <= self.max_len
-        if len(os.listdir(self.data_path512)) <= 1:
-            self.pre_data = data.filter(is_valid)
-            self.pre_data.save_to_disk(self.data_path512)
-        else:
-            data = None
-            self.pre_data = load_from_disk(self.data_path512)
-        print(f"Filtered dataset size: {len(self.pre_data)}")
-        # print(len(self.pre_data))
+# class data_loaderQA(Dataset):
+#     def __init__(self, path, new_tokenizer, max_len=512, data_path512=None):
+#         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+#         self.max_len = max_len
+#         self.new_tokenizer = new_tokenizer
+#         self.data_path = path
+#         self.data_path512 = data_path512
+#         if not os.path.isdir(self.data_path+"train"):
+#             print("Directory does not exist.")
+#             # load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(self.data_path)
+#             load_dataset(path="papahawk/conversational-01", save_infos=True).save_to_disk(self.data_path)
+#         # data = load_dataset(path=self.data_path, split="train")
+#         data = load_from_disk(dataset_path = self.data_path)["train"]
+#         # self.pre_data = data
+
+#         def is_valid(example):
+#             question = self.new_tokenizer.tokenizer.encode(example["prompt"]).ids
+#             answer = self.new_tokenizer.tokenizer.encode(example["response"]).ids
+#             QA_data = [1] + [5] + question + [6] + answer + [3]
+#             return len(QA_data) <= self.max_len
         
-        # self.tokens_data_new = new_tokenizer.tokenize(data)
-        # tt = [F.pad(torch.tensor(new_tokenizer.tokenizer.encode(dd).ids, dtype=torch.int), mode='constant', pad=(0, max(512 - len(new_tokenizer.tokenizer.encode(dd).tokens), 0)), value=0) for dd in self.pre_data]
-        # self.tokens_data_new = torch.stack(tt)
-    def __len__(self):
-        return 8#int(len(self.pre_data)*0.001)
-    def __getitem__(self, idx):
-        # print(self.pre_data[idx]["instruction"])
-        # question = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids, device=self.device)
-        # answer = torch.tensor([1] + self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["output"]).ids + [3], device=self.device)
+#         if len(os.listdir(self.data_path512)) <= 1:
+#             self.pre_data = data.filter(is_valid)
+#             self.pre_data.save_to_disk(self.data_path512)
+#         else:
+#             data = None
+#             self.pre_data = load_from_disk(self.data_path512)
+#         print(f"Filtered dataset size: {len(self.pre_data)}")
+#         # print(len(self.pre_data))
+        
+#         # self.tokens_data_new = new_tokenizer.tokenize(data)
+#         # tt = [F.pad(torch.tensor(new_tokenizer.tokenizer.encode(dd).ids, dtype=torch.int), mode='constant', pad=(0, max(512 - len(new_tokenizer.tokenizer.encode(dd).tokens), 0)), value=0) for dd in self.pre_data]
+#         # self.tokens_data_new = torch.stack(tt)
+#     def __len__(self):
+#         return 8#int(len(self.pre_data)*0.001)
+#     def __getitem__(self, idx):
+#         # print(self.pre_data[idx]["instruction"])
+#         # question = torch.tensor(self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["instruction"]).ids, device=self.device)
+#         # answer = torch.tensor([1] + self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["output"]).ids + [3], device=self.device)
 
-        question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["prompt"]).ids
-        answer = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["response"]).ids
+#         question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["prompt"]).ids
+#         answer = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["response"]).ids
 
-        QA_data = torch.tensor([1] + [5] + question + [6] + answer + [3], device=self.device)
+#         QA_data = torch.tensor([1] + [5] + question + [6] + answer + [3], device=self.device)
 
-        # print(answer.size())
-        # rr = random.randint(0, len(answer)-self.max_len if len(answer) - self.max_len > 0 else 2)
-        rr = random.randint(len(question) + 3, min(len(QA_data), self.max_len))
-        # answer = answer[0:random.randint(1, answer.shape[0])]
-        QA_data = QA_data[0:rr]
-        QA_in = QA_data[:-1].clone()
-        QA_out = QA_data.clone()
+#         # print(answer.size())
+#         # rr = random.randint(0, len(answer)-self.max_len if len(answer) - self.max_len > 0 else 2)
+#         rr = random.randint(len(question) + 3, min(len(QA_data), self.max_len))
+#         # answer = answer[0:random.randint(1, answer.shape[0])]
+#         QA_data = QA_data[0:rr]
+#         QA_in = QA_data[:-1].clone()
+#         QA_out = QA_data.clone()
 
-        # question_pad = F.pad(question, mode='constant', pad=(0, max(self.max_len - len(question), -1000000)), value=0)
-        QA_in_pad = F.pad(QA_in, mode='constant', pad=(0, max(self.max_len - len(QA_in), -1000000)), value=0)
-        QA_out_pad = F.pad(QA_out, mode='constant', pad=(0, max(self.max_len - len(QA_out), -1000000)), value=0)
+#         # question_pad = F.pad(question, mode='constant', pad=(0, max(self.max_len - len(question), -1000000)), value=0)
+#         QA_in_pad = F.pad(QA_in, mode='constant', pad=(0, max(self.max_len - len(QA_in), -1000000)), value=0)
+#         QA_out_pad = F.pad(QA_out, mode='constant', pad=(0, max(self.max_len - len(QA_out), -1000000)), value=0)
 
-        # data_token = torch.tensor([1] + self.new_tokenizer.tokenizer.encode(self.pre_data[idx]).ids + [3], device=self.device)
-        # data_token = data_token[0:random.randint(10, data_token.shape[0])]
-        # data_token_in = data_token[:-1].clone()
-        # data_token_out = data_token[:].clone()
-        # data_token_in_pad = F.pad(data_token_in, mode='constant', pad=(0, max(self.max_len - len(data_token_in), -1000000)), value=0)
-        # data_token_out_pad = F.pad(data_token_out, mode='constant', pad=(0, max(self.max_len - len(data_token_out), -1000000)), value=0)
-        return QA_in_pad, QA_out_pad
-    def get_sample(self):
-        rr = random.randint(0, len(self.pre_data)-1)
-        rr = 0
-        return self.pre_data.to_dict()['response'][rr:1] , self.pre_data.to_dict()['prompt'][rr:1]
-    def get_vocab(self):
-        return self.new_tokenizer.vocab
+#         # data_token = torch.tensor([1] + self.new_tokenizer.tokenizer.encode(self.pre_data[idx]).ids + [3], device=self.device)
+#         # data_token = data_token[0:random.randint(10, data_token.shape[0])]
+#         # data_token_in = data_token[:-1].clone()
+#         # data_token_out = data_token[:].clone()
+#         # data_token_in_pad = F.pad(data_token_in, mode='constant', pad=(0, max(self.max_len - len(data_token_in), -1000000)), value=0)
+#         # data_token_out_pad = F.pad(data_token_out, mode='constant', pad=(0, max(self.max_len - len(data_token_out), -1000000)), value=0)
+#         return QA_in_pad, QA_out_pad
+#     def get_sample(self):
+#         rr = random.randint(0, len(self.pre_data)-1)
+#         rr = 0
+#         return self.pre_data.to_dict()['response'][rr:1] , self.pre_data.to_dict()['prompt'][rr:1]
+#     def get_vocab(self):
+#         return self.new_tokenizer.vocab
     
 
 class data_loaderQA(Dataset):
-    def __init__(self, path, new_tokenizer, max_len=512, data_path512=None):
+    def __init__(self, path, new_tokenizer, max_len=512, data_path512=None, data_path_clean = None ):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.max_len = max_len
         self.new_tokenizer = new_tokenizer
         self.data_path = path
         self.data_path512 = data_path512
+        self.data_path_clean = data_path_clean
         if not os.path.isdir(self.data_path+"train"):
             print("Directory does not exist.")
             # load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(self.data_path)
             load_dataset(path="papahawk/conversational-01", save_infos=True).save_to_disk(self.data_path)
         # data = load_dataset(path=self.data_path, split="train")
-        data = load_from_disk(dataset_path = self.data_path)["train"]
+        # data = load_from_disk(dataset_path = self.data_path)["train"]
         # self.pre_data = data
+
+        def clean_data():
+            for data in tqdm(datas):
+                question = data["prompt"]
+                answer = data["response"]
+                if question.endswith("1") and answer.startswith("."):
+                    question = question.replace("1", "").strip()
+                    answer = ("1" + answer).strip()
+                yield {'prompt': question, 'response': answer}
+
         def is_valid(example):
             question = self.new_tokenizer.tokenizer.encode(example["prompt"]).ids
             answer = self.new_tokenizer.tokenizer.encode(example["response"]).ids
             QA_data = [1] + [5] + question + [6] + answer + [3]
             return len(QA_data) <= self.max_len
-        if len(os.listdir(self.data_path512)) <= 1:
-            self.pre_data = data.filter(is_valid,num_proc=8)
+        
+        if (len(os.listdir(self.data_path_clean)) <= 1):
+            datas = load_from_disk(dataset_path = self.data_path)["train"]
+            self.pre_data = DatasetLoad.from_generator(clean_data,num_proc=8)
+            self.pre_data.save_to_disk(self.data_path_clean)
+
+        if (len(os.listdir(self.data_path512)) <= 1) and (len(os.listdir(self.data_path_clean)) >= 1):
+            self.pre_data = load_from_disk(self.data_path_clean)
+            self.pre_data = self.pre_data.filter(is_valid,num_proc=8)
             self.pre_data.save_to_disk(self.data_path512)
-        else:
-            data = None
+
+        if (len(os.listdir(self.data_path512)) >= 1) and (len(os.listdir(self.data_path_clean)) >= 1):
             self.pre_data = load_from_disk(self.data_path512)
         print(f"Filtered dataset size: {len(self.pre_data)}")
         # print(len(self.pre_data))
@@ -991,18 +1013,28 @@ class data_loaderQA(Dataset):
     
 
 class data_loaderQA_SEQ(Dataset):
-    def __init__(self, path, new_tokenizer, max_len=512, data_path512=None, data_path512_seq=None, data_sector = 0):
+    def __init__(self, path, new_tokenizer, max_len=512, data_path512=None, data_path512_seq=None, data_path_clean=None, data_sector = 0):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.max_len = max_len
         self.new_tokenizer = new_tokenizer
         self.data_path = path
         self.data_path512 = data_path512
         self.data_path512_seq = data_path512_seq
+        self.data_path_clean = data_path_clean
         self.data_sector = data_sector
         if not os.path.isdir(self.data_path+"train"):
             print("Directory does not exist.")
             load_dataset(path="papahawk/conversational-01", save_infos=True).save_to_disk(self.data_path)
-        data = load_from_disk(dataset_path = self.data_path)["train"]
+        
+        def clean_data():
+            for data in tqdm(datas):
+                question = data["prompt"]
+                answer = data["response"]
+                if question.endswith("1") and answer.startswith("."):
+                    question = question.replace("1", "").strip()
+                    answer = ("1" + answer).strip()
+                yield {'prompt': question, 'response': answer}
+
         def is_valid(example):
             question = self.new_tokenizer.tokenizer.encode(example["prompt"]).ids
             answer = self.new_tokenizer.tokenizer.encode(example["response"]).ids
@@ -1016,17 +1048,27 @@ class data_loaderQA_SEQ(Dataset):
                 QA_data = [1] + [5] + question + [6] + answer + [3]
                 for i in range(len(question)+4,len(QA_data) + 1):
                     yield {'prompt':QA_data[:i-1], 'response':QA_data[0:i]}
-        if (len(os.listdir(self.data_path512)) <= 1) and (len(os.listdir(self.data_path512_seq)) <= 1):
-            self.pre_data = data.filter(is_valid,num_proc=8)
+
+        if (len(os.listdir(self.data_path_clean)) <= 1):
+            datas = load_from_disk(dataset_path = self.data_path)["train"]
+            self.pre_data = DatasetLoad.from_generator(clean_data,num_proc=8)
+            self.pre_data.save_to_disk(self.data_path_clean)
+
+        if (len(os.listdir(self.data_path512)) <= 1) and (len(os.listdir(self.data_path512_seq)) <= 1) and (len(os.listdir(self.data_path_clean)) >= 1):
+            self.pre_data = load_from_disk(self.data_path_clean)
+            self.pre_data = self.pre_data.filter(is_valid,num_proc=8)
             self.pre_data.save_to_disk(self.data_path512)
-        if len(os.listdir(self.data_path512)) > 1 and len(os.listdir(self.data_path512_seq)) <= 1:
+
+        if len(os.listdir(self.data_path512)) > 1 and len(os.listdir(self.data_path512_seq)) <= 1 and (len(os.listdir(self.data_path_clean)) >= 1):
             data = None
             self.pre_data = load_from_disk(self.data_path512)
             self.pre_data = DatasetLoad.from_generator(gen_seq,num_proc=8)
             self.pre_data.save_to_disk(self.data_path512_seq)
-        if len(os.listdir(self.data_path512)) > 1 and len(os.listdir(self.data_path512_seq)) > 1:
+
+        if len(os.listdir(self.data_path512)) > 1 and len(os.listdir(self.data_path512_seq)) > 1 and (len(os.listdir(self.data_path_clean)) >= 1):
             data = None
             self.pre_data = load_from_disk(self.data_path512_seq)
+
         print(f"Filtered dataset size: {len(self.pre_data)}")
 
         # if len(os.listdir(self.data_path512)) <= 1:
@@ -1044,6 +1086,116 @@ class data_loaderQA_SEQ(Dataset):
 
     def __len__(self):
         return int(len(self.pre_data)*0.001) #int(len(self.pre_data)*0.1)
+    def __getitem__(self, idx):
+
+        # question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["prompt"]).ids
+        # answer = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["response"]).ids
+
+        # lenght_answer = torch.tensor([len(answer)], device=self.device)
+
+        # QA_data = torch.tensor([1] + [5] + question + [6] + answer + [3], device=self.device)
+
+        # rr = random.randint(len(question) + 3, min(len(QA_data), self.max_len))
+        # QA_data = QA_data[0:rr]
+        # QA_in = QA_data[:-1].clone()
+        # QA_out = QA_data.clone()
+
+        # test = torch.tensor([i for i in range(30)], device=self.device)
+        # data_in = [int(i) for i in self.pre_data[idx]["prompt"][0]]
+        # data_out = [int(i) for i in self.pre_data[idx]["response"][0]]
+        # [print(i) for i in self.pre_data[0]["prompt"]]
+        # print("++++++++++++++++++++++++++")
+        # print(idx)
+        idx = idx + int(len(self.pre_data)*0.01)*self.data_sector
+        QA_in = torch.tensor(self.pre_data[idx]["prompt"], device=self.device)
+        QA_out = torch.tensor(self.pre_data[idx]["response"], device=self.device)
+
+        QA_in_pad = F.pad(QA_in, mode='constant', pad=(0, max(self.max_len - len(QA_in), -1000000)), value=0)
+        QA_out_pad = F.pad(QA_out, mode='constant', pad=(0, max(self.max_len - len(QA_out), -1000000)), value=0)
+
+        return QA_in_pad, QA_out_pad
+    def get_sample(self):
+        rr = random.randint(0, len(self.pre_data)-1)
+        rr = 0
+        # return self.pre_data.to_dict()['response'][rr:1] , self.pre_data.to_dict()['prompt'][rr:1]
+        return self.pre_data[rr:rr+10]
+    
+    def get_vocab(self):
+        return self.new_tokenizer.vocab
+    
+
+class data_loaderQA_SEQR(Dataset):
+    def __init__(self, path, new_tokenizer, max_len=512, data_path512=None, data_path512_seq=None, data_path_clean=None, data_sector = 0):
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.max_len = max_len
+        self.new_tokenizer = new_tokenizer
+        self.data_path = path
+        self.data_path512 = data_path512
+        self.data_path512_seq = data_path512_seq
+        self.data_path_clean = data_path_clean
+        self.data_sector = data_sector
+        if not os.path.isdir(self.data_path+"train"):
+            print("Directory does not exist.")
+            load_dataset(path="papahawk/conversational-01", save_infos=True).save_to_disk(self.data_path)
+
+        def clean_data():
+            for data in tqdm(datas):
+                question = data["prompt"]
+                answer = data["response"]
+                if question.endswith("1") and answer.startswith("."):
+                    question = question.replace("1", "").strip()
+                    answer = ("1" + answer).strip()
+                yield {'prompt': question, 'response': answer}
+
+        def is_valid(example):
+            question = self.new_tokenizer.tokenizer.encode(example["prompt"]).ids
+            # answer = self.new_tokenizer.tokenizer.encode(example["response"]).ids
+            QA_data = [1] + [5] + question + [6]
+            return (len(QA_data) + 5) <= self.max_len
+        
+        def gen_seq():
+            for data in tqdm(self.pre_data):
+                question = self.new_tokenizer.tokenizer.encode(data["prompt"]).ids
+                answer = self.new_tokenizer.tokenizer.encode(data["response"]).ids
+                QA_data = [1] + [5] + question + [6] + answer + [3]
+                for i in range(len(question)+4,len(QA_data) + 1):
+                    yield {'prompt':QA_data[max(0, i - self.max_len - 2):i-1], 'response':QA_data[max(0, i - self.max_len - 1):i]}
+
+        if (len(os.listdir(self.data_path_clean)) <= 1):
+            datas = load_from_disk(dataset_path = self.data_path)["train"]
+            self.pre_data = DatasetLoad.from_generator(clean_data,num_proc=8)
+            self.pre_data.save_to_disk(self.data_path_clean)
+
+        if (len(os.listdir(self.data_path512)) <= 1) and (len(os.listdir(self.data_path512_seq)) <= 1):
+            self.pre_data = load_from_disk(self.data_path_clean)
+            self.pre_data = self.pre_data.filter(is_valid,num_proc=8)
+            self.pre_data.save_to_disk(self.data_path512)
+
+        if len(os.listdir(self.data_path512)) > 1 and len(os.listdir(self.data_path512_seq)) <= 1:
+            self.pre_data = load_from_disk(self.data_path512)
+            self.pre_data = DatasetLoad.from_generator(gen_seq,num_proc=8)
+            self.pre_data.save_to_disk(self.data_path512_seq)
+
+        if len(os.listdir(self.data_path512)) > 1 and len(os.listdir(self.data_path512_seq)) > 1:
+            self.pre_data = load_from_disk(self.data_path512_seq)
+
+        print(f"Filtered dataset size: {len(self.pre_data)}")
+
+        # if len(os.listdir(self.data_path512)) <= 1:
+
+        # data.set_format(type="torch", columns=["prompt", "response"])
+        # q_list = []
+        # a_list = []
+        # for idx in range(len(self.pre_data)):
+        #     question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["prompt"]).ids
+        #     answer = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["response"]).ids
+        #     QA_data = [1] + [5] + question + [6] + answer + [3]
+        #     for i in range(len(question)+3,len(QA_data)):
+        #         q_list.append(QA_data[:i-1])
+        #         a_list.append(QA_data[i:i])
+
+    def __len__(self):
+        return int(len(self.pre_data)*1.0) #int(len(self.pre_data)*0.1)
     def __getitem__(self, idx):
 
         # question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["prompt"]).ids
@@ -1132,3 +1284,15 @@ class check_loss:
         fig = plt.figure(0)
         plt.plot(self.his_epochs, self.his_loss)
         fig.savefig(fname=f"{os.path.join(file_path,para)}.png")
+
+
+class Config:
+    def __init__(self, path):
+        with open(path, 'r') as f:
+            self.config = json.load(f)
+
+        # Flatten for direct attribute access
+        self.__dict__.update(self.config)
+
+    def get(self, section, key, default=None):
+        return self.config.get(section, {}).get(key, default)

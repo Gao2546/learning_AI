@@ -1,33 +1,43 @@
 from utils.util import *
 from utils.node import TransformerDecodeM
 
-from utils.config import config
+# from utils.config import config
+
 
 import torch
 from flask import Flask, request, jsonify # Import Flask components
+
+
+config = Config("./utils/model_config.json")
+config = config.config02
+model_config = config['model']
+data_config = config['data']
+training_config = config['training']
+inference_config = config['inference']
 
 class Transformer_DecodeOnly:
     def __init__(self,  
                  tokenizer_path = "./models/BPEs/tokenizer-bpe-conversational-10k.json",
                  model_path = "./models/TransformerDecodeOnly/TransformerDecodeOnly_V01_256_768_12_12_3072_mn2_10K_MQcpk8.pth"
                 ):
-        self.tokenizer_path = tokenizer_path
-        self.model_path = model_path
+        self.tokenizer_path = data_config['tokenizer_path']#tokenizer_path
+        self.model_path = model_config['load_path']#model_path
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.llm = TransformerDecodeM(
-                                        src_vocab_size=config["src_vocab_size"],
-                                        tgt_vocab_size=config["tgt_vocab_size"],
-                                        d_model=config["d_model"],
-                                        num_heads=config["num_heads"],
-                                        num_layers=config["num_layers"],
-                                        d_ff=config["d_ff"],
-                                        max_seq_length=config["max_seq_length"],
-                                        dropout=config["dropout"],
-                                        device=config["device"]
+                                        src_vocab_size=model_config["vocab_size"],
+                                        tgt_vocab_size=model_config["vocab_size"],
+                                        d_model=model_config["d_model"],
+                                        num_heads=model_config["num_heads"],
+                                        num_layers=model_config["num_layers"],
+                                        d_ff=model_config["d_ff"],
+                                        max_seq_length=model_config["max_seq_length"],
+                                        dropout=model_config["dropout"],
+                                        device=self.device
                                     )
-        self.llm.to(config["device"])
+        self.llm.to(self.device)
         self.llm.eval()
 
-        self.tokenizer = BPEsQA(config["tgt_vocab_size"])
+        self.tokenizer = BPEsQA(model_config["vocab_size"])
         self.tokenizer.load(self.tokenizer_path)
 
         model_state_dict = torch.load(self.model_path)
@@ -56,21 +66,21 @@ class Transformer_DecodeOnly:
         answer_output = [1] + [5] + self.tokenizer.tokenizer.encode(question).ids + [6]
         start_seq = len(answer_output) - 1
         # print(start_seq)
-        answer_output = torch.tensor(answer_output, device=config["device"])
-        answer_output = torch.nn.functional.pad(answer_output,(0,config["max_seq_length"] - len(answer_output)),"constant",0).unsqueeze(0)
-        # answer_output = torch.zeros((1,self.max_seq_length),device=self.device,dtype=torch.int32)
+        answer_output = torch.tensor(answer_output, device=self.device)
+        answer_output = torch.nn.functional.pad(answer_output,(0,model_config["max_seq"] - len(answer_output)),"constant",0).unsqueeze(0)
+        # answer_output = torch.zeros((1,model_config["max_seq_length"]),device=self.device,dtype=torch.int32)
         # answer_output[0,0] = 1
         answer_input = answer_output.clone()
         seq_idx = 0
         with torch.no_grad():
-            for seq_idx in range(start_seq,config["max_seq_length"] - 1):
-                if answer_output[0].clone().cpu().tolist()[seq_idx] != 3:
-                    answer_input[0,seq_idx] = answer_output.clone()[0,seq_idx]
-                    answer_output = self.llm(answer_input)
+            for seq_idx in range(start_seq,model_config["max_seq"] - 1):
+                if answer_output[0].clone().cpu().tolist()[min(seq_idx, model_config["max_seq_length"] - 1)] != 3:
+                    answer_input[0,seq_idx] = answer_output.clone()[0,min(seq_idx, model_config["max_seq_length"] - 1)]
+                    answer_output = self.llm(answer_input[:,max(0, seq_idx - model_config["max_seq_length"] + 1):max(model_config["max_seq_length"], seq_idx+1)])
                     answer_output = torch.argmax(torch.nn.functional.softmax(answer_output,dim=2),dim=2)
                 else:
                     break
-        answer_input[0,seq_idx] = answer_output.clone()[0,seq_idx]
+        answer_input[0,seq_idx] = answer_output.clone()[0,min(seq_idx, model_config["max_seq_length"] - 1)]
 
         answer_question = self.tokenizer.decode_clean(answer_input[0,start_seq+1:seq_idx].cpu().tolist())
 

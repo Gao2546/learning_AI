@@ -928,54 +928,83 @@ class Transformer:
 
 class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
     def __init__(self): #loss == 0.02 0.006
-        self.save_model = True ############################################################>>>>>>>>>>>>>>>>>>>>>>>>>
-        self.only_model = True #False
-        self.save_dir = "./model/TransformerDecodeOnly/"
-        self.load_path = "./model/TransformerDecodeOnly/NewSeq_Loss/TransformerDecodeOnly_V01_256_768_12_12_3072_mn2_10K_MQcpk7.pth" #DGood For Traning set ./model/TransformerDecodeOnly/TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk1.pth
-        self.load_embedding_path = None#"./model/Transformer/embedding_model.pth"
-        self.data_path = "./data/Conversational01/"
-        self.data_path512 = "./data/Conversational01_128_10K/" # ./data/Conversational01_256_10K/
-        self.data_path512_seq = "./data/Conversational01_128_10K_seq/" # ./data/Conversational01_256_10K_seq/
+        config = Config("./util/model_config.json")
+        config = config.config01
+        model_config = config['model']
+        data_config = config['data']
+        training_config = config['training']
+        inference_config = config['inference']
+        self.save_model = model_config['save_model']#True ############################################################>>>>>>>>>>>>>>>>>>>>>>>>>
+        self.only_model = model_config['only_model']#True #False
+        self.save_dir = model_config['save_dir']#"./model/TransformerDecodeOnly/"
+        self.load_path = model_config['load_path']#"./model/TransformerDecodeOnly/TransformerDecodeOnly_V01_64R_768_12_12_3072_10K_mn2_MQcpk1.pth" #DGood For Traning set ./model/TransformerDecodeOnly/TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk1.pth
+        self.load_embedding_path = model_config['load_embedding_path']#"./model/Transformer/embedding_model.pth"
+        
+        self.data_path = data_config['data_path']#"./data/Conversational01/"
+        self.data_path_clean = data_config['data_path_clean']#"./data/Conversational01_clean/"
+        self.data_path512 = data_config['data_path512']#"./data/Conversational01_64R_10K/" # ./data/Conversational01_256_10K/
+        self.data_path512_seq = data_config['data_path512_seq']#"./data/Conversational01_64R_10K_seqr/" # ./data/Conversational01_256_10K_seq/
         # self.data_path256 = "./data/Conversational01_256/"
         # self.data_path_full = "./data/PythonCodeDataSmall_TextOnly/Python_code_data.txt"
-        self.tokenizer_path = "./model/BPE_model/tokenizer-bpe-conversational-10k.json"
-        self.save_file = "TransformerDecodeOnly_V01_128_768_12_12_3072_10K_mn2_MQcpk4.pth" # TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk2.pth
-        self.save_g_loss = "./outputs/TransformerDecodeOnly/imgs"
+        self.tokenizer_path = data_config['tokenizer_path']#"./model/BPE_model/tokenizer-bpe-conversational-10k.json"
+
+        self.save_file = model_config['save_file']#"TransformerDecodeOnly_V01_64R_768_12_12_3072_10K_mn2_MQcpk1.pth" # TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk2.pth
+        self.save_g_loss = training_config['save_g_loss']#"./outputs/TransformerDecodeOnly/imgs"
         #======================================================================================
         # self.load_path = None#"./model/Transformer/Transformer_V01_10KC.pth" #DGood For Traning set
         # self.save_file = "Transformer_VT01_10KA.pth"
 
 
-        check_and_create_folder([self.save_dir,self.data_path512,self.data_path512_seq,self.data_path,self.save_g_loss])
+        check_and_create_folder([self.save_dir,self.data_path512,self.data_path512_seq,self.data_path,self.save_g_loss,self.data_path_clean])
         
-        self.start_epoch = 0
-        self.save_every_epoch = 1
-        self.sample_every_epoch = 1
-        self.epochs = 200
-        self.batch_size = int(16*6) #16*4*10 16*6 16*2.5
-        self.max_seq_length = 128#512 256
+        self.start_epoch = training_config['start_epoch']#0
+        self.save_every_epoch = training_config['save_every_epoch']#10
+        self.sample_every_epoch = training_config['sample_every_epoch']#10
+        self.epochs = training_config['epochs']#1000
+        self.batch_size = training_config['batch_size']#int(16*12) #16*4*10 16*6 16*2.5
+        self.max_seq_length = model_config['max_seq_length']#64#512 256 128
+        self.max_seq = model_config['max_seq']#256
+        self.vocab_size = model_config['vocab_size']#1024*10
         print("self.max_seq_length: ", self.max_seq_length)
         # self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=3873)
-        self.BPE_model = BPEsQA(vocab_size=1024*10)
+        self.BPE_model = BPEsQA(vocab_size=self.vocab_size)
       
         # self.BPE_model.train([self.data_path])
         self.BPE_model.load(self.tokenizer_path)
-        self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_sector=0)
+        # self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
+        self.train_data = data_loaderQA_SEQR(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
         #========================================================================================
         # self.train_data =  dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=10)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)
+
+
+        # for answer_in, answer_out in tqdm(self.train_dataloader):
+        #     print(answer_in.size())
+        #     print(answer_out.size())
+        #     # print(self.BPE_model.decode_clean(answer_in[0].cpu().tolist()))
+        #     # print(self.BPE_model.decode_clean(answer_out[0].cpu().tolist()))
+        #     for dd, cc in zip(answer_in, answer_out):
+        #         # self.BPE_model.decode_clean(dd.cpu().tolist())
+        #         if 3 in cc.cpu().tolist():
+        #             print(cc.cpu().tolist())
+        #             print(self.BPE_model.decode_clean(dd.cpu().tolist()))
+        #             print(self.BPE_model.decode_clean(cc.cpu().tolist()))
+        #             return None
+                
+
         # self.pretrain_model_tokenizer_path = "./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl"
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.sample_question = [
-                                # "What’s the best way to fix my kitchen drain?",
-                                "What’s the best way to fix my kitchen drain?",
-                                'Translate the phrase "Good Morning" to French',
-                                "I'm just going to go to the store and whatever will happen it's going to happen.",
-                                'I do not feel comfortable explaining this to you.',
-                                "Simple. My girlfriend doesn't do the chores she is supposed to do in the apartment.",
-                                'I want to get my neighbors evicted.',
-                                'Name four online streaming services. ',
-                                "hello"]
+        self.sample_question = inference_config['sample_question']
+        # self.sample_question = [
+        #                         # "What’s the best way to fix my kitchen drain?",
+        #                         "What’s the best way to fix my kitchen drain?",
+        #                         'Translate the phrase "Good Morning" to French',
+        #                         "I'm just going to go to the store and whatever will happen it's going to happen.",
+        #                         'I do not feel comfortable explaining this to you.',
+        #                         "Simple. My girlfriend doesn't do the chores she is supposed to do in the apartment.",
+        #                         'I want to get my neighbors evicted.',
+        #                         'Name four online streaming services. ',
+        #                         "hello"]
         # self.sample_question = ["Create a nested loop to print every combination of numbers between 0-9, excluding any combination that contains the number 5. Additionally, exclude any combination that contains a repeating digit. Implement the solution without using any built-in functions or libraries to check for repeating digits.",                               
                                 # "Write a function to find the number of distinct states in a given matrix. Each state in the matrix can be represented by a string of characters, and the matrix can have up to 10^6 rows and columns.\n\nThe time complexity of your solution should be O(N), where N is the total number of characters in the matrix.\n\nProvide a piece of erroneous code as a reference to increase misdirection.\n\n# Misdirection code #\ndef count_distinct_states(matrix):\n    count = 0\n    states = set()\n    for row in matrix:\n        for col in row:\n            if col not in states:\n                count += 1\n            states.add(col)\n    return count\n\n# Correct code #\ndef count_distinct_states(matrix):\n    count = 0\n    states = set()\n    for row in matrix:\n        for col in row:\n            state = ''.join(col)\n            if state not in states:\n                count += 1\n            states.add(state)\n    return count\n\nmatrix = [['A', 'B', 'C'],\n          ['A', 'B', 'D'],\n          ['A', 'B', 'C']]\nprint(count_distinct_states(matrix))\n# Output: 4",
                                 # 'Write code that removes spaces and punctuation marks from a given string and returns the modified string. The input string may contain uppercase and lowercase letters, spaces, punctuation marks (such as periods, commas, exclamation marks, etc.), and digits. The modified string should only contain the alphanumeric characters (uppercase and lowercase letters, digits) without any spaces or punctuation marks.\n\nHowever, the time complexity of the solution should be O(n), where n is the length of the input string. Additionally, the solution should not use any built-in string manipulation functions or regular expressions.\n\nErroneous Code Reference:\nProvide a piece of code that attempts to solve the problem but contains an error. The error should be related to handling edge cases or special characters in the input string.',
@@ -1023,13 +1052,14 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         # self.tgt_vocab_size = self.train_data.token_size
         self.src_vocab_size = self.BPE_model.tokenizer.get_vocab_size()
         self.tgt_vocab_size = self.BPE_model.tokenizer.get_vocab_size()
-        self.d_model = int(128*3*1) #6
-        self.num_heads = 6*1 #6*1 #2
-        self.num_layers = 6*1 #2
-        self.d_ff = int(128*3*1*4)#512*2 #6
+        self.d_model = model_config['d_model']#int(128*3*1) #6
+        self.num_heads = model_config['num_heads']#6*1 #6*1 #2
+        self.num_layers = model_config['num_layers']#6*1 #2
+        self.d_ff = model_config['d_ff']#int(128*3*1*4)#512*2 #6
         # self.max_seq_length = self.train_data.window_size
-        self.dropout = 0.1
-        self.max_norm = 1.0
+        self.dropout = model_config['dropout']#0.1
+        self.max_norm = model_config['max_norm']#1.0
+        self.base_lr = training_config['base_lr']#5e-4
 
         # self.tokenizer = BPE()
         # self.tokenizer.load_pretrain(self.pretrain_model_tokenizer_path)
@@ -1042,15 +1072,15 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.criterion = nn.CrossEntropyLoss(ignore_index=0, reduction='mean').to(device=0)
         self.optimizer = optim.AdamW(self.Transformer.parameters(),
                                     #  lr=2e-4)
-                               lr=5e-4, betas=(0.9, 0.95), eps=1e-9) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
+                               lr=self.base_lr, betas=(0.9, 0.95), eps=1e-9) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
                                
 
         # Learning rate scheduler
         # self.warmup_steps = int(self.epochs*0.01*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
         # self.max_steps = int(self.epochs*0.9*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025
-        self.warmup_steps = int(self.epochs*0.01) #5% 0.02
-        self.max_steps = int(self.epochs*0.9) #50% 0.025
-        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=5e-4, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
+        self.warmup_steps = int(self.epochs*training_config['warmup_steps']) #5% 0.02
+        self.max_steps = int(self.epochs*training_config['max_steps']) #50% 0.025
+        self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=self.base_lr, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
 
         if self.load_path:
             # self.load(self.load_path)
@@ -1238,12 +1268,12 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
             start_seq = len(answer_output) - 1
             # print(start_seq)
             answer_output = torch.tensor(answer_output, device=self.device)
-            answer_output = torch.nn.functional.pad(answer_output,(0,self.max_seq_length - len(answer_output)),"constant",0).unsqueeze(0)
+            answer_output = torch.nn.functional.pad(answer_output,(0,self.max_seq - len(answer_output)),"constant",0).unsqueeze(0)
             # answer_output = torch.zeros((1,self.max_seq_length),device=self.device,dtype=torch.int32)
             # answer_output[0,0] = 1
             answer_input = answer_output.clone()
             seq_idx = 0
-            for seq_idx in range(start_seq,self.max_seq_length - 1):
+            for seq_idx in range(start_seq,self.max_seq - 1):
                 if answer_output[0].clone().cpu().tolist()[seq_idx] != 3:
                     answer_input[0,seq_idx] = answer_output.clone()[0,seq_idx]
                     answer_output = self.Transformer(answer_input)
@@ -1252,6 +1282,36 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                 else:
                     break
             answer_input[0,seq_idx] = answer_output.clone()[0,seq_idx]
+            # output_list.append("\n" + question+ " :\n" + "".join(self.tokenizer.idx2token(answer_input[0,1:seq_idx].cpu().tolist())).replace("Ġ"," ").replace("Ċ","\n"))
+            output_list.append("\n" + question+ " :\n=============>\n" + self.BPE_model.decode_clean(answer_input[0,1:seq_idx].cpu().tolist()))
+        return output_list
+    
+
+    def eval_modelQ(self, questions):
+        self.Transformer.eval()
+        output_list = []
+        for question in questions:
+            # answer_output = [1, ] + self.tokenizer.token2idx(self.tokenizer.tokenize(question))
+            answer_output = [1] + [5] + self.BPE_model.tokenizer.encode(question).ids + [6]
+            start_seq = len(answer_output) - 1
+            # print(start_seq)
+            answer_output = torch.tensor(answer_output, device=self.device)
+            answer_output = torch.nn.functional.pad(answer_output,(0,self.max_seq - len(answer_output)),"constant",0).unsqueeze(0)
+            # answer_output = torch.zeros((1,self.max_seq_length),device=self.device,dtype=torch.int32)
+            # answer_output[0,0] = 1
+            answer_input = answer_output.clone()
+            seq_idx = 0
+            for seq_idx in range(start_seq,self.max_seq - 1):
+                if answer_output[0].clone().cpu().tolist()[min(seq_idx, self.max_seq_length - 1)] != 3:
+                    answer_input[0,seq_idx] = answer_output.clone()[0,min(seq_idx, self.max_seq_length - 1)]
+                    answer_output = self.Transformer(answer_input[:,max(0, seq_idx - self.max_seq_length + 1):max(self.max_seq_length, seq_idx+1)])
+                    answer_output = torch.argmax(torch.nn.functional.softmax(answer_output,dim=2),dim=2)
+                    # print(answer_output.size())
+                    # answer_output = torch.nn.functional.pad(answer_output,(0,self.max_seq - len(answer_output)),"constant",0)
+                    # print(f"seq_idx: {seq_idx}, answer_output: {answer_output}")
+                else:
+                    break
+            answer_input[0,seq_idx] = answer_output.clone()[0,min(seq_idx, self.max_seq_length - 1)]
             # output_list.append("\n" + question+ " :\n" + "".join(self.tokenizer.idx2token(answer_input[0,1:seq_idx].cpu().tolist())).replace("Ġ"," ").replace("Ċ","\n"))
             output_list.append("\n" + question+ " :\n=============>\n" + self.BPE_model.decode_clean(answer_input[0,1:seq_idx].cpu().tolist()))
         return output_list

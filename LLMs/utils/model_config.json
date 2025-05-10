@@ -1,0 +1,155 @@
+{
+    "config01": {
+        "model": {
+          "discription": "64 window size traning with all sequence lenght 256 model size 18M",
+          "save_model": true,
+          "only_model": true,
+          "save_dir": "./models/TransformerDecodeOnly/",
+          "load_path": "./models/TransformerDecodeOnly/TransformerDecodeOnly_V01_64R_768_12_12_3072_10K_mn2_MQcpk1.pth",
+          "load_embedding_path": null,
+          "save_file": "TransformerDecodeOnly_V01_64R_768_12_12_3072_10K_mn2_MQcpk2.pth",
+          "d_model": 384,
+          "num_heads": 6,
+          "num_layers": 6,
+          "d_ff": 1536,
+          "dropout": 0.1,
+          "max_norm": 1.0,
+          "vocab_size": 10240,
+          "max_seq_length": 64,
+          "max_seq": 256
+        },
+        "data": {
+          "data_path": "./data/Conversational01/",
+          "data_path_clean": "./data/Conversational01_clean/",
+          "data_path512": "./data/Conversational01_64R_10K/",
+          "data_path512_seq": "./data/Conversational01_64R_10K_seqr/",
+          "tokenizer_path": "./models/BPEs/tokenizer-bpe-conversational-10k.json"
+        },
+        "training": {
+          "start_epoch": 0,
+          "save_every_epoch": 10,
+          "sample_every_epoch": 10,
+          "epochs": 1000,
+          "batch_size": 192,
+          "base_lr": 0.0005,
+          "save_g_loss": "./outputs/TransformerDecodeOnly/imgs",
+          "warmup_steps": 0.01,
+          "max_steps": 1.0
+        },
+        "inference": {
+          "sample_question": [
+            "What’s the best way to fix my kitchen drain?",
+            "Translate the phrase \"Good Morning\" to French",
+            "I'm just going to go to the store and whatever will happen it's going to happen.",
+            "I do not feel comfortable explaining this to you.",
+            "Simple. My girlfriend doesn't do the chores she is supposed to do in the apartment.",
+            "I want to get my neighbors evicted.",
+            "Name four online streaming services.",
+            "hello"
+          ]
+        }
+      },
+
+    "config02": {
+        "model": {
+          "discription": "256 window size traning with all sequence lenght 256 model size 18M",
+          "save_model": true,
+          "only_model": true,
+          "save_dir": "./models/TransformerDecodeOnly/",
+          "load_path": "./models/TransformerDecodeOnly/TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk01F.pth",
+          "load_embedding_path": null,
+          "save_file": "TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk00.pth",
+          "d_model": 384,
+          "num_heads": 6,
+          "num_layers": 6,
+          "d_ff": 1536,
+          "dropout": 0.1,
+          "max_norm": 1.0,
+          "vocab_size": 10240,
+          "max_seq_length": 256,
+          "max_seq": 256
+        },
+        "data": {
+          "data_path": "./data/Conversational01/",
+          "data_path_clean": "./data/Conversational01_clean/",
+          "data_path512": "./data/Conversational01_256_10K/",
+          "data_path512_seq": "./data/Conversational01_256_10K_seqr/",
+          "tokenizer_path": "./models/BPEs/tokenizer-bpe-conversational-10k.json"
+        },
+        "training": {
+          "start_epoch": 0,
+          "save_every_epoch": 1,
+          "sample_every_epoch": 1,
+          "epochs": 1000,
+          "batch_size": 100,
+          "base_lr": 0.0005,
+          "save_g_loss": "./outputs/TransformerDecodeOnly/imgs",
+          "warmup_steps": 0.01,
+          "max_steps": 1.0
+        },
+        "inference": {
+          "sample_question": [
+            "What’s the best way to fix my kitchen drain?",
+            "Translate the phrase \"Good Morning\" to French",
+            "I'm just going to go to the store and whatever will happen it's going to happen.",
+            "I do not feel comfortable explaining this to you.",
+            "Simple. My girlfriend doesn't do the chores she is supposed to do in the apartment.",
+            "I want to get my neighbors evicted.",
+            "Name four online streaming services.",
+            "hello"
+          ]
+        }
+      },
+
+      "config03": {
+        "model": {
+          "discription": "256 window size traning with all sequence lenght 256 model size 18M",
+          "save_model": true,
+          "only_model": true,
+          "save_dir": "./models/TransformerDecodeOnly/",
+          "load_path": "./models/TransformerDecodeOnly/TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk3.pth",
+          "load_embedding_path": null,
+          "save_file": "TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk4.pth",
+          "d_model": 384,
+          "num_heads": 6,
+          "num_layers": 6,
+          "d_ff": 1536,
+          "dropout": 0.1,
+          "max_norm": 1.0,
+          "vocab_size": 10240,
+          "max_seq_length": 256,
+          "max_seq": 256
+        },
+        "data": {
+          "data_path": "./data/Conversational01/",
+          "data_path_clean": "./data/Conversational01_clean/",
+          "data_path512": "./data/Conversational01_256_10K/",
+          "data_path512_seq": "./data/Conversational01_256_10K_seqr/",
+          "tokenizer_path": "./models/BPEs/tokenizer-bpe-conversational-10k.json"
+        },
+        "training": {
+          "start_epoch": 0,
+          "save_every_epoch": 1,
+          "sample_every_epoch": 1,
+          "epochs": 200,
+          "batch_size": 640,
+          "base_lr": 0.0005,
+          "save_g_loss": "./outputs/TransformerDecodeOnly/imgs",
+          "warmup_steps": 0.01,
+          "max_steps": 1.0
+        },
+        "inference": {
+          "sample_question": [
+            "What’s the best way to fix my kitchen drain?",
+            "Translate the phrase \"Good Morning\" to French",
+            "I'm just going to go to the store and whatever will happen it's going to happen.",
+            "I do not feel comfortable explaining this to you.",
+            "Simple. My girlfriend doesn't do the chores she is supposed to do in the apartment.",
+            "I want to get my neighbors evicted.",
+            "Name four online streaming services.",
+            "hello"
+          ]
+        }
+      }
+  }
+  
