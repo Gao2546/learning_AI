@@ -1195,7 +1195,7 @@ class data_loaderQA_SEQR(Dataset):
         #         a_list.append(QA_data[i:i])
 
     def __len__(self):
-        return int(len(self.pre_data)*1.0) #int(len(self.pre_data)*0.1)
+        return int(len(self.pre_data)*0.001) #int(len(self.pre_data)*0.1)
     def __getitem__(self, idx):
 
         # question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["prompt"]).ids
@@ -1243,13 +1243,13 @@ class WarmupCosineScheduler:
         self.base_lr = base_lr
         self.cosine_scheduler = CosineAnnealingLR(optimizer, T_max=max_steps, last_epoch=-1, eta_min=1e-6) #lr=5e-6 1e-6 5e-7
         # self.cosine_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=max_steps, T_mult=1, last_epoch=-1, eta_min=5e-6) 
-        self.current_step = 0
+        self.current_step = 1
         if start_step != None:
             self.current_step = start_step
             self.cosine_scheduler.step(start_step)
 
     def step(self):
-        if self.current_step < self.warmup_steps:
+        if self.current_step <= self.warmup_steps:
             # Linear warmup
             lr = self.base_lr * (self.current_step / self.warmup_steps)
             for param_group in self.optimizer.param_groups:
