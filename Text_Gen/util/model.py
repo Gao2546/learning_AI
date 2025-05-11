@@ -17,6 +17,7 @@ import math
 import signal
 import sys
 import os
+import gc
 
 logging.basicConfig(filename="output_PythonSmall_04_3873data.log", level=logging.INFO)
 
@@ -1165,7 +1166,17 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
 
             if (epoch + 1) % self.sample_every_epoch == 0:
                 # self.save_model_and_optimizer(self.save_dir + "cpk/" + f"epoch_{epoch}_{self.save_file}", epoch = epoch)
-                output_eval = self.eval_model(self.sample_question)
+
+                del output
+                del answer_in
+                del answer_out
+                gc.collect()
+                # Frees up unused memory from the CUDA memory cache
+                torch.cuda.empty_cache()
+                # Collects intermediately unused memory fragments (use with care)
+                torch.cuda.ipc_collect()
+
+                output_eval = self.eval_modelQ(self.sample_question)
                 for o in output_eval:
                     print(o)
                     logging.info(o)
@@ -1260,61 +1271,63 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         print(f"Model and optimizer state dictionaries loaded from {path}")
 
     def eval_model(self, questions):
-        self.Transformer.eval()
-        output_list = []
-        for question in questions:
-            # answer_output = [1, ] + self.tokenizer.token2idx(self.tokenizer.tokenize(question))
-            answer_output = [1] + [5] + self.BPE_model.tokenizer.encode(question).ids + [6]
-            start_seq = len(answer_output) - 1
-            # print(start_seq)
-            answer_output = torch.tensor(answer_output, device=self.device)
-            answer_output = torch.nn.functional.pad(answer_output,(0,self.max_seq - len(answer_output)),"constant",0).unsqueeze(0)
-            # answer_output = torch.zeros((1,self.max_seq_length),device=self.device,dtype=torch.int32)
-            # answer_output[0,0] = 1
-            answer_input = answer_output.clone()
-            seq_idx = 0
-            for seq_idx in range(start_seq,self.max_seq - 1):
-                if answer_output[0].clone().cpu().tolist()[seq_idx] != 3:
-                    answer_input[0,seq_idx] = answer_output.clone()[0,seq_idx]
-                    answer_output = self.Transformer(answer_input)
-                    answer_output = torch.argmax(torch.nn.functional.softmax(answer_output,dim=2),dim=2)
-                    # print(f"seq_idx: {seq_idx}, answer_output: {answer_output}")
-                else:
-                    break
-            answer_input[0,seq_idx] = answer_output.clone()[0,seq_idx]
-            # output_list.append("\n" + question+ " :\n" + "".join(self.tokenizer.idx2token(answer_input[0,1:seq_idx].cpu().tolist())).replace("Ġ"," ").replace("Ċ","\n"))
-            output_list.append("\n" + question+ " :\n=============>\n" + self.BPE_model.decode_clean(answer_input[0,1:seq_idx].cpu().tolist()))
-        return output_list
+        with torch.no_grad():
+            self.Transformer.eval()
+            output_list = []
+            for question in questions:
+                # answer_output = [1, ] + self.tokenizer.token2idx(self.tokenizer.tokenize(question))
+                answer_output = [1] + [5] + self.BPE_model.tokenizer.encode(question).ids + [6]
+                start_seq = len(answer_output) - 1
+                # print(start_seq)
+                answer_output = torch.tensor(answer_output, device=self.device)
+                answer_output = torch.nn.functional.pad(answer_output,(0,self.max_seq - len(answer_output)),"constant",0).unsqueeze(0)
+                # answer_output = torch.zeros((1,self.max_seq_length),device=self.device,dtype=torch.int32)
+                # answer_output[0,0] = 1
+                answer_input = answer_output.clone()
+                seq_idx = 0
+                for seq_idx in range(start_seq,self.max_seq - 1):
+                    if answer_output[0].clone().cpu().tolist()[seq_idx] != 3:
+                        answer_input[0,seq_idx] = answer_output.clone()[0,seq_idx]
+                        answer_output = self.Transformer(answer_input)
+                        answer_output = torch.argmax(torch.nn.functional.softmax(answer_output,dim=2),dim=2)
+                        # print(f"seq_idx: {seq_idx}, answer_output: {answer_output}")
+                    else:
+                        break
+                answer_input[0,seq_idx] = answer_output.clone()[0,seq_idx]
+                # output_list.append("\n" + question+ " :\n" + "".join(self.tokenizer.idx2token(answer_input[0,1:seq_idx].cpu().tolist())).replace("Ġ"," ").replace("Ċ","\n"))
+                output_list.append("\n" + question+ " :\n=============>\n" + self.BPE_model.decode_clean(answer_input[0,1:seq_idx].cpu().tolist()))
+            return output_list
     
 
     def eval_modelQ(self, questions):
-        self.Transformer.eval()
-        output_list = []
-        for question in questions:
-            # answer_output = [1, ] + self.tokenizer.token2idx(self.tokenizer.tokenize(question))
-            answer_output = [1] + [5] + self.BPE_model.tokenizer.encode(question).ids + [6]
-            start_seq = len(answer_output) - 1
-            # print(start_seq)
-            answer_output = torch.tensor(answer_output, device=self.device)
-            answer_output = torch.nn.functional.pad(answer_output,(0,self.max_seq - len(answer_output)),"constant",0).unsqueeze(0)
-            # answer_output = torch.zeros((1,self.max_seq_length),device=self.device,dtype=torch.int32)
-            # answer_output[0,0] = 1
-            answer_input = answer_output.clone()
-            seq_idx = 0
-            for seq_idx in range(start_seq,self.max_seq - 1):
-                if answer_output[0].clone().cpu().tolist()[min(seq_idx, self.max_seq_length - 1)] != 3:
-                    answer_input[0,seq_idx] = answer_output.clone()[0,min(seq_idx, self.max_seq_length - 1)]
-                    answer_output = self.Transformer(answer_input[:,max(0, seq_idx - self.max_seq_length + 1):max(self.max_seq_length, seq_idx+1)])
-                    answer_output = torch.argmax(torch.nn.functional.softmax(answer_output,dim=2),dim=2)
-                    # print(answer_output.size())
-                    # answer_output = torch.nn.functional.pad(answer_output,(0,self.max_seq - len(answer_output)),"constant",0)
-                    # print(f"seq_idx: {seq_idx}, answer_output: {answer_output}")
-                else:
-                    break
-            answer_input[0,seq_idx] = answer_output.clone()[0,min(seq_idx, self.max_seq_length - 1)]
-            # output_list.append("\n" + question+ " :\n" + "".join(self.tokenizer.idx2token(answer_input[0,1:seq_idx].cpu().tolist())).replace("Ġ"," ").replace("Ċ","\n"))
-            output_list.append("\n" + question+ " :\n=============>\n" + self.BPE_model.decode_clean(answer_input[0,1:seq_idx].cpu().tolist()))
-        return output_list
+        with torch.no_grad():
+            self.Transformer.eval()
+            output_list = []
+            for question in questions:
+                # answer_output = [1, ] + self.tokenizer.token2idx(self.tokenizer.tokenize(question))
+                answer_output = [1] + [5] + self.BPE_model.tokenizer.encode(question).ids + [6]
+                start_seq = len(answer_output) - 1
+                # print(start_seq)
+                answer_output = torch.tensor(answer_output, device=self.device)
+                answer_output = torch.nn.functional.pad(answer_output,(0,self.max_seq - len(answer_output)),"constant",0).unsqueeze(0)
+                # answer_output = torch.zeros((1,self.max_seq_length),device=self.device,dtype=torch.int32)
+                # answer_output[0,0] = 1
+                answer_input = answer_output.clone()
+                seq_idx = 0
+                for seq_idx in range(start_seq,self.max_seq - 1):
+                    if answer_output[0].clone().cpu().tolist()[min(seq_idx, self.max_seq_length - 1)] != 3:
+                        answer_input[0,seq_idx] = answer_output.clone()[0,min(seq_idx, self.max_seq_length - 1)]
+                        answer_output = self.Transformer(answer_input[:,max(0, seq_idx - self.max_seq_length + 1):max(self.max_seq_length, seq_idx+1)])
+                        answer_output = torch.argmax(torch.nn.functional.softmax(answer_output,dim=2),dim=2)
+                        # print(answer_output.size())
+                        # answer_output = torch.nn.functional.pad(answer_output,(0,self.max_seq - len(answer_output)),"constant",0)
+                        # print(f"seq_idx: {seq_idx}, answer_output: {answer_output}")
+                    else:
+                        break
+                answer_input[0,seq_idx] = answer_output.clone()[0,min(seq_idx, self.max_seq_length - 1)]
+                # output_list.append("\n" + question+ " :\n" + "".join(self.tokenizer.idx2token(answer_input[0,1:seq_idx].cpu().tolist())).replace("Ġ"," ").replace("Ċ","\n"))
+                output_list.append("\n" + question+ " :\n=============>\n" + self.BPE_model.decode_clean(answer_input[0,1:seq_idx].cpu().tolist()))
+            return output_list
     
 
 
