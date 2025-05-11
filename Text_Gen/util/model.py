@@ -1170,6 +1170,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                 del output
                 del answer_in
                 del answer_out
+                del loss
                 gc.collect()
                 # Frees up unused memory from the CUDA memory cache
                 torch.cuda.empty_cache()
