@@ -1125,65 +1125,68 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
     def train(self):
         scaler = GradScaler()
         self.Transformer.train()
-        for epoch in tqdm(range(self.start_epoch,self.epochs)):
+        for epoch in tqdm(range(self.start_epoch, self.epochs), desc="Epochs"):
             self.loss_epoch = []
-            for answer_in, answer_out in tqdm(self.train_dataloader):
-                # print(answer_in.shape)
-                # print(answer_out.shape)
-                # print(length_answer)
-                # length_answer = length_answer/length_answer.max()
-                signal.signal(signal.SIGINT, signal_handler)
-                self.optimizer.zero_grad()
-                with autocast(device_type='cuda'):  # Mixed precision context device_type='cuda'
-                    output = self.Transformer(answer_in)
-                    loss = self.criterion(output.contiguous().view(-1, self.tgt_vocab_size),
-                                     answer_out.contiguous().view(-1))
-                    # loss = loss.view(answer_in.shape[0],-1)
-                    # loss = loss.sum(dim=1)
-                    # loss = loss*length_answer
-                    # loss = loss.mean()
-                # loss.backward()
-                scaler.scale(loss).backward()
-                self.loss_epoch.append(loss.item())
-                torch.nn.utils.clip_grad_norm_(self.Transformer.parameters(), max_norm=self.max_norm)
-                # self.optimizer.step()
-                scaler.step(self.optimizer)
-                scaler.update()
-            self.scheduler.step()
-            if self.save_model and (((epoch + 1) % self.save_every_epoch) == 0):
-                # self.save(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
-                # self.save_model_and_optimizer(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
-                self.save_model_and_optimizer(self.save_dir + f"{self.save_file}", epoch = epoch)
-                # output_eval = self.eval_model(self.sample_question)
-                logging.info(f"batch_eval : epoch {epoch}")
-                # for o in output_eval:
-                #     print(o)
-                #     logging.info(o)
-                # self.Transformer.train()
-            print(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")
-            logging.info(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")  
-            self.g_loss.add(loss=sum(self.loss_epoch)/len(self.loss_epoch), epoch=self.scheduler.current_step)
+            with tqdm(self.train_dataloader, desc=f"Epoch {epoch+1}") as batch_bar:
+                for answer_in, answer_out in batch_bar:
+                    # print(answer_in.shape)
+                    # print(answer_out.shape)
+                    # print(length_answer)
+                    # length_answer = length_answer/length_answer.max()
+                    signal.signal(signal.SIGINT, signal_handler)
+                    self.optimizer.zero_grad()
+                    with autocast(device_type='cuda'):  # Mixed precision context device_type='cuda'
+                        output = self.Transformer(answer_in)
+                        loss = self.criterion(output.contiguous().view(-1, self.tgt_vocab_size),
+                                         answer_out.contiguous().view(-1))
+                        # loss = loss.view(answer_in.shape[0],-1)
+                        # loss = loss.sum(dim=1)
+                        # loss = loss*length_answer
+                        # loss = loss.mean()
+                    # loss.backward()
+                    scaler.scale(loss).backward()
+                    self.loss_epoch.append(loss.item())
+                    torch.nn.utils.clip_grad_norm_(self.Transformer.parameters(), max_norm=self.max_norm)
+                    # self.optimizer.step()
+                    scaler.step(self.optimizer)
+                    scaler.update()
+                    # Show current loss in tqdm
+                    batch_bar.set_postfix(loss=loss.item())
+                self.scheduler.step()
+                if self.save_model and (((epoch + 1) % self.save_every_epoch) == 0):
+                    # self.save(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
+                    # self.save_model_and_optimizer(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
+                    self.save_model_and_optimizer(self.save_dir + f"{self.save_file}", epoch = epoch)
+                    # output_eval = self.eval_model(self.sample_question)
+                    logging.info(f"batch_eval : epoch {epoch}")
+                    # for o in output_eval:
+                    #     print(o)
+                    #     logging.info(o)
+                    # self.Transformer.train()
+                print(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")
+                logging.info(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")  
+                self.g_loss.add(loss=sum(self.loss_epoch)/len(self.loss_epoch), epoch=self.scheduler.current_step)
 
-            if (epoch + 1) % self.sample_every_epoch == 0:
-                # self.save_model_and_optimizer(self.save_dir + "cpk/" + f"epoch_{epoch}_{self.save_file}", epoch = epoch)
+                if (epoch + 1) % self.sample_every_epoch == 0:
+                    # self.save_model_and_optimizer(self.save_dir + "cpk/" + f"epoch_{epoch}_{self.save_file}", epoch = epoch)
 
-                del output
-                del answer_in
-                del answer_out
-                del loss
-                gc.collect()
-                # Frees up unused memory from the CUDA memory cache
-                torch.cuda.empty_cache()
-                # Collects intermediately unused memory fragments (use with care)
-                torch.cuda.ipc_collect()
+                    del output
+                    del answer_in
+                    del answer_out
+                    del loss
+                    gc.collect()
+                    # Frees up unused memory from the CUDA memory cache
+                    torch.cuda.empty_cache()
+                    # Collects intermediately unused memory fragments (use with care)
+                    torch.cuda.ipc_collect()
 
-                output_eval = self.eval_modelQ(self.sample_question)
-                for o in output_eval:
-                    print(o)
-                    logging.info(o)
-                    print("\n=====================================\n")
-                self.g_loss.plot_save(file_path=self.save_g_loss, para=self.save_file.replace(".pth",""))
-                self.Transformer.train()
+                    output_eval = self.eval_modelQ(self.sample_question)
+                    for o in output_eval:
+                        print(o)
+                        logging.info(o)
+                        print("\n=====================================\n")
+                    self.g_loss.plot_save(file_path=self.save_g_loss, para=self.save_file.replace(".pth",""))
+                    self.Transformer.train()
 
     def save(self,path):
         torch.save(self.Transformer.state_dict(),path)
