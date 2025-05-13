@@ -1079,8 +1079,8 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         # Learning rate scheduler
         # self.warmup_steps = int(self.epochs*0.01*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
         # self.max_steps = int(self.epochs*0.9*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025
-        self.warmup_steps = int(self.epochs*training_config['warmup_steps']) #5% 0.02
-        self.max_steps = int(self.epochs*training_config['max_steps']) #50% 0.025
+        self.warmup_steps = int(self.epochs*training_config['warmup_steps']*math.ceil(len(self.train_data)/self.batch_size)) #5% 0.02
+        self.max_steps = int(self.epochs*training_config['max_steps']*math.ceil(len(self.train_data)/self.batch_size)) #50% 0.025
         self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=self.base_lr, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
 
         if self.load_path:
@@ -1151,8 +1151,9 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                     scaler.step(self.optimizer)
                     scaler.update()
                     # Show current loss in tqdm
+                    self.g_loss.add(loss=loss.item(), epoch=self.scheduler.current_step)
                     batch_bar.set_postfix(loss=loss.item())
-                self.scheduler.step()
+                    self.scheduler.step()
                 if self.save_model and (((epoch + 1) % self.save_every_epoch) == 0):
                     # self.save(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
                     # self.save_model_and_optimizer(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
@@ -1165,7 +1166,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                     # self.Transformer.train()
                 print(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")
                 logging.info(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")  
-                self.g_loss.add(loss=sum(self.loss_epoch)/len(self.loss_epoch), epoch=self.scheduler.current_step)
+                # self.g_loss.add(loss=sum(self.loss_epoch)/len(self.loss_epoch), epoch=self.scheduler.current_step)
 
                 if (epoch + 1) % self.sample_every_epoch == 0:
                     # self.save_model_and_optimizer(self.save_dir + "cpk/" + f"epoch_{epoch}_{self.save_file}", epoch = epoch)
