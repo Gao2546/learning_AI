@@ -1085,7 +1085,7 @@ class data_loaderQA_SEQ(Dataset):
         #         a_list.append(QA_data[i:i])
 
     def __len__(self):
-        return int(len(self.pre_data)*0.001) #int(len(self.pre_data)*0.1)
+        return int(len(self.pre_data)*0.0001) #int(len(self.pre_data)*0.1)
     def __getitem__(self, idx):
 
         # question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["prompt"]).ids

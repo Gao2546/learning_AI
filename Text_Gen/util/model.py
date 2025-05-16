@@ -930,7 +930,7 @@ class Transformer:
 class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
     def __init__(self): #loss == 0.02 0.006
         config = Config("./util/model_config.json")
-        config = config.config01
+        config = config.config02
         model_config = config['model']
         data_config = config['data']
         training_config = config['training']
@@ -960,6 +960,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         
         self.start_epoch = training_config['start_epoch']#0
         self.save_every_epoch = training_config['save_every_epoch']#10
+        self.save_every_step = training_config['save_every_step']
         self.sample_every_epoch = training_config['sample_every_epoch']#10
         self.epochs = training_config['epochs']#1000
         self.batch_size = training_config['batch_size']#int(16*12) #16*4*10 16*6 16*2.5
@@ -973,7 +974,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         # self.BPE_model.train([self.data_path])
         self.BPE_model.load(self.tokenizer_path)
         # self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
-        self.train_data = data_loaderQA_SEQR(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
+        self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
         #========================================================================================
         # self.train_data =  dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=10)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)
@@ -1154,12 +1155,31 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                     self.g_loss.add(loss=loss.item(), epoch=self.scheduler.current_step)
                     batch_bar.set_postfix(loss=loss.item())
                     self.scheduler.step()
+                    if self.scheduler.current_step % self.save_every_step == 0:
+                        self.save_model_and_optimizer(self.save_dir + f"{self.save_file}", epoch = epoch)
+                        del output
+                        del answer_in
+                        del answer_out
+                        del loss
+                        gc.collect()
+                        # Frees up unused memory from the CUDA memory cache
+                        torch.cuda.empty_cache()
+                        # Collects intermediately unused memory fragments (use with care)
+                        torch.cuda.ipc_collect()
+    
+                        output_eval = self.eval_modelQ(self.sample_question)
+                        for o in output_eval:
+                            print(o)
+                            logging.info(o)
+                            print("\n=====================================\n")
+                        self.g_loss.plot_save(file_path=self.save_g_loss, para=self.save_file.replace(".pth",""))
+                        self.Transformer.train()
                 if self.save_model and (((epoch + 1) % self.save_every_epoch) == 0):
                     # self.save(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
                     # self.save_model_and_optimizer(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
                     self.save_model_and_optimizer(self.save_dir + f"{self.save_file}", epoch = epoch)
                     # output_eval = self.eval_model(self.sample_question)
-                    logging.info(f"batch_eval : epoch {epoch}")
+                    # logging.info(f"batch_eval : epoch {epoch}")
                     # for o in output_eval:
                     #     print(o)
                     #     logging.info(o)
