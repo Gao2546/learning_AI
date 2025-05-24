@@ -1333,6 +1333,20 @@ class data_loader_LongText(Dataset):
         self.data_path = path
         self.data_path512_seq = data_path512_seq
         self.data_sector = data_sector
+        self.pre_data = None
+
+
+        def prepare_chunks():
+            print("test")
+
+            for item in self.pre_data:
+                text = item["text"]
+                tokens = self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids
+
+                # Chunk this one document (no need to build global token list)
+                for i in range(0, len(tokens) - self.max_len - 1, self.max_len):
+                    chunk = tokens[i:i + self.max_len + 1]
+                    yield {"input_ids": chunk}
 
         if not os.path.isdir(os.path.join(self.data_path, "train")):
             print("Downloading OpenWebText and saving...")
@@ -1341,8 +1355,8 @@ class data_loader_LongText(Dataset):
             dataset = None
             del dataset
         if len(os.listdir(self.data_path)) > 1 and len(os.listdir(self.data_path512_seq)) <= 1:
-            self.pre_data = load_from_disk(self.data_path)
-            self.pre_data = DatasetLoad.from_generator(self._prepare_chunks,num_proc=8)
+            self.pre_data = load_from_disk(self.data_path)['train']
+            self.pre_data = DatasetLoad.from_generator(prepare_chunks,num_proc=8)
             self.pre_data.save_to_disk(self.data_path512_seq)
             self.pre_data = None
             del self.pre_data
@@ -1350,21 +1364,6 @@ class data_loader_LongText(Dataset):
             self.tokenized_chunks = load_from_disk(self.data_path512_seq)
         # self.tokenized_chunks = self._prepare_chunks(self.dataset["train"])
         print(f"Prepared {len(self.tokenized_chunks)} chunks.")
-
-    def _prepare_chunks(self, raw_dataset):
-        # chunks = []
-
-        for item in raw_dataset:
-            text = item["text"]
-            tokens = self.tokenizer.tokenizer.encode(text, add_special_tokens=False)
-
-            # Chunk this one document (no need to build global token list)
-            for i in range(0, len(tokens) - self.max_len - 1, self.max_len):
-                chunk = tokens[i:i + self.max_len + 1]
-                yield chunk
-                # chunks.append(chunk)
-
-        # return chunks
 
 
     def __len__(self):

@@ -972,7 +972,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         # self.BPE_model = BPEsQA(vocab_size=self.vocab_size)
         self.BPE_model = BPEsSEQ(vocab_size=self.vocab_size)
       
-        self.BPE_model.train([self.data_path])
+        # self.BPE_model.train([self.data_path])
         self.BPE_model.load(self.tokenizer_path)
         # self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
         # self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
