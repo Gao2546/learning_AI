@@ -275,6 +275,97 @@ class BPEsQA:
         # import re
         # cleaned_text = re.sub(r' +', ' ', cleaned_text)
         return cleaned_text
+    
+
+class BPEsSEQ:
+    def __init__(self, vocab_size=5120):
+        # Initialize tokenizer
+        self.tokenizer = Tokenizer(BPE(unk_token="<|unk|>"))
+        self.normalizer = NormalizerSequence([
+            # NFKC(), # Optional: Unicode normalization
+            # Lowercase(), # Optional: Convert to lowercase
+            Replace("\n", "Ċ") # Replace newline with Ċ
+        ])
+        self.tokenizer.normalizer = self.normalizer
+        # self.tokenizer.pre_tokenizer = Metaspace(replacement="Ġ")
+        self.pre_tokenizer = PreTokenizerSequence([
+            Split(pattern="Ċ", behavior="isolated"), # Treat Ċ as a separate pre-token
+            Metaspace(replacement="Ġ", prepend_scheme="never") # Handle spaces/prefixes for other parts
+        ])
+        self.tokenizer.pre_tokenizer = self.pre_tokenizer
+
+        # Define trainer with small vocab size
+        self.trainer = BpeTrainer(
+            vocab_size=vocab_size,
+            special_tokens=["<|pad|>", 
+                            "<|startoftext|>", 
+                            "<|unk|>", 
+                            "<|endoftext|>",
+                            "Ċ", # Add our custom newline token here
+                            "<|Q:|>",
+                            "<|A:|>"
+                            ],
+            show_progress=True,
+        )
+
+    def train(self, path, method = 2):
+        # Train on a text corpus (plain text file paths)
+        if method == 1:
+            self.tokenizer.train(path, self.trainer)
+        elif method == 2:
+            if not os.path.isdir(path[0] + "train" if isinstance(path, list) else path + "train"):
+                print("Directory does not exist.")
+                # load_dataset(path="jtatman/python-code-dataset-500k", save_infos=True).save_to_disk(path[0] if isinstance(path, list) else path)
+                load_dataset(path="openwebtext", save_infos=True).save_to_disk(path[0] if isinstance(path, list) else path)
+            # data = load_dataset(path=path[0] if isinstance(path, list) else path, split="train")
+            data = load_from_disk(dataset_path = path[0] if isinstance(path, list) else path)["train"]
+            # Extract the text column
+            def text_iterator():
+                for sample in data:
+                    yield sample["text"]
+
+            # Train tokenizer from iterator
+            self.tokenizer.train_from_iterator(text_iterator(), trainer=self.trainer)
+
+        # Save the tokenizer
+        # self.tokenizer.save(f"./model/BPE_model/tokenizer-bpe-{self.trainer.vocab_size // 1000}k.json")
+        self.tokenizer.save(f"./model/BPE_model/tokenizer-bpe-conversational-{self.trainer.vocab_size // 1000}k.json")
+
+    def load(self, path):
+        # Load the tokenizer
+        self.tokenizer = Tokenizer.from_file(path)
+        # self.tokenizer.pre_tokenizer = Metaspace(replacement="Ġ")
+        self.tokenizer.normalizer = self.normalizer
+        self.tokenizer.pre_tokenizer = self.pre_tokenizer
+        # self.tokenizer.enable_truncation(5120)
+        # self.tokenizer.enable_padding(pad_id=0, pad_token="<|pad|>", length=5120)
+
+    def save(self, path):
+        # Save the tokenizer
+        self.tokenizer.save(path)
+
+    def encode(self, text: str):
+        """Encodes a piece of text."""
+        return self.tokenizer.encode(text)
+
+    def decode(self, ids: list[int]):
+        """Decodes a list of token IDs back to text."""
+        # Note: This will decode 'Ċ' as 'Ċ'. If you need '\n' back,
+        # you'll need to replace it manually after decoding.
+        # The 'Ġ' characters will likely remain as well.
+        return self.tokenizer.decode(ids, skip_special_tokens=False)
+
+    def decode_clean(self, ids: list[int]):
+        """Decodes IDs and performs basic cleanup (Ċ -> \n, Ġ -> space)."""
+        decoded_text = self.tokenizer.decode(ids, skip_special_tokens=False)
+        # Replace the custom newline token back to a standard newline
+        # Replace the Metaspace prefix (often you want a space instead)
+        # Use strip() to remove leading/trailing whitespace potentially introduced
+        cleaned_text = decoded_text.replace(" ","").replace("Ċ", "\n").replace("Ġ", " ").replace("<|Q:|>", "Q: ").replace("<|A:|>","\nA: ").strip()
+        # Handle potential double spaces resulting from replacements
+        # import re
+        # cleaned_text = re.sub(r' +', ' ', cleaned_text)
+        return cleaned_text
 
 
 
@@ -1233,6 +1324,72 @@ class data_loaderQA_SEQR(Dataset):
     def get_vocab(self):
         return self.new_tokenizer.vocab
     
+
+class data_loader_LongText(Dataset):
+    def __init__(self, path, data_path512_seq, new_tokenizer, max_len=1024, data_sector=0):
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.max_len = max_len
+        self.tokenizer = new_tokenizer
+        self.data_path = path
+        self.data_path512_seq = data_path512_seq
+        self.data_sector = data_sector
+
+        if not os.path.isdir(os.path.join(self.data_path, "train")):
+            print("Downloading OpenWebText and saving...")
+            dataset = load_dataset("openwebtext")
+            dataset.save_to_disk(self.data_path)
+            dataset = None
+            del dataset
+        if len(os.listdir(self.data_path)) > 1 and len(os.listdir(self.data_path512_seq)) <= 1:
+            self.pre_data = load_from_disk(self.data_path)
+            self.pre_data = DatasetLoad.from_generator(self._prepare_chunks,num_proc=8)
+            self.pre_data.save_to_disk(self.data_path512_seq)
+            self.pre_data = None
+            del self.pre_data
+        else:
+            self.tokenized_chunks = load_from_disk(self.data_path512_seq)
+        # self.tokenized_chunks = self._prepare_chunks(self.dataset["train"])
+        print(f"Prepared {len(self.tokenized_chunks)} chunks.")
+
+    def _prepare_chunks(self, raw_dataset):
+        # chunks = []
+
+        for item in raw_dataset:
+            text = item["text"]
+            tokens = self.tokenizer.tokenizer.encode(text, add_special_tokens=False)
+
+            # Chunk this one document (no need to build global token list)
+            for i in range(0, len(tokens) - self.max_len - 1, self.max_len):
+                chunk = tokens[i:i + self.max_len + 1]
+                yield chunk
+                # chunks.append(chunk)
+
+        # return chunks
+
+
+    def __len__(self):
+        return int(len(self.tokenized_chunks) * 0.0001)  # reduce for debugging
+
+    def __getitem__(self, idx):
+        idx = idx + int(len(self.tokenized_chunks) * 0.0001) * self.data_sector
+        chunk = self.tokenized_chunks[idx]
+
+        input_ids = torch.tensor(chunk[:-1], device=self.device)
+        labels = torch.tensor(chunk[1:], device=self.device)
+
+        # Pad to max_len if needed
+        input_ids = F.pad(input_ids, (0, max(self.max_len - len(input_ids), -100000)), value=0)
+        labels = F.pad(labels, (0, max(self.max_len - len(labels), -100000)), value=0)
+
+        return input_ids, labels
+
+    def get_sample(self):
+        rr = random.randint(0, len(self.tokenized_chunks)-10)
+        return self.tokenized_chunks[rr:rr+10]
+
+    def get_vocab(self):
+        return self.tokenizer.vocab
+
 
 class WarmupCosineScheduler:
     def __init__(self, optimizer, warmup_steps, max_steps, base_lr, start_step):

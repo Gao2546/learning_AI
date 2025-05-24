@@ -930,7 +930,7 @@ class Transformer:
 class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
     def __init__(self): #loss == 0.02 0.006
         config = Config("./util/model_config.json")
-        config = config.config02
+        config = config.config05
         model_config = config['model']
         data_config = config['data']
         training_config = config['training']
@@ -969,12 +969,14 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.vocab_size = model_config['vocab_size']#1024*10
         print("self.max_seq_length: ", self.max_seq_length)
         # self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=3873)
-        self.BPE_model = BPEsQA(vocab_size=self.vocab_size)
+        # self.BPE_model = BPEsQA(vocab_size=self.vocab_size)
+        self.BPE_model = BPEsSEQ(vocab_size=self.vocab_size)
       
-        # self.BPE_model.train([self.data_path])
+        self.BPE_model.train([self.data_path])
         self.BPE_model.load(self.tokenizer_path)
         # self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
-        self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
+        # self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
+        self.train_data = data_loader_LongText(self.data_path, self.data_path512_seq, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_sector=0)
         #========================================================================================
         # self.train_data =  dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=10)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)
@@ -1128,6 +1130,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.Transformer.train()
         for epoch in tqdm(range(self.start_epoch, self.epochs), desc="Epochs"):
             self.loss_epoch = []
+            self.loss_step = []
             with tqdm(self.train_dataloader, desc=f"Epoch {epoch+1}") as batch_bar:
                 for answer_in, answer_out in batch_bar:
                     # print(answer_in.shape)
@@ -1153,10 +1156,14 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                     scaler.update()
                     # Show current loss in tqdm
                     self.g_loss.add(loss=loss.item(), epoch=self.scheduler.current_step)
+                    self.loss_step.append(loss.item())
                     batch_bar.set_postfix(loss=loss.item())
                     self.scheduler.step()
                     if self.scheduler.current_step % self.save_every_step == 0:
                         self.save_model_and_optimizer(self.save_dir + f"{self.save_file}", epoch = epoch)
+                        print(f"loss: {sum(self.loss_step)/len(self.loss_step)}")
+                        logging.info(f"loss: {sum(self.loss_step)/len(self.loss_step)}")
+                        self.loss_step = []
                         del output
                         del answer_in
                         del answer_out

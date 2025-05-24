@@ -150,6 +150,57 @@
             "hello"
           ]
         }
+      },
+    "config04": {
+        "model": {
+          "discription": "256 window size traning with all sequence lenght 256 model size 18M",
+          "save_model": true,
+          "only_model": true,
+          "save_dir": "./models/TransformerDecodeOnly/",
+          "load_path": "./models/TransformerDecodeOnly/TransformerDecodeOnly_V01_256_768_12_12_3072_10K_MQcpk9NT.pth",
+          "load_embedding_path": null,
+          "save_file": "TransformerDecodeOnly_V01_256_768_12_12_3072_10K_MQcpk1.pth",
+          "d_model": 768,
+          "num_heads": 12,
+          "num_layers": 12,
+          "d_ff": 3072,
+          "dropout": 0.1,
+          "max_norm": 1.0,
+          "vocab_size": 10240,
+          "max_seq_length": 256,
+          "max_seq": 256
+        },
+        "data": {
+          "data_path": "./data/Conversational01/",
+          "data_path_clean": "./data/Conversational01_clean/",
+          "data_path512": "./data/Conversational01_256_10K/",
+          "data_path512_seq": "./data/Conversational01_256_10K_seqr/",
+          "tokenizer_path": "./models/BPEs/tokenizer-bpe-conversational-10k.json"
+        },
+        "training": {
+          "start_epoch": 0,
+          "save_every_epoch": 1,
+          "save_every_step": 2000,
+          "sample_every_epoch": 1,
+          "epochs": 5,
+          "batch_size": 112,
+          "base_lr": 0.0005,
+          "save_g_loss": "./outputs/TransformerDecodeOnly/imgs",
+          "warmup_steps": 0.02,
+          "max_steps": 1.0
+        },
+        "inference": {
+          "sample_question": [
+            "What’s the best way to fix my kitchen drain?",
+            "Translate the phrase \"Good Morning\" to French",
+            "I'm just going to go to the store and whatever will happen it's going to happen.",
+            "I do not feel comfortable explaining this to you.",
+            "Simple. My girlfriend doesn't do the chores she is supposed to do in the apartment.",
+            "I want to get my neighbors evicted.",
+            "Name four online streaming services.",
+            "hello"
+          ]
+        }
       }
   }
   

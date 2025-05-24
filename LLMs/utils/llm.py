@@ -9,7 +9,7 @@ from flask import Flask, request, jsonify # Import Flask components
 
 
 config = Config("./utils/model_config.json")
-config = config.config02
+config = config.config04
 model_config = config['model']
 data_config = config['data']
 training_config = config['training']
