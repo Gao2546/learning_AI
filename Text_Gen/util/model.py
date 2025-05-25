@@ -1077,13 +1077,13 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.criterion = nn.CrossEntropyLoss(ignore_index=0, reduction='mean').to(device=0)
         self.optimizer = optim.AdamW(self.Transformer.parameters(),
                                     #  lr=2e-4)
-                               lr=self.base_lr, betas=(0.9, 0.95), eps=1e-9) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
+                               lr=self.base_lr, betas=(0.9, 0.999), eps=1e-8) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
                                
 
         # Learning rate scheduler
         # self.warmup_steps = int(self.epochs*0.01*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
         # self.max_steps = int(self.epochs*0.9*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025
-        self.warmup_steps = int(self.epochs*training_config['warmup_steps']*math.ceil(len(self.train_data)/self.batch_size)) #5% 0.02
+        self.warmup_steps = training_config['warmup_steps']#int(self.epochs*training_config['warmup_steps']*math.ceil(len(self.train_data)/self.batch_size)) #5% 0.02
         self.max_steps = int(self.epochs*training_config['max_steps']*math.ceil(len(self.train_data)/self.batch_size)) #50% 0.025
         self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=self.base_lr, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
 
