@@ -940,6 +940,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.save_dir = model_config['save_dir']#"./model/TransformerDecodeOnly/"
         self.load_path = model_config['load_path']#"./model/TransformerDecodeOnly/TransformerDecodeOnly_V01_64R_768_12_12_3072_10K_mn2_MQcpk1.pth" #DGood For Traning set ./model/TransformerDecodeOnly/TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk1.pth
         self.load_embedding_path = model_config['load_embedding_path']#"./model/Transformer/embedding_model.pth"
+        self.accumulation_steps = training_config["accumulation_steps"]
         
         self.data_path = data_config['data_path']#"./data/Conversational01/"
         self.data_path_clean = data_config['data_path_clean']#"./data/Conversational01_clean/"
@@ -1132,7 +1133,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
             self.loss_epoch = []
             self.loss_step = []
             with tqdm(self.train_dataloader, desc=f"Epoch {epoch+1}") as batch_bar:
-                for answer_in, answer_out in batch_bar:
+                for steps, (answer_in, answer_out) in enumerate(batch_bar):
                     # print(answer_in.shape)
                     # print(answer_out.shape)
                     # print(length_answer)
@@ -1143,6 +1144,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                         output = self.Transformer(answer_in)
                         loss = self.criterion(output.contiguous().view(-1, self.tgt_vocab_size),
                                          answer_out.contiguous().view(-1))
+                        loss = loss / self.accumulation_steps
                         # loss = loss.view(answer_in.shape[0],-1)
                         # loss = loss.sum(dim=1)
                         # loss = loss*length_answer
@@ -1152,8 +1154,9 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                     self.loss_epoch.append(loss.item())
                     torch.nn.utils.clip_grad_norm_(self.Transformer.parameters(), max_norm=self.max_norm)
                     # self.optimizer.step()
-                    scaler.step(self.optimizer)
-                    scaler.update()
+                    if (steps + 1) % self.accumulation_steps == 0:
+                        scaler.step(self.optimizer)
+                        scaler.update()
                     # Show current loss in tqdm
                     self.g_loss.add(loss=loss.item(), epoch=self.scheduler.current_step)
                     self.loss_step.append(loss.item())
@@ -1181,6 +1184,9 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                             print("\n=====================================\n")
                         self.g_loss.plot_save(file_path=self.save_g_loss, para=self.save_file.replace(".pth",""))
                         self.Transformer.train()
+                if (steps + 1) % self.accumulation_steps != 0:
+                        scaler.step(self.optimizer)
+                        scaler.update()
                 if self.save_model and (((epoch + 1) % self.save_every_epoch) == 0):
                     # self.save(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
                     # self.save_model_and_optimizer(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
