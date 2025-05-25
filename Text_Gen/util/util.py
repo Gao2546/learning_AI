@@ -1334,14 +1334,17 @@ class data_loader_LongText(Dataset):
         self.data_path512_seq = data_path512_seq
         self.data_sector = data_sector
         self.pre_data = None
+        self.number_of_token = 0
 
 
         def prepare_chunks():
-            print("test")
 
             for item in self.pre_data:
+                if self.number_of_token >= 2000_000_000:
+                    break
                 text = item["text"]
                 tokens = self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids
+                self.number_of_token += len(tokens)
 
                 # Chunk this one document (no need to build global token list)
                 for i in range(0, len(tokens) - self.max_len - 1, self.max_len):
@@ -1360,18 +1363,18 @@ class data_loader_LongText(Dataset):
             self.pre_data.save_to_disk(self.data_path512_seq)
             self.pre_data = None
             del self.pre_data
-        else:
-            self.tokenized_chunks = load_from_disk(self.data_path512_seq)
+        self.tokenized_chunks = load_from_disk(self.data_path512_seq)
         # self.tokenized_chunks = self._prepare_chunks(self.dataset["train"])
         print(f"Prepared {len(self.tokenized_chunks)} chunks.")
 
 
     def __len__(self):
-        return int(len(self.tokenized_chunks) * 0.0001)  # reduce for debugging
+        return int(len(self.tokenized_chunks) * 1.0)  # reduce for debugging
 
     def __getitem__(self, idx):
-        idx = idx + int(len(self.tokenized_chunks) * 0.0001) * self.data_sector
-        chunk = self.tokenized_chunks[idx]
+        idx = idx + int(len(self.tokenized_chunks) * 1.0) * self.data_sector
+        chunk = self.tokenized_chunks[idx]["input_ids"]
+        print(chunk)
 
         input_ids = torch.tensor(chunk[:-1], device=self.device)
         labels = torch.tensor(chunk[1:], device=self.device)

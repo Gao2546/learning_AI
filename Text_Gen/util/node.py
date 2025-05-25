@@ -162,7 +162,7 @@ class DecoderLayerOnly(nn.Module):
         self.feed_forward = PositionWiseFeedForward(d_model, d_ff)
         self.norm1 = nn.LayerNorm(d_model)
         # self.norm2 = nn.LayerNorm(d_model)
-        self.norm3 = nn.LayerNorm(d_model)
+        # self.norm3 = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, tgt_mask):
@@ -171,7 +171,8 @@ class DecoderLayerOnly(nn.Module):
         # attn_output = self.cross_attn(x, enc_output, enc_output, src_mask)
         # x = self.norm2(x + self.dropout(attn_output))
         ff_output = self.feed_forward(x)
-        x = self.norm3(x + self.dropout(ff_output))
+        x = x + self.dropout(ff_output)
+        # x = self.norm3(x + self.dropout(ff_output))
         return x
     
 # class DecoderLayer(nn.Module):
