@@ -1340,11 +1340,13 @@ class data_loader_LongText(Dataset):
         def prepare_chunks():
 
             for item in self.pre_data:
-                if self.number_of_token >= 2000_000_000:
+                if self.number_of_token >= 5000_000_000:
                     break
+                if self.number_of_token % 100_000:
+                    print(self.number_of_token)
                 text = item["text"]
-                tokens = self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids
-                self.number_of_token += len(tokens)
+                tokens = [1] + self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids + [3]
+                self.number_of_token += (len(tokens) - 2)
 
                 # Chunk this one document (no need to build global token list)
                 for i in range(0, len(tokens) - self.max_len - 1, self.max_len):
