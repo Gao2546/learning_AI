@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 from torch.nn import functional as F
 import pandas as pd
+import numpy as np
 import torch
 import random
 import os
@@ -1335,23 +1336,58 @@ class data_loader_LongText(Dataset):
         self.data_sector = data_sector
         self.pre_data = None
         self.number_of_token = 0
+        self.chunk_size = 1000
+        self.count_c = 1_000_000
+
+        def chunk_document(batch):
+            input_ids = []
+            max_len = self.max_len
+
+            for text in batch["text"]:
+                tokens = np.array([1] + self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids + [3], dtype=np.uint16)
+                L = len(tokens)
+                self.number_of_token += (L - 2)
+
+                for i in range(3, min(L, max_len + 1)):
+                    input_ids.append(tokens[:i])
+
+                for i in range(L - max_len):
+                    chunk = tokens[i:i + max_len]
+                    input_ids.append(chunk)
+
+            return {"input_ids": input_ids}
 
 
-        def prepare_chunks():
+        # Break your dataset into slices
+        def chunked_map():
+            chunked_slices = []
+            total_len = len(self.pre_data)
 
-            for item in self.pre_data:
-                if self.number_of_token >= 5000_000_000:
-                    break
-                if self.number_of_token % 100_000:
+            for start in range(0, total_len, self.chunk_size):
+                end = min(start + self.chunk_size, total_len)
+                print(f"Processing records {start} to {end}")
+
+                slice = self.pre_data.select(range(start, end))
+
+                mapped = slice.map(
+                            chunk_document,
+                            batched=True,
+                            remove_columns=["text"],
+                            num_proc=16,
+                            desc=f"Chunking [{start}-{end}]",
+                            load_from_cache_file=False,     # ปิด cache
+                        )
+
+                chunked_slices.append(mapped)
+
+                if self.number_of_token >= self.count_c:
                     print(self.number_of_token)
-                text = item["text"]
-                tokens = [1] + self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids + [3]
-                self.number_of_token += (len(tokens) - 2)
+                    self.count_c += 1_000_000
 
-                # Chunk this one document (no need to build global token list)
-                for i in range(0, len(tokens) - self.max_len - 1, self.max_len):
-                    chunk = tokens[i:i + self.max_len + 1]
-                    yield {"input_ids": chunk}
+                if self.number_of_token >= 2_000_000_000:
+                    break
+
+            return concatenate_datasets(chunked_slices)
 
         if not os.path.isdir(os.path.join(self.data_path, "train")):
             print("Downloading OpenWebText and saving...")
@@ -1361,7 +1397,8 @@ class data_loader_LongText(Dataset):
             del dataset
         if len(os.listdir(self.data_path)) > 1 and len(os.listdir(self.data_path512_seq)) <= 1:
             self.pre_data = load_from_disk(self.data_path)['train']
-            self.pre_data = DatasetLoad.from_generator(prepare_chunks,num_proc=8)
+            # self.pre_data = DatasetLoad.from_generator(prepare_chunks,num_proc=16)
+            self.pre_data = chunked_map()
             self.pre_data.save_to_disk(self.data_path512_seq)
             self.pre_data = None
             del self.pre_data
@@ -1376,7 +1413,6 @@ class data_loader_LongText(Dataset):
     def __getitem__(self, idx):
         idx = idx + int(len(self.tokenized_chunks) * 1.0) * self.data_sector
         chunk = self.tokenized_chunks[idx]["input_ids"]
-        print(chunk)
 
         input_ids = torch.tensor(chunk[:-1], device=self.device)
         labels = torch.tensor(chunk[1:], device=self.device)
@@ -1393,6 +1429,78 @@ class data_loader_LongText(Dataset):
 
     def get_vocab(self):
         return self.tokenizer.vocab
+    
+
+class data_loader_LongText_NoPre(Dataset):
+    def __init__(self,path, tokenizer, max_len=1024, data_sector=0):
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.path = path
+        self.max_len = max_len
+        self.tokenizer = tokenizer
+        self.data_sector = data_sector
+        self.index_map_path = os.path.join(self.path, "index_map.pkl")
+        # self.dataset = load_dataset("openwebtext", split="train")  # โหลด text ตรง ๆ ไม่ต้อง save_to_disk
+        if not os.path.isdir(os.path.join(self.path, "train")):
+            print("Downloading OpenWebText and saving...")
+            dataset = load_dataset("openwebtext")
+            dataset.save_to_disk(self.path)
+            dataset = None
+            del dataset
+
+        self.dataset = load_from_disk(self.path)['train']
+        if os.path.exists(self.index_map_path):
+            print("Loading cached index_map...")
+            with open(self.index_map_path, "rb") as f:
+                self.index_map = pickle.load(f)
+        else:
+            print("Building index_map...")
+            self.index_map = self._build_index_map()
+            print("Saving index_map to cache...")
+            with open(self.index_map_path, "wb") as f:
+                pickle.dump(self.index_map, f)
+        # self.index_map = self._build_index_map()
+        print(f"Dataset loaded with {len(self.index_map)} sub-sequences.")
+
+    def _build_index_map(self):
+        index_map = []
+        for doc_idx, example in tqdm(enumerate(self.dataset)):
+            tokens = [1] + self.tokenizer.tokenizer.encode(example['text'], add_special_tokens=False).ids + [3]
+            L = len(tokens)
+
+            # Growing window
+            for i in range(3, min(L, self.max_len + 1)):
+                index_map.append((doc_idx, 0, i))  # (doc_id, start, end)
+
+            # Sliding window
+            for i in range(L - self.max_len):
+                index_map.append((doc_idx, i, i + self.max_len))
+
+        return index_map
+
+    def __len__(self):
+        return len(self.index_map)
+
+    def __getitem__(self, idx):
+        doc_idx, start, end = self.index_map[idx]
+        text = self.dataset[doc_idx]['text']
+        tokens = [1] + self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids + [3]
+        chunk = tokens[start:end]
+
+        input_ids = torch.tensor(chunk[:-1], device=self.device)
+        labels = torch.tensor(chunk[1:], device=self.device)
+
+        input_ids = F.pad(input_ids, (0, max(self.max_len - len(input_ids), 0)), value=0)
+        labels = F.pad(labels, (0, max(self.max_len - len(labels), 0)), value=0)
+
+        return input_ids, labels
+
+    def get_sample(self):
+        rr = random.randint(0, len(self.dataset) - 1)
+        return self.dataset[rr]["text"]
+
+    def get_vocab(self):
+        return self.tokenizer.vocab
+
 
 
 class WarmupCosineScheduler:
@@ -1404,7 +1512,7 @@ class WarmupCosineScheduler:
         self.base_lr = base_lr
         self.cosine_scheduler = CosineAnnealingLR(optimizer, T_max=max_steps, last_epoch=-1, eta_min=1e-6) #lr=5e-6 1e-6 5e-7
         # self.cosine_scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=max_steps, T_mult=1, last_epoch=-1, eta_min=5e-6) 
-        self.current_step = 1
+        self.current_step = 0
         if start_step != None:
             self.current_step = start_step
             self.cosine_scheduler.step(start_step)
