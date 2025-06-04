@@ -1513,7 +1513,7 @@ class data_loader_LongText_NoPre(Dataset):
         if not os.path.isdir(os.path.join(self.path, "train")):
             print("Downloading OpenWebText and saving...")
             dataset = load_dataset("openwebtext")
-            dataset.save_to_disk(self.path)
+            dataset.save_to_disk(self.path, max_shard_size="50MB")
             dataset = None
             del dataset
 
@@ -1526,7 +1526,7 @@ class data_loader_LongText_NoPre(Dataset):
             print("Building index_map...")
             self.index_map = _chunked_map()
             print("Saving index_map to cache...")
-            self.index_map.save_to_disk(self.index_map_path)
+            self.index_map.save_to_disk(self.index_map_path, max_shard_size="50MB")
         # self.index_map = self._build_index_map()
         print(f"Dataset loaded with {len(self.index_map)} sub-sequences.")
 
@@ -1538,7 +1538,7 @@ class data_loader_LongText_NoPre(Dataset):
             print("Pre-tokenizing dataset...")
             self.dataset = _chunked_map_T()
             print("Saving pre-tokenized dataset to cache...")
-            self.dataset.save_to_disk(self.pre_tokenize_path)
+            self.dataset.save_to_disk(self.pre_tokenize_path, max_shard_size="50MB")
 
     def __len__(self):
         return len(self.index_map)
@@ -1550,8 +1550,8 @@ class data_loader_LongText_NoPre(Dataset):
         tokens = self.dataset[doc_idx]['token_map']
         chunk = tokens[start:end]
 
-        input_ids = torch.tensor(chunk[:-1], device=self.device)
-        labels = torch.tensor(chunk[1:], device=self.device)
+        input_ids = torch.tensor(chunk[:-1], device=self.device, dtype=torch.uint16)
+        labels = torch.tensor(chunk[1:], device=self.device, dtype=torch.uint16)
 
         input_ids = F.pad(input_ids, (0, max(self.max_len - len(input_ids), 0)), value=0)
         labels = F.pad(labels, (0, max(self.max_len - len(labels), 0)), value=0)
