@@ -1440,7 +1440,7 @@ class data_loader_LongText_NoPre(Dataset):
         self.data_sector = data_sector
         self.index_map_path = os.path.join(self.path, "index_map")
         self.pre_tokenize_path = os.path.join(self.path, "pro_tokenize")
-        self.chunk_size = 50_000
+        self.chunk_size = 100_000 # 1_000_000 # 200_000
         # self.dataset = load_dataset("openwebtext", split="train")  # โหลด text ตรง ๆ ไม่ต้อง save_to_disk
         def _build_index_map(batch):
             index_map = []
@@ -1456,18 +1456,20 @@ class data_loader_LongText_NoPre(Dataset):
                 # Sliding window
                 for i in range(L - self.max_len):
                     index_map.append((doc_idx, i, i + self.max_len))
+            # ✅ Shuffle index_map entries randomly
+            random.shuffle(index_map)
             return {'map_index':index_map}
         
-        def _build_token_map(batch):
-            token_map = []
-            for doc_idx, example in tqdm(enumerate(batch['text'])):
-                tokens = [1] + self.tokenizer.tokenizer.encode(example, add_special_tokens=False).ids + [3]
-                token_map.append(tokens)
-            return {'token_map': token_map}
+        # def _build_token_map(batch):
+        #     token_map = []
+        #     for doc_idx, example in tqdm(enumerate(batch['text'])):
+        #         tokens = [1] + self.tokenizer.tokenizer.encode(example, add_special_tokens=False).ids + [3]
+        #         token_map.append(tokens)
+        #     return {'token_map': token_map}
 
         def _chunked_map():
             chunked_slices = []
-            total_len = len(self.dataset)
+            total_len = int(len(self.dataset)*0.02)
 
             for start in range(0, total_len, self.chunk_size):
                 end = min(start + self.chunk_size, total_len)
@@ -1488,32 +1490,32 @@ class data_loader_LongText_NoPre(Dataset):
             return concatenate_datasets(chunked_slices)
         
 
-        def _chunked_map_T():
-            chunked_slices = []
-            total_len = len(self.dataset)
+        # def _chunked_map_T():
+        #     chunked_slices = []
+        #     total_len = len(self.dataset)
 
-            for start in range(0, total_len, self.chunk_size):
-                end = min(start + self.chunk_size, total_len)
-                print(f"Processing records {start} to {end}")
+        #     for start in range(0, total_len, self.chunk_size):
+        #         end = min(start + self.chunk_size, total_len)
+        #         print(f"Processing records {start} to {end}")
 
-                slice = self.dataset.select(range(start, end))
+        #         slice = self.dataset.select(range(start, end))
 
-                mapped = slice.map(
-                            _build_token_map,
-                            batched=True,
-                            remove_columns=["text"],
-                            num_proc=8,
-                            desc=f"Chunking [{start}-{end}]",
-                        )
+        #         mapped = slice.map(
+        #                     _build_token_map,
+        #                     batched=True,
+        #                     remove_columns=["text"],
+        #                     num_proc=8,
+        #                     desc=f"Chunking [{start}-{end}]",
+        #                 )
 
-                chunked_slices.append(mapped)
+        #         chunked_slices.append(mapped)
 
-            return concatenate_datasets(chunked_slices)
+        #     return concatenate_datasets(chunked_slices)
         
         if not os.path.isdir(os.path.join(self.path, "train")):
             print("Downloading OpenWebText and saving...")
             dataset = load_dataset("openwebtext")
-            dataset.save_to_disk(self.path, max_shard_size="50MB")
+            dataset.save_to_disk(self.path, max_shard_size="512MB")
             dataset = None
             del dataset
 
@@ -1525,20 +1527,21 @@ class data_loader_LongText_NoPre(Dataset):
             check_and_create_folder(self.index_map_path)
             print("Building index_map...")
             self.index_map = _chunked_map()
+            random.shuffle(self.index_map)
             print("Saving index_map to cache...")
-            self.index_map.save_to_disk(self.index_map_path, max_shard_size="50MB")
+            self.index_map.save_to_disk(self.index_map_path, max_shard_size="512MB")
         # self.index_map = self._build_index_map()
         print(f"Dataset loaded with {len(self.index_map)} sub-sequences.")
 
-        if os.path.exists(self.pre_tokenize_path):
-            print("Loading cached pre-tokenized dataset...")
-            self.dataset = load_from_disk(self.pre_tokenize_path)
-        else:
-            check_and_create_folder(self.pre_tokenize_path)
-            print("Pre-tokenizing dataset...")
-            self.dataset = _chunked_map_T()
-            print("Saving pre-tokenized dataset to cache...")
-            self.dataset.save_to_disk(self.pre_tokenize_path, max_shard_size="50MB")
+        # if os.path.exists(self.pre_tokenize_path):
+        #     print("Loading cached pre-tokenized dataset...")
+        #     self.dataset = load_from_disk(self.pre_tokenize_path)
+        # else:
+        #     check_and_create_folder(self.pre_tokenize_path)
+        #     print("Pre-tokenizing dataset...")
+        #     self.dataset = _chunked_map_T()
+        #     print("Saving pre-tokenized dataset to cache...")
+        #     self.dataset.save_to_disk(self.pre_tokenize_path, max_shard_size="50MB")
 
     def __len__(self):
         return len(self.index_map)
@@ -1550,8 +1553,8 @@ class data_loader_LongText_NoPre(Dataset):
         tokens = self.dataset[doc_idx]['token_map']
         chunk = tokens[start:end]
 
-        input_ids = torch.tensor(chunk[:-1], device=self.device, dtype=torch.uint16)
-        labels = torch.tensor(chunk[1:], device=self.device, dtype=torch.uint16)
+        input_ids = torch.tensor(chunk[:-1], device=self.device, dtype=torch.long)
+        labels = torch.tensor(chunk[1:], device=self.device, dtype=torch.long)
 
         input_ids = F.pad(input_ids, (0, max(self.max_len - len(input_ids), 0)), value=0)
         labels = F.pad(labels, (0, max(self.max_len - len(labels), 0)), value=0)

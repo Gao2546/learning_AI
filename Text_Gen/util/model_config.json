@@ -262,7 +262,7 @@
           "save_model": true,
           "only_model": false,
           "save_dir": "./model/TransformerDecodeOnlyN/",
-          "load_path": "./model/TransformerDecodeOnlyN/TransformerDecodeOnly_V01_128_384_6_6_1536_50K_512_MQcpk1.pth",
+          "load_path": null,
           "load_embedding_path": null,
           "save_file": "TransformerDecodeOnly_V01_128_384_6_6_1536_50K_512_MQcpk1.pth",
           "d_model": 384,
