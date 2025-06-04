@@ -1487,6 +1487,8 @@ class data_loader_LongText_NoPre(Dataset):
 
                 chunked_slices.append(mapped)
 
+            random.shuffle(chunked_slices)
+
             return concatenate_datasets(chunked_slices)
         
 

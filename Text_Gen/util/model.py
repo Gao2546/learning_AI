@@ -930,7 +930,7 @@ class Transformer:
 class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
     def __init__(self): #loss == 0.02 0.006
         config = Config("./util/model_config.json")
-        config = config.config05
+        config = config.config06
         model_config = config['model']
         data_config = config['data']
         training_config = config['training']
