@@ -1460,12 +1460,12 @@ class data_loader_LongText_NoPre(Dataset):
             random.shuffle(index_map)
             return {'map_index':index_map}
         
-        # def _build_token_map(batch):
-        #     token_map = []
-        #     for doc_idx, example in tqdm(enumerate(batch['text'])):
-        #         tokens = [1] + self.tokenizer.tokenizer.encode(example, add_special_tokens=False).ids + [3]
-        #         token_map.append(tokens)
-        #     return {'token_map': token_map}
+        def _build_token_map(batch):
+            token_map = []
+            for doc_idx, example in tqdm(enumerate(batch['text'])):
+                tokens = [1] + self.tokenizer.tokenizer.encode(example, add_special_tokens=False).ids + [3]
+                token_map.append(tokens)
+            return {'token_map': token_map}
 
         def _chunked_map():
             chunked_slices = []
@@ -1492,32 +1492,32 @@ class data_loader_LongText_NoPre(Dataset):
             return concatenate_datasets(chunked_slices)
         
 
-        # def _chunked_map_T():
-        #     chunked_slices = []
-        #     total_len = len(self.dataset)
+        def _chunked_map_T():
+            chunked_slices = []
+            total_len = int(len(self.dataset)*0.1)
 
-        #     for start in range(0, total_len, self.chunk_size):
-        #         end = min(start + self.chunk_size, total_len)
-        #         print(f"Processing records {start} to {end}")
+            for start in range(0, total_len, self.chunk_size):
+                end = min(start + self.chunk_size, total_len)
+                print(f"Processing records {start} to {end}")
 
-        #         slice = self.dataset.select(range(start, end))
+                slice = self.dataset.select(range(start, end))
 
-        #         mapped = slice.map(
-        #                     _build_token_map,
-        #                     batched=True,
-        #                     remove_columns=["text"],
-        #                     num_proc=8,
-        #                     desc=f"Chunking [{start}-{end}]",
-        #                 )
+                mapped = slice.map(
+                            _build_token_map,
+                            batched=True,
+                            remove_columns=["text"],
+                            num_proc=8,
+                            desc=f"Chunking [{start}-{end}]",
+                        )
 
-        #         chunked_slices.append(mapped)
+                chunked_slices.append(mapped)
 
-        #     return concatenate_datasets(chunked_slices)
+            return concatenate_datasets(chunked_slices)
         
         if not os.path.isdir(os.path.join(self.path, "train")):
             print("Downloading OpenWebText and saving...")
             dataset = load_dataset("openwebtext")
-            dataset.save_to_disk(self.path, max_shard_size="512MB")
+            dataset.save_to_disk(self.path, max_shard_size="1024MB")
             dataset = None
             del dataset
 
@@ -1530,28 +1530,28 @@ class data_loader_LongText_NoPre(Dataset):
             print("Building index_map...")
             self.index_map = _chunked_map()
             print("Saving index_map to cache...")
-            self.index_map.save_to_disk(self.index_map_path, max_shard_size="512MB")
+            self.index_map.save_to_disk(self.index_map_path, max_shard_size="1024MB")
         # self.index_map = self._build_index_map()
         print(f"Dataset loaded with {len(self.index_map)} sub-sequences.")
 
-        # if os.path.exists(self.pre_tokenize_path):
-        #     print("Loading cached pre-tokenized dataset...")
-        #     self.dataset = load_from_disk(self.pre_tokenize_path)
-        # else:
-        #     check_and_create_folder(self.pre_tokenize_path)
-        #     print("Pre-tokenizing dataset...")
-        #     self.dataset = _chunked_map_T()
-        #     print("Saving pre-tokenized dataset to cache...")
-        #     self.dataset.save_to_disk(self.pre_tokenize_path, max_shard_size="50MB")
+        if os.path.exists(self.pre_tokenize_path):
+            print("Loading cached pre-tokenized dataset...")
+            self.dataset = load_from_disk(self.pre_tokenize_path)
+        else:
+            check_and_create_folder(self.pre_tokenize_path)
+            print("Pre-tokenizing dataset...")
+            self.dataset = _chunked_map_T()
+            print("Saving pre-tokenized dataset to cache...")
+            self.dataset.save_to_disk(self.pre_tokenize_path, max_shard_size="1024MB")
 
     def __len__(self):
         return len(self.index_map)
 
     def __getitem__(self, idx):
         doc_idx, start, end = self.index_map[idx]['map_index']
-        text = self.dataset[doc_idx]['text']
-        tokens = [1] + self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids + [3]
-        # tokens = self.dataset[doc_idx]['token_map']
+        # text = self.dataset[doc_idx]['text']
+        # tokens = [1] + self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids + [3]
+        tokens = self.dataset[doc_idx]['token_map']
         chunk = tokens[start:end]
 
         input_ids = torch.tensor(chunk[:-1], device=self.device, dtype=torch.long)
