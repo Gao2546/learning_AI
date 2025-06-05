@@ -1529,7 +1529,6 @@ class data_loader_LongText_NoPre(Dataset):
             check_and_create_folder(self.index_map_path)
             print("Building index_map...")
             self.index_map = _chunked_map()
-            random.shuffle(self.index_map)
             print("Saving index_map to cache...")
             self.index_map.save_to_disk(self.index_map_path, max_shard_size="512MB")
         # self.index_map = self._build_index_map()
@@ -1550,9 +1549,9 @@ class data_loader_LongText_NoPre(Dataset):
 
     def __getitem__(self, idx):
         doc_idx, start, end = self.index_map[idx]['map_index']
-        # text = self.dataset[doc_idx]['text']
-        # tokens = [1] + self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids + [3]
-        tokens = self.dataset[doc_idx]['token_map']
+        text = self.dataset[doc_idx]['text']
+        tokens = [1] + self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids + [3]
+        # tokens = self.dataset[doc_idx]['token_map']
         chunk = tokens[start:end]
 
         input_ids = torch.tensor(chunk[:-1], device=self.device, dtype=torch.long)
