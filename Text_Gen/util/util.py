@@ -1469,7 +1469,7 @@ class data_loader_LongText_NoPre(Dataset):
 
         def _chunked_map():
             chunked_slices = []
-            total_len = int(len(self.dataset)*0.1)
+            total_len = int(len(self.dataset)*0.001)
 
             for start in range(0, total_len, self.chunk_size):
                 end = min(start + self.chunk_size, total_len)
@@ -1494,7 +1494,7 @@ class data_loader_LongText_NoPre(Dataset):
 
         def _chunked_map_T():
             chunked_slices = []
-            total_len = int(len(self.dataset)*0.1)
+            total_len = int(len(self.dataset)*0.001)
 
             for start in range(0, total_len, self.chunk_size):
                 end = min(start + self.chunk_size, total_len)
