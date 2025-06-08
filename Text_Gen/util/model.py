@@ -1134,6 +1134,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         for epoch in tqdm(range(self.start_epoch, self.epochs), desc="Epochs"):
             self.loss_epoch = []
             self.loss_step = []
+            self.acc_loss = 0
             with tqdm(self.train_dataloader, desc=f"Epoch {epoch+1}") as batch_bar:
                 for steps, (answer_in, answer_out) in enumerate(batch_bar):
                     # print(answer_in.shape)
@@ -1141,12 +1142,13 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                     # print(length_answer)
                     # length_answer = length_answer/length_answer.max()
                     signal.signal(signal.SIGINT, signal_handler)
-                    self.optimizer.zero_grad()
+                    # self.optimizer.zero_grad()
                     with autocast(device_type='cuda'):  # Mixed precision context device_type='cuda'
                         output = self.Transformer(answer_in)
                         loss = self.criterion(output.contiguous().view(-1, self.tgt_vocab_size),
                                          answer_out.contiguous().view(-1))
                         loss = loss / self.accumulation_steps
+                        self.acc_loss += loss.item()
                         # loss = loss.view(answer_in.shape[0],-1)
                         # loss = loss.sum(dim=1)
                         # loss = loss*length_answer
@@ -1159,37 +1161,39 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                     if (steps + 1) % self.accumulation_steps == 0:
                         scaler.step(self.optimizer)
                         scaler.update()
-                    # Show current loss in tqdm
-                    self.g_loss.add(loss=loss.item(), epoch=self.scheduler.current_step)
-                    self.loss_step.append(loss.item())
-                    batch_bar.set_postfix(loss=loss.item())
-                    self.scheduler.step()
-                    if self.scheduler.current_step % self.save_every_step == 0:
-                        self.save_model_and_optimizer(self.save_dir + f"{self.save_file}", epoch = epoch)
-                        print(f"loss: {sum(self.loss_step)/len(self.loss_step)}")
-                        logging.info(f"loss: {sum(self.loss_step)/len(self.loss_step)}")
-                        self.loss_step = []
-                        self.g_loss.plot_save(file_path=self.save_g_loss, para=self.save_file.replace(".pth",""))
-                    if self.scheduler.current_step % self.eval_every_step == 0:
-                        del output
-                        del answer_in
-                        del answer_out
-                        del loss
-                        gc.collect()
-                        # Frees up unused memory from the CUDA memory cache
-                        torch.cuda.empty_cache()
-                        # Collects intermediately unused memory fragments (use with care)
-                        torch.cuda.ipc_collect()
-    
-                        output_eval = self.eval_modelNew(self.sample_question)
-                        for o in output_eval:
-                            print(o)
-                            logging.info(o)
-                            print("\n=====================================\n")
-                        self.Transformer.train()
+                        self.optimizer.zero_grad()
+                        self.g_loss.add(loss=self.acc_loss, epoch=self.scheduler.current_step)
+                        self.loss_step.append(self.acc_loss)
+                        batch_bar.set_postfix(loss=self.acc_loss)
+                        self.acc_loss = 0
+                        self.scheduler.step()
+                        if (self.scheduler.current_step % self.save_every_step == 0):
+                            self.save_model_and_optimizer(self.save_dir + f"{self.save_file}", epoch = epoch)
+                            print(f"loss: {sum(self.loss_step)/len(self.loss_step)}")
+                            logging.info(f"loss: {sum(self.loss_step)/len(self.loss_step)}")
+                            self.loss_step = []
+                            self.g_loss.plot_save(file_path=self.save_g_loss, para=self.save_file.replace(".pth",""))
+                        if self.scheduler.current_step % self.eval_every_step == 0:
+                            del output
+                            del answer_in
+                            del answer_out
+                            del loss
+                            gc.collect()
+                            # Frees up unused memory from the CUDA memory cache
+                            torch.cuda.empty_cache()
+                            # Collects intermediately unused memory fragments (use with care)
+                            torch.cuda.ipc_collect()
+        
+                            output_eval = self.eval_modelNew(self.sample_question)
+                            for o in output_eval:
+                                print(o)
+                                logging.info(o)
+                                print("\n=====================================\n")
+                            self.Transformer.train()
                 if (steps + 1) % self.accumulation_steps != 0:
                         scaler.step(self.optimizer)
                         scaler.update()
+                        self.optimizer.zero_grad()
                 if self.save_model and (((epoch + 1) % self.save_every_epoch) == 0):
                     # self.save(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
                     # self.save_model_and_optimizer(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")

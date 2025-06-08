@@ -1440,7 +1440,7 @@ class data_loader_LongText_NoPre(Dataset):
         self.data_sector = data_sector
         self.index_map_path = os.path.join(self.path, "index_map")
         self.pre_tokenize_path = os.path.join(self.path, "pro_tokenize")
-        self.chunk_size = 100_000 # 1_000_000 # 200_000
+        self.chunk_size = 20_000 # 1_000_000 # 200_000
         # self.dataset = load_dataset("openwebtext", split="train")  # โหลด text ตรง ๆ ไม่ต้อง save_to_disk
         def _build_index_map(batch):
             index_map = []
@@ -1457,7 +1457,7 @@ class data_loader_LongText_NoPre(Dataset):
                 for i in range(L - self.max_len):
                     index_map.append((doc_idx, i, i + self.max_len))
             # ✅ Shuffle index_map entries randomly
-            random.shuffle(index_map)
+            # random.shuffle(index_map)
             return {'map_index':index_map}
         
         def _build_token_map(batch):
@@ -1487,7 +1487,7 @@ class data_loader_LongText_NoPre(Dataset):
 
                 chunked_slices.append(mapped)
 
-            random.shuffle(chunked_slices)
+            # random.shuffle(chunked_slices)
 
             return concatenate_datasets(chunked_slices)
         
@@ -1526,7 +1526,7 @@ class data_loader_LongText_NoPre(Dataset):
             print("Loading cached index_map...")
             self.index_map = load_from_disk(self.index_map_path)
         else:
-            check_and_create_folder(self.index_map_path)
+            check_and_create_folder([self.index_map_path])
             print("Building index_map...")
             self.index_map = _chunked_map()
             print("Saving index_map to cache...")
@@ -1538,7 +1538,7 @@ class data_loader_LongText_NoPre(Dataset):
             print("Loading cached pre-tokenized dataset...")
             self.dataset = load_from_disk(self.pre_tokenize_path)
         else:
-            check_and_create_folder(self.pre_tokenize_path)
+            check_and_create_folder([self.pre_tokenize_path])
             print("Pre-tokenizing dataset...")
             self.dataset = _chunked_map_T()
             print("Saving pre-tokenized dataset to cache...")
