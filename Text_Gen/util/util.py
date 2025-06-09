@@ -1440,7 +1440,7 @@ class data_loader_LongText_NoPre(Dataset):
         self.data_sector = data_sector
         self.index_map_path = os.path.join(self.path, "index_map")
         self.pre_tokenize_path = os.path.join(self.path, "pro_tokenize")
-        self.chunk_size = 20_000 # 1_000_000 # 200_000
+        self.chunk_size = 100_000 # 1_000_000 # 200_000
         # self.dataset = load_dataset("openwebtext", split="train")  # โหลด text ตรง ๆ ไม่ต้อง save_to_disk
         def _build_index_map(batch):
             index_map = []
@@ -1469,7 +1469,7 @@ class data_loader_LongText_NoPre(Dataset):
 
         def _chunked_map():
             chunked_slices = []
-            total_len = int(len(self.dataset)*0.001)
+            total_len = int(len(self.dataset)*0.01)
 
             for start in range(0, total_len, self.chunk_size):
                 end = min(start + self.chunk_size, total_len)
@@ -1481,7 +1481,7 @@ class data_loader_LongText_NoPre(Dataset):
                             _build_index_map,
                             batched=True,
                             remove_columns=["text"],
-                            num_proc=8,
+                            num_proc=20,
                             desc=f"Chunking [{start}-{end}]",
                         )
 
@@ -1494,7 +1494,7 @@ class data_loader_LongText_NoPre(Dataset):
 
         def _chunked_map_T():
             chunked_slices = []
-            total_len = int(len(self.dataset)*0.001)
+            total_len = int(len(self.dataset)*0.01)
 
             for start in range(0, total_len, self.chunk_size):
                 end = min(start + self.chunk_size, total_len)
@@ -1506,7 +1506,7 @@ class data_loader_LongText_NoPre(Dataset):
                             _build_token_map,
                             batched=True,
                             remove_columns=["text"],
-                            num_proc=8,
+                            num_proc=20,
                             desc=f"Chunking [{start}-{end}]",
                         )
 
@@ -1516,8 +1516,8 @@ class data_loader_LongText_NoPre(Dataset):
         
         if not os.path.isdir(os.path.join(self.path, "train")):
             print("Downloading OpenWebText and saving...")
-            dataset = load_dataset("openwebtext")
-            dataset.save_to_disk(self.path, max_shard_size="1024MB")
+            dataset = load_dataset("openwebtext",num_proc=20)
+            dataset.save_to_disk(self.path, max_shard_size="1024MB",num_proc=20)
             dataset = None
             del dataset
 

@@ -982,7 +982,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.train_data = data_loader_LongText_NoPre(path=self.data_path, tokenizer=self.BPE_model, max_len=self.max_seq_length, data_sector=0 )
         #========================================================================================
         # self.train_data =  dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=10)
-        self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=False)
+        self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)
 
 
         # for answer_in, answer_out in tqdm(self.train_dataloader):
