@@ -1129,7 +1129,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.g_loss = check_loss()
 
     def train(self):
-        scaler = GradScaler()
+        # scaler = GradScaler()
         self.Transformer.train()
         for epoch in tqdm(range(self.start_epoch, self.epochs), desc="Epochs"):
             self.loss_epoch = []
@@ -1153,14 +1153,15 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                         # loss = loss.sum(dim=1)
                         # loss = loss*length_answer
                         # loss = loss.mean()
-                    # loss.backward()
-                    scaler.scale(loss).backward()
+                    loss.backward()
+                    # scaler.scale(loss).backward()
                     self.loss_epoch.append(loss.item())
                     torch.nn.utils.clip_grad_norm_(self.Transformer.parameters(), max_norm=self.max_norm)
                     # self.optimizer.step()
                     if (steps + 1) % self.accumulation_steps == 0:
-                        scaler.step(self.optimizer)
-                        scaler.update()
+                        # scaler.step(self.optimizer)
+                        # scaler.update()
+                        self.optimizer.step()
                         self.optimizer.zero_grad()
                         self.g_loss.add(loss=self.acc_loss, epoch=self.scheduler.current_step)
                         self.loss_step.append(self.acc_loss)
