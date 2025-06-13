@@ -979,7 +979,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         # self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
         # self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
         # self.train_data = data_loader_LongText(self.data_path, self.data_path512_seq, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_sector=0)
-        self.train_data = data_loader_LongText_NoPre(path=self.data_path, tokenizer=self.BPE_model, max_len=self.max_seq_length, data_sector=0,step=128)
+        self.train_data = data_loader_LongText_NoPre(path=self.data_path, tokenizer=self.BPE_model, max_len=self.max_seq_length, data_sector=0,step=512)
         #========================================================================================
         # self.train_data =  dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=10)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)
