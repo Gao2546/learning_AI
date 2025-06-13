@@ -979,7 +979,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         # self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
         # self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
         # self.train_data = data_loader_LongText(self.data_path, self.data_path512_seq, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_sector=0)
-        self.train_data = data_loader_LongText_NoPre(path=self.data_path, tokenizer=self.BPE_model, max_len=self.max_seq_length, data_sector=0 )
+        self.train_data = data_loader_LongText_NoPre(path=self.data_path, tokenizer=self.BPE_model, max_len=self.max_seq_length, data_sector=0,step=128)
         #========================================================================================
         # self.train_data =  dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=10)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)
@@ -1086,7 +1086,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         # self.warmup_steps = int(self.epochs*0.01*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
         # self.max_steps = int(self.epochs*0.9*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025
         self.warmup_steps = training_config['warmup_steps']#int(self.epochs*training_config['warmup_steps']*math.ceil(len(self.train_data)/self.batch_size)) #5% 0.02
-        self.max_steps = int(self.epochs*training_config['max_steps']*math.ceil(len(self.train_data)/self.batch_size)) #50% 0.025
+        self.max_steps = int(self.epochs*training_config['max_steps']*math.ceil(len(self.train_data)/self.batch_size))//self.accumulation_steps #50% 0.025
         self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=self.base_lr, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
 
         if self.load_path:
@@ -1129,7 +1129,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.g_loss = check_loss()
 
     def train(self):
-        # scaler = GradScaler()
+        scaler = GradScaler()
         self.Transformer.train()
         for epoch in tqdm(range(self.start_epoch, self.epochs), desc="Epochs"):
             self.loss_epoch = []
@@ -1153,15 +1153,14 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                         # loss = loss.sum(dim=1)
                         # loss = loss*length_answer
                         # loss = loss.mean()
-                    loss.backward()
-                    # scaler.scale(loss).backward()
+                    # loss.backward()
+                    scaler.scale(loss).backward()
                     self.loss_epoch.append(loss.item())
                     torch.nn.utils.clip_grad_norm_(self.Transformer.parameters(), max_norm=self.max_norm)
                     # self.optimizer.step()
                     if (steps + 1) % self.accumulation_steps == 0:
-                        # scaler.step(self.optimizer)
-                        # scaler.update()
-                        self.optimizer.step()
+                        scaler.step(self.optimizer)
+                        scaler.update()
                         self.optimizer.zero_grad()
                         self.g_loss.add(loss=self.acc_loss, epoch=self.scheduler.current_step)
                         self.loss_step.append(self.acc_loss)

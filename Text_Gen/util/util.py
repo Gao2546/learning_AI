@@ -1432,7 +1432,7 @@ class data_loader_LongText(Dataset):
     
 
 class data_loader_LongText_NoPre(Dataset):
-    def __init__(self,path, tokenizer, max_len=1024, data_sector=0):
+    def __init__(self,path, tokenizer, max_len=1024, data_sector=0,step=128):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.path = path
         self.max_len = max_len
@@ -1441,24 +1441,51 @@ class data_loader_LongText_NoPre(Dataset):
         self.index_map_path = os.path.join(self.path, "index_map")
         self.pre_tokenize_path = os.path.join(self.path, "pro_tokenize")
         self.chunk_size = 100_000 # 1_000_000 # 200_000
+        self.method = 'sliding'
         # self.dataset = load_dataset("openwebtext", split="train")  # โหลด text ตรง ๆ ไม่ต้อง save_to_disk
+        
         def _build_index_map(batch):
+            """
+            Build index map for sub-sequences.
+        
+            Args:
+                batch (dict): batch containing 'text' list
+                tokenizer: tokenizer object with .encode method
+                max_len (int): max sequence length for sub-sequences
+                method (str): 'growing' or 'sliding' to select windowing style
+        
+            Returns:
+                dict: {'map_index': list of (doc_idx, start, end) tuples}
+            """
             index_map = []
-            for doc_idx, example in tqdm(enumerate(batch['text'])):
+        
+            for doc_idx, example in tqdm(enumerate(batch['text']), total=len(batch['text'])):
                 tokens = [1] + self.tokenizer.tokenizer.encode(example, add_special_tokens=False).ids + [3]
                 L = len(tokens)
-
-                # Growing window
-                for i in range(3, min(L, self.max_len + 1)):
-                    index_map.append((doc_idx, 0, i))  # (doc_id, start, end)
-                
-
-                # Sliding window
-                for i in range(L - self.max_len):
-                    index_map.append((doc_idx, i, i + self.max_len))
-            # ✅ Shuffle index_map entries randomly
-            # random.shuffle(index_map)
-            return {'map_index':index_map}
+        
+                if self.method == 'growing':
+                    # Growing window from length 3 to max_len or L
+                    for end_idx in range(3, min(L, max_len) + 1):
+                        start_idx = 0
+                        index_map.append((doc_idx, start_idx, end_idx))
+        
+                elif self.method == 'sliding':
+                    # Sliding window of fixed max_len size over tokens
+                    if L <= max_len:
+                        # If text shorter than max_len, take full length
+                        index_map.append((doc_idx, 0, L))
+                    else:
+                        for start_idx in range(0, L - max_len + 1, step):
+                            end_idx = start_idx + max_len
+                            index_map.append((doc_idx, start_idx, end_idx))
+                        if end_idx != L:
+                            index_map.append((doc_idx, start_idx + step, L))
+        
+                else:
+                    raise ValueError("Method must be either 'growing' or 'sliding'")
+        
+            # Optionally shuffle index_map outside this function if needed
+            return {'map_index': index_map}
         
         def _build_token_map(batch):
             token_map = []
@@ -1469,7 +1496,7 @@ class data_loader_LongText_NoPre(Dataset):
 
         def _chunked_map():
             chunked_slices = []
-            total_len = int(len(self.dataset)*0.01)
+            total_len = int(len(self.dataset)*0.1)
 
             for start in range(0, total_len, self.chunk_size):
                 end = min(start + self.chunk_size, total_len)
@@ -1494,7 +1521,7 @@ class data_loader_LongText_NoPre(Dataset):
 
         def _chunked_map_T():
             chunked_slices = []
-            total_len = int(len(self.dataset)*0.01)
+            total_len = int(len(self.dataset)*0.1)
 
             for start in range(0, total_len, self.chunk_size):
                 end = min(start + self.chunk_size, total_len)
