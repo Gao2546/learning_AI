@@ -930,7 +930,7 @@ class Transformer:
 class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
     def __init__(self): #loss == 0.02 0.006
         config = Config("./util/model_config.json")
-        config = config.config06
+        config = config.config07
         model_config = config['model']
         data_config = config['data']
         training_config = config['training']
@@ -943,11 +943,13 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.accumulation_steps = training_config["accumulation_steps"]
         
         self.data_path = data_config['data_path']#"./data/Conversational01/"
-        self.data_path_clean = data_config['data_path_clean']#"./data/Conversational01_clean/"
-        self.data_path512 = data_config['data_path512']#"./data/Conversational01_64R_10K/" # ./data/Conversational01_256_10K/
-        self.data_path512_seq = data_config['data_path512_seq']#"./data/Conversational01_64R_10K_seqr/" # ./data/Conversational01_256_10K_seq/
+        # self.data_path_clean = data_config['data_path_clean']#"./data/Conversational01_clean/"
+        # self.data_path512 = data_config['data_path512']#"./data/Conversational01_64R_10K/" # ./data/Conversational01_256_10K/
+        # self.data_path512_seq = data_config['data_path512_seq']#"./data/Conversational01_64R_10K_seqr/" # ./data/Conversational01_256_10K_seq/
+
         # self.data_path256 = "./data/Conversational01_256/"
         # self.data_path_full = "./data/PythonCodeDataSmall_TextOnly/Python_code_data.txt"
+
         self.tokenizer_path = data_config['tokenizer_path']#"./model/BPE_model/tokenizer-bpe-conversational-10k.json"
 
         self.save_file = model_config['save_file']#"TransformerDecodeOnly_V01_64R_768_12_12_3072_10K_mn2_MQcpk1.pth" # TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk2.pth
@@ -957,8 +959,9 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         # self.save_file = "Transformer_VT01_10KA.pth"
 
 
-        check_and_create_folder([self.save_dir,self.data_path512,self.data_path512_seq,self.data_path,self.save_g_loss,self.data_path_clean])
-        
+        # check_and_create_folder([self.save_dir,self.data_path512,self.data_path512_seq,self.data_path,self.save_g_loss,self.data_path_clean])
+        check_and_create_folder([self.save_dir,self.data_path,self.save_g_loss])
+
         self.start_epoch = training_config['start_epoch']#0
         self.save_every_epoch = training_config['save_every_epoch']#10
         self.eval_every_step = training_config['eval_every_step']
@@ -979,7 +982,8 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         # self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
         # self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
         # self.train_data = data_loader_LongText(self.data_path, self.data_path512_seq, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_sector=0)
-        self.train_data = data_loader_LongText_NoPre(path=self.data_path, tokenizer=self.BPE_model, max_len=self.max_seq_length, data_sector=0,step=512)
+        # self.train_data = data_loader_LongText_NoPre(path=self.data_path, tokenizer=self.BPE_model, max_len=self.max_seq_length, data_sector=0,step=1)
+        self.train_data = data_loader_LongText_Pre_SEQ(path=self.data_path, tokenizer=self.BPE_model, max_len=self.max_seq_length)
         #========================================================================================
         # self.train_data =  dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=10)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)

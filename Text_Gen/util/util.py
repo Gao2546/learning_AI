@@ -1442,6 +1442,8 @@ class data_loader_LongText_NoPre(Dataset):
         self.pre_tokenize_path = os.path.join(self.path, "pro_tokenize")
         self.chunk_size = 100_000 # 1_000_000 # 200_000
         self.method = 'sliding'
+        self.both = True
+        self.offset = 0
         # self.dataset = load_dataset("openwebtext", split="train")  # โหลด text ตรง ๆ ไม่ต้อง save_to_disk
         
         def _build_index_map(batch):
@@ -1463,19 +1465,20 @@ class data_loader_LongText_NoPre(Dataset):
                 tokens = [1] + self.tokenizer.tokenizer.encode(example, add_special_tokens=False).ids + [3]
                 L = len(tokens)
         
-                if self.method == 'growing':
+                if self.method == 'growing' or self.both:
                     # Growing window from length 3 to max_len or L
-                    for end_idx in range(3, min(L, max_len) + 1):
+                    for end_idx in range(3, min(L, max_len) + 1, 1):
                         start_idx = 0
                         index_map.append((doc_idx, start_idx, end_idx))
+                    self.offset = 1
         
-                elif self.method == 'sliding':
+                elif self.method == 'sliding' or self.both:
                     # Sliding window of fixed max_len size over tokens
                     if L <= max_len:
                         # If text shorter than max_len, take full length
                         index_map.append((doc_idx, 0, L))
                     else:
-                        for start_idx in range(0, L - max_len + 1, step):
+                        for start_idx in range(0 + self.offset, L - max_len + 1 + self.offset, step):
                             end_idx = start_idx + max_len
                             index_map.append((doc_idx, start_idx, end_idx))
                         if end_idx != L:
@@ -1496,7 +1499,7 @@ class data_loader_LongText_NoPre(Dataset):
 
         def _chunked_map():
             chunked_slices = []
-            total_len = int(len(self.dataset)*1.0)
+            total_len = int(len(self.dataset)*0.001)
 
             for start in range(0, total_len, self.chunk_size):
                 end = min(start + self.chunk_size, total_len)
@@ -1521,7 +1524,7 @@ class data_loader_LongText_NoPre(Dataset):
 
         def _chunked_map_T():
             chunked_slices = []
-            total_len = int(len(self.dataset)*1.0)
+            total_len = int(len(self.dataset)*0.001)
 
             for start in range(0, total_len, self.chunk_size):
                 end = min(start + self.chunk_size, total_len)
@@ -1579,10 +1582,18 @@ class data_loader_LongText_NoPre(Dataset):
         # text = self.dataset[doc_idx]['text']
         # tokens = [1] + self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids + [3]
         tokens = self.dataset[doc_idx]['token_map']
-        chunk = tokens[start:end]
+        chunk_ins = tokens[start:end]
 
-        input_ids = torch.tensor(chunk[:-1], device=self.device, dtype=torch.long)
-        labels = torch.tensor(chunk[1:], device=self.device, dtype=torch.long)
+        if len(chunk_ins) < self.max_len or chunk_ins[-1] == 3:
+            input_ids = torch.tensor(chunk_ins[:-1], device=self.device, dtype=torch.long)
+            labels = torch.tensor(chunk_ins[:], device=self.device, dtype=torch.long)
+        else:
+            chunk_out = tokens[start+1:end+1]
+            input_ids = torch.tensor(chunk_ins, device=self.device, dtype=torch.long)
+            labels = torch.tensor(chunk_out, device=self.device, dtype=torch.long)
+
+        # input_ids = torch.tensor(chunk_ins, device=self.device, dtype=torch.long)
+        # labels = torch.tensor(chunk_out, device=self.device, dtype=torch.long)
 
         input_ids = F.pad(input_ids, (0, max(self.max_len - len(input_ids), 0)), value=0)
         labels = F.pad(labels, (0, max(self.max_len - len(labels), 0)), value=0)
@@ -1595,6 +1606,75 @@ class data_loader_LongText_NoPre(Dataset):
 
     def get_vocab(self):
         return self.tokenizer.vocab
+    
+
+class data_loader_LongText_Pre_SEQ(Dataset):
+    def __init__(self, path, tokenizer, max_len=1024):
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.path = path
+        self.max_len = max_len
+        self.tokenizer = tokenizer
+        self.data_path256_seq = os.path.join(self.path, "data256_seq")
+
+        check_and_create_folder([self.data_path256_seq])
+
+        def pre_sub_sequence(batch):
+            input_ids = []
+            max_len = self.max_len
+
+            text = batch["text"].replace("``", "").strip()
+            # print(f"Processing text: {text[:50]}...")  # Print first 50 characters for context
+            tokens = [1] + self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids + [3]
+            L = len(tokens)
+            # print(f"Processing text of length {L} with max_len {max_len}")
+            for i in range(3, min(L, max_len + 1)):
+                input_ids.append(tokens[:i])
+            for i in range(L - max_len):
+                chunk = tokens[i:i + max_len]
+                input_ids.append(chunk)
+
+            return {"input_ids": input_ids}
+
+        if not os.path.isdir(os.path.join(self.path, "train")):
+            print("Downloading bookcorpus and saving...")
+            dataset = load_dataset("rojagtap/bookcorpus", num_proc=16)
+            dataset.save_to_disk(self.path, max_shard_size="1024MB")
+            dataset = None
+            del dataset
+        else:
+            dataset = load_from_disk(self.path)['train']
+
+        if len(os.listdir(self.data_path256_seq)) <= 1:
+            self.pre_data = load_from_disk(self.path)['train']
+            self.pre_data = self.pre_data.map(
+                pre_sub_sequence,
+                num_proc=16,
+                remove_columns=['text'],
+                desc="Tokenizing text"
+            )
+            self.pre_data.save_to_disk(self.data_path256_seq, max_shard_size="1024MB")
+        else:
+            self.pre_data = load_from_disk(self.data_path256_seq)
+        print(f"Dataset loaded with {len(self.pre_data)} records.")
+
+    def __len__(self):
+        return int(len(self.pre_data) * 1.0)
+    def __getitem__(self, idx):
+        idx = idx + int(len(self.pre_data) * 1.0) * 0
+        chunk = self.pre_data[idx]["input_ids"] 
+
+        if len(chunk) < self.max_len or chunk[-1] == 3:
+            input_ids = torch.tensor(chunk[:-1], device=self.device, dtype=torch.long)
+            labels = torch.tensor(chunk[:], device=self.device, dtype=torch.long)
+        else:
+            chunk_o = self.pre_data[idx+1]["input_ids"] 
+            input_ids = torch.tensor(chunk, device=self.device, dtype=torch.long)
+            labels = torch.tensor(chunk_o, device=self.device, dtype=torch.long)
+
+        input_ids = F.pad(input_ids, (0, max(self.max_len - len(input_ids), 0)), value=0)
+        labels = F.pad(labels, (0, max(self.max_len - len(labels), 0)), value=0)
+
+        return input_ids, labels
 
 
 
