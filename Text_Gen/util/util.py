@@ -1615,6 +1615,7 @@ class data_loader_LongText_Pre_SEQ(Dataset):
         self.max_len = max_len
         self.tokenizer = tokenizer
         self.data_path256_seq = os.path.join(self.path, "data256_seq")
+        self.chunk_size = 10_000_000 # 1_000_000 # 200_000
 
         check_and_create_folder([self.data_path256_seq])
 
@@ -1622,37 +1623,59 @@ class data_loader_LongText_Pre_SEQ(Dataset):
             input_ids = []
             max_len = self.max_len
 
-            text = batch["text"].replace("``", "").strip()
-            # print(f"Processing text: {text[:50]}...")  # Print first 50 characters for context
-            tokens = [1] + self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids + [3]
-            L = len(tokens)
-            # print(f"Processing text of length {L} with max_len {max_len}")
-            for i in range(3, min(L, max_len + 1)):
-                input_ids.append(tokens[:i])
-            for i in range(L - max_len):
-                chunk = tokens[i:i + max_len]
-                input_ids.append(chunk)
+            for text in batch["text"]:
+                text = text.replace("``", "").replace("''", "").strip()
+                # print(f"Processing text: {text[:50]}...")  # Print first 50 characters for context
+                tokens = [1] + self.tokenizer.tokenizer.encode(text, add_special_tokens=False).ids + [3]
+                L = len(tokens)
+                # print(f"Processing text of length {L} with max_len {max_len}")
+                for i in range(3, min(L, max_len) + 1):
+                    input_ids.append(tokens[:i])
+                    # yield {"input_ids": tokens[:i]}
+                for i in range(1, L - max_len + 1):
+                    chunk = tokens[i:i + max_len]
+                    input_ids.append(chunk)
+                    # yield {"input_ids": chunk}
 
             return {"input_ids": input_ids}
 
+        def chunked_map():
+            chunked_slices = []
+            total_len = int(len(self.dataset)*0.001)
+
+            for start in range(0, total_len, self.chunk_size):
+                end = min(start + self.chunk_size, total_len)
+                print(f"Processing records {start} to {end}")
+
+                slice = self.dataset.select(range(start, end))
+
+                mapped = slice.map(
+                            pre_sub_sequence,
+                            batched=True,
+                            remove_columns=["text"],
+                            num_proc=16,
+                            desc=f"Chunking [{start}-{end}]",
+                        )
+
+                chunked_slices.append(mapped)
+
+            # random.shuffle(chunked_slices)
+
+            return concatenate_datasets(chunked_slices)
+
         if not os.path.isdir(os.path.join(self.path, "train")):
             print("Downloading bookcorpus and saving...")
-            dataset = load_dataset("rojagtap/bookcorpus", num_proc=16)
-            dataset.save_to_disk(self.path, max_shard_size="1024MB")
-            dataset = None
-            del dataset
+            self.dataset = load_dataset("rojagtap/bookcorpus", num_proc=16)
+            self.dataset.save_to_disk(self.path, max_shard_size="1024MB")
         else:
-            dataset = load_from_disk(self.path)['train']
+            self.dataset = load_from_disk(self.path)['train']
 
         if len(os.listdir(self.data_path256_seq)) <= 1:
             self.pre_data = load_from_disk(self.path)['train']
-            self.pre_data = self.pre_data.map(
-                pre_sub_sequence,
-                num_proc=16,
-                remove_columns=['text'],
-                desc="Tokenizing text"
-            )
+            self.pre_data = chunked_map()
             self.pre_data.save_to_disk(self.data_path256_seq, max_shard_size="1024MB")
+            self.dataset = None
+            del self.dataset
         else:
             self.pre_data = load_from_disk(self.data_path256_seq)
         print(f"Dataset loaded with {len(self.pre_data)} records.")
@@ -1675,6 +1698,164 @@ class data_loader_LongText_Pre_SEQ(Dataset):
         labels = F.pad(labels, (0, max(self.max_len - len(labels), 0)), value=0)
 
         return input_ids, labels
+    
+
+class data_loaderQA_SEQRN(Dataset):
+    def __init__(self, path, new_tokenizer, max_len=256):
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.max_len = max_len
+        self.new_tokenizer = new_tokenizer
+        self.data_path = path
+        self.pre_data_path = os.path.join(self.data_path, "pre_data")
+
+        self.chunk_size = 10_000 # 1_000_000 # 200_000
+
+        check_and_create_folder([self.pre_data_path])
+        # if not os.path.isdir(self.data_path+"train"):
+        #     print("Directory does not exist.")
+        #     load_dataset(path="papahawk/conversational-01", save_infos=True).save_to_disk(self.data_path)
+
+        def clean_data(batch):
+            questionL = []
+            answerL = []
+            for data in tqdm(zip(batch["prompt"], batch["response"])):
+                question = data[0]
+                answer = data[1]
+                if question.endswith("1") and answer.startswith("."):
+                    question = question.replace("1", "").strip()
+                    answer = ("1" + answer).strip()
+                questionL.append(question)
+                answerL.append(answer)
+            return {'prompt': questionL, 'response': answerL}
+
+        def gen_seq(batch):
+            QA_data_seq_prompt = []
+            QA_data_seq_response = []
+            for data in tqdm(zip(batch["prompt"], batch["response"])):
+                question = self.new_tokenizer.tokenizer.encode(data[0]).ids
+                answer = self.new_tokenizer.tokenizer.encode(data[1]).ids
+                QA_data = [1] + [5] + question + [6] + answer + [3]
+                for i in range(len(question)+4,len(QA_data) + 1):
+                    QA_data_seq_prompt.append(QA_data[max(0, i - self.max_len - 2):i-1])
+                    QA_data_seq_response.append(QA_data[max(0, i - self.max_len - 1):i])
+            return {'prompt': QA_data_seq_prompt, 'response': QA_data_seq_response}
+                # for i in range(len(question)+4,len(QA_data) + 1):
+                #     yield {'prompt':QA_data[max(0, i - self.max_len - 2):i-1], 'response':QA_data[max(0, i - self.max_len - 1):i]}
+
+        def preprocessData():
+            chunked_slices = []
+            total_len = int(len(self.dataset)*1.0)
+
+            for start in range(0, total_len, self.chunk_size):
+                end = min(start + self.chunk_size, total_len)
+                print(f"Processing records {start} to {end}")
+
+                slice = self.dataset.select(range(start, end))
+
+                mapped = slice.map(
+                            clean_data,
+                            batched=True,
+                            num_proc=16,
+                            desc=f"Chunking [{start}-{end}]",
+                        )
+
+                chunked_slices.append(mapped)
+
+            # random.shuffle(chunked_slices)
+
+            return concatenate_datasets(chunked_slices)
+        
+
+        def preprocessDataSEQ():
+            chunked_slices = []
+            total_len = int(len(self.pre_data)*1.0)
+
+            for start in range(0, total_len, self.chunk_size):
+                end = min(start + self.chunk_size, total_len)
+                print(f"Processing records {start} to {end}")
+
+                slice = self.pre_data.select(range(start, end))
+
+                mapped = slice.map(
+                            gen_seq,
+                            batched=True,
+                            num_proc=16,
+                            desc=f"Chunking [{start}-{end}]",
+                        )
+
+                chunked_slices.append(mapped)
+
+            # random.shuffle(chunked_slices)
+
+            return concatenate_datasets(chunked_slices)
+
+        if (len(os.listdir(self.data_path)) <= 1):
+            self.dataset = load_dataset("papahawk/conversational-01",split="train", num_proc=16)
+            # self.pre_data = DatasetLoad.from_generator(preprocessData,num_proc=8)
+            self.pre_data = preprocessData()
+            self.pre_data.save_to_disk(self.data_path)
+   
+        if (len(os.listdir(self.pre_data_path)) <= 1):
+            self.pre_data = load_from_disk(self.data_path)
+            self.pre_data = preprocessDataSEQ()
+            self.pre_data.save_to_disk(self.pre_data_path)
+
+        self.pre_data = load_from_disk(self.pre_data_path)
+        print(f"Dataset loaded with {len(self.pre_data)} records.")
+        # self.pre_data = DatasetLoad.from_generator(gen_seq,num_proc=8)
+        # self.pre_data.save_to_disk(self.data_path512_seq
+
+        # if len(os.listdir(self.data_path512)) <= 1:
+
+        # data.set_format(type="torch", columns=["prompt", "response"])
+        # q_list = []
+        # a_list = []
+        # for idx in range(len(self.pre_data)):
+        #     question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["prompt"]).ids
+        #     answer = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["response"]).ids
+        #     QA_data = [1] + [5] + question + [6] + answer + [3]
+        #     for i in range(len(question)+3,len(QA_data)):
+        #         q_list.append(QA_data[:i-1])
+        #         a_list.append(QA_data[i:i])
+
+    def __len__(self):
+        return int(len(self.pre_data)*1.0) #int(len(self.pre_data)*0.1)
+    def __getitem__(self, idx):
+
+        # question = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["prompt"]).ids
+        # answer = self.new_tokenizer.tokenizer.encode(self.pre_data[idx]["response"]).ids
+
+        # lenght_answer = torch.tensor([len(answer)], device=self.device)
+
+        # QA_data = torch.tensor([1] + [5] + question + [6] + answer + [3], device=self.device)
+
+        # rr = random.randint(len(question) + 3, min(len(QA_data), self.max_len))
+        # QA_data = QA_data[0:rr]
+        # QA_in = QA_data[:-1].clone()
+        # QA_out = QA_data.clone()
+
+        # test = torch.tensor([i for i in range(30)], device=self.device)
+        # data_in = [int(i) for i in self.pre_data[idx]["prompt"][0]]
+        # data_out = [int(i) for i in self.pre_data[idx]["response"][0]]
+        # [print(i) for i in self.pre_data[0]["prompt"]]
+        # print("++++++++++++++++++++++++++")
+        # print(idx)
+        # idx = idx + int(len(self.pre_data)*0.01)*self.data_sector
+        QA_in = torch.tensor(self.pre_data[idx]["prompt"], device=self.device)
+        QA_out = torch.tensor(self.pre_data[idx]["response"], device=self.device)
+
+        QA_in_pad = F.pad(QA_in, mode='constant', pad=(0, max(self.max_len - len(QA_in), -1000000)), value=0)
+        QA_out_pad = F.pad(QA_out, mode='constant', pad=(0, max(self.max_len - len(QA_out), -1000000)), value=0)
+
+        return QA_in_pad, QA_out_pad
+    def get_sample(self):
+        rr = random.randint(0, len(self.pre_data)-1)
+        rr = 0
+        # return self.pre_data.to_dict()['response'][rr:1] , self.pre_data.to_dict()['prompt'][rr:1]
+        return self.pre_data[rr:rr+10]
+    
+    def get_vocab(self):
+        return self.new_tokenizer.vocab
 
 
 
