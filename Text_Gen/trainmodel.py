@@ -90,7 +90,13 @@ import torch
 #             "how can i open a usda slaughterhouse",
 #             "how deadly are brain tumors"]
 question = ["in the morning",
-            "what is the"
+            "what is the",
+            "starlings , new york",
+            "he gritted",
+            "at the gate",
+            "What is the purpose of the Python programming language?",
+            "anubis placed a pair",
+            "Hello"
             # "What’s the best way to fix my kitchen drain?",
             # "I'm just going to go to the store and whatever will happen it's going to happen.",
             # "What contribution did Samurai warriors make to Japanese culture?",

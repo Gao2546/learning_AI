@@ -313,7 +313,7 @@
           "save_model": true,
           "only_model": true,
           "save_dir": "./model/TransformerDecodeOnly_Best/",
-          "load_path": "/home/athip/psu/learning_AI/Text_Gen/model/TransformerDecodeOnly_Best/TransformerDecodeOnly_V01_128_384_6_6_1536_50K_256_MQcpk3.4_st1.pth",
+          "load_path": "/home/athip/psu/learning_AI/Text_Gen/model/TransformerDecodeOnly_Best/TransformerDecodeOnly_V01_128_384_6_6_1536_50K_256_MQcpk3.6_st1.pth",
           "load_embedding_path": null,
           "save_file": "TransformerDecodeOnly_V01_128_384_6_6_1536_50K_256_MQcpk1_st1QA.pth",
           "d_model": 384,
