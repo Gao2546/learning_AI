@@ -37,7 +37,7 @@ console.log("Client object initialized.\n");
 
 
 
-const ai = new GoogleGenAI({apiKey:"AIzaSyAeKtGko-Vn8xNlOk3zVAuERcXPupOa_C8"});
+const ai = new GoogleGenAI({apiKey:"AIzaSyDWrJjRLMvs2Mf-vxqvgZR7RIsRYKWDuhY"});
 
 import readline = require('readline');
 import fs = require('fs');
@@ -165,12 +165,12 @@ async function llm(question: string): Promise<Record<string , any> | string | un
   // const contents = ChatHistory.map(obj => JSON.stringify(obj)).join("\n");
   // console.log("reques model api\n================================")
   const countTokensResponse = await ai.models.countTokens({
-    model: "gemini-2.5-pro-exp-03-25",
+    model: "gemini-2.0-flash-001",
     contents: question,
   });
   console.log(countTokensResponse.totalTokens);
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-pro-exp-03-25",//"models/gemini-2.0-flash-001", // gemini-2.5-pro-exp-03-25
+    model: "gemini-2.0-flash-001",//"models/gemini-2.0-flash-001", // gemini-2.5-pro-exp-03-25
     contents: question ,//setting_prompt + "\n\n" + question,
   });
   const responseText = response.text; // Get text once

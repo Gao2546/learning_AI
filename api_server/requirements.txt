@@ -223,8 +223,9 @@ tokenizers
 tomli
 tomlkit
 torch
-torchaudio
 torchvision
+torchaudio
+--extra-index-url https://download.pytorch.org/whl/cu122
 tornado
 tqdm
 tqdm-loggable

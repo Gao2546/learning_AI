@@ -313,7 +313,7 @@
           "save_model": true,
           "only_model": true,
           "save_dir": "./model/TransformerDecodeOnly_Best/",
-          "load_path": "/home/athip/psu/learning_AI/Text_Gen/model/TransformerDecodeOnly_Best/TransformerDecodeOnly_V01_128_384_6_6_1536_50K_256_MQcpk3.6_st1.pth",
+          "load_path": "/home/athip/psu/learning_AI/Text_Gen/model/TransformerDecodeOnly_Best/TransformerDecodeOnly_V01_128_384_6_6_1536_50K_256_MQcpk1.2_st4QA.pth",
           "load_embedding_path": null,
           "save_file": "TransformerDecodeOnly_V01_128_384_6_6_1536_50K_256_MQcpk1_st1QA.pth",
           "d_model": 384,
@@ -327,7 +327,7 @@
           "max_seq": 256
         },
         "data": {
-          "data_path": "./data/Conversational01/",
+          "data_path": ["./data//BookCorpus/","./data/Conversation01"],
           "data_path_clean": "./data/BookCorpus_clean/",
           "data_path512": "./data/BookCorpus_1024_50K/",
           "data_path512_seq": "./data/BookCorpus_1024_50K_seqr/",
@@ -349,11 +349,16 @@
         },
         "inference": {
           "sample_question": [
-            "starlings , new york",
-            "he gritted",
-            "at the gate",
-            "What is the purpose of the Python programming language?",
+            "<|Q:|>I'm just going to go to the store and whatever will happen it's going to happen.<|A:|>",
+            "<|Q:|>What’s the best way to fix my kitchen drain?<|A:|>",
+            "<|Q:|>Can you provide me with some advice about a career in marketing.<|A:|>",
+            "<|Q:|>What is the purpose of the Python programming language?<|A:|>",
+            "<|Q:|>I just want to have fun.<|A:|>",
+            "<|Q:|>He was being a bitch and acting very stupid<|A:|>",
+            "<|Q:|>anubis placed a pair<|A:|>",
             "anubis placed a pair",
+            "<|Q:|>Why sky is blue?<|A:|>",
+            "<|Q:|>Hello<|A:|>",
             "Hello"
           ]
         }

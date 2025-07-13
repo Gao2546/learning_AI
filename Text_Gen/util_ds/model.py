@@ -2,7 +2,7 @@ import pandas as pd
 from util.util import *
 from transformers import AutoTokenizer
 import random
-from torch.utils.data import DataLoader, ConcatDataset
+from torch.utils.data import DataLoader
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -18,6 +18,7 @@ import signal
 import sys
 import os
 import gc
+import deepspeed
 
 logging.basicConfig(filename="output_PythonSmall_04_3873data.log", level=logging.INFO)
 
@@ -930,7 +931,7 @@ class Transformer:
 class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
     def __init__(self): #loss == 0.02 0.006
         config = Config("./util/model_config.json")
-        config = config.config07
+        config = config.config02
         model_config = config['model']
         data_config = config['data']
         training_config = config['training']
@@ -940,16 +941,13 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.save_dir = model_config['save_dir']#"./model/TransformerDecodeOnly/"
         self.load_path = model_config['load_path']#"./model/TransformerDecodeOnly/TransformerDecodeOnly_V01_64R_768_12_12_3072_10K_mn2_MQcpk1.pth" #DGood For Traning set ./model/TransformerDecodeOnly/TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk1.pth
         self.load_embedding_path = model_config['load_embedding_path']#"./model/Transformer/embedding_model.pth"
-        self.accumulation_steps = training_config["accumulation_steps"]
         
         self.data_path = data_config['data_path']#"./data/Conversational01/"
-        # self.data_path_clean = data_config['data_path_clean']#"./data/Conversational01_clean/"
-        # self.data_path512 = data_config['data_path512']#"./data/Conversational01_64R_10K/" # ./data/Conversational01_256_10K/
-        # self.data_path512_seq = data_config['data_path512_seq']#"./data/Conversational01_64R_10K_seqr/" # ./data/Conversational01_256_10K_seq/
-
+        self.data_path_clean = data_config['data_path_clean']#"./data/Conversational01_clean/"
+        self.data_path512 = data_config['data_path512']#"./data/Conversational01_64R_10K/" # ./data/Conversational01_256_10K/
+        self.data_path512_seq = data_config['data_path512_seq']#"./data/Conversational01_64R_10K_seqr/" # ./data/Conversational01_256_10K_seq/
         # self.data_path256 = "./data/Conversational01_256/"
         # self.data_path_full = "./data/PythonCodeDataSmall_TextOnly/Python_code_data.txt"
-
         self.tokenizer_path = data_config['tokenizer_path']#"./model/BPE_model/tokenizer-bpe-conversational-10k.json"
 
         self.save_file = model_config['save_file']#"TransformerDecodeOnly_V01_64R_768_12_12_3072_10K_mn2_MQcpk1.pth" # TransformerDecodeOnly_V01_256_768_12_12_3072_10K_mn2_MQcpk2.pth
@@ -959,13 +957,10 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         # self.save_file = "Transformer_VT01_10KA.pth"
 
 
-        # check_and_create_folder([self.save_dir,self.data_path512,self.data_path512_seq,self.data_path,self.save_g_loss,self.data_path_clean])
-        check_and_create_folder([self.save_dir,self.save_g_loss] + self.data_path)
-
+        check_and_create_folder([self.save_dir,self.data_path512,self.data_path512_seq,self.data_path,self.save_g_loss,self.data_path_clean])
+        
         self.start_epoch = training_config['start_epoch']#0
         self.save_every_epoch = training_config['save_every_epoch']#10
-        self.eval_every_step = training_config['eval_every_step']
-        self.save_every_step = training_config['save_every_step']
         self.sample_every_epoch = training_config['sample_every_epoch']#10
         self.epochs = training_config['epochs']#1000
         self.batch_size = training_config['batch_size']#int(16*12) #16*4*10 16*6 16*2.5
@@ -974,18 +969,12 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.vocab_size = model_config['vocab_size']#1024*10
         print("self.max_seq_length: ", self.max_seq_length)
         # self.train_data = dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=3873)
-        # self.BPE_model = BPEsQA(vocab_size=self.vocab_size)
-        self.BPE_model = BPEsSEQ(vocab_size=self.vocab_size)
+        self.BPE_model = BPEsQA(vocab_size=self.vocab_size)
       
         # self.BPE_model.train([self.data_path])
         self.BPE_model.load(self.tokenizer_path)
         # self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
-        # self.train_data = data_loaderQA_SEQ(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
-        # self.train_data = data_loader_LongText(self.data_path, self.data_path512_seq, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_sector=0)
-        # self.train_data = data_loader_LongText_NoPre(path=self.data_path, tokenizer=self.BPE_model, max_len=self.max_seq_length, data_sector=0,step=1)
-        self.train_data_LongTxt = data_loader_LongText_Pre_SEQ(path=self.data_path[0], tokenizer=self.BPE_model, max_len=self.max_seq_length)
-        self.train_data_QA = data_loaderQA_SEQRN(self.data_path[1], new_tokenizer=self.BPE_model, max_len=self.max_seq_length)
-        self.train_data = ConcatDataset([self.train_data_LongTxt, self.train_data_QA])
+        self.train_data = data_loaderQA_SEQR(self.data_path, new_tokenizer=self.BPE_model, max_len=self.max_seq_length, data_path512 = self.data_path512, data_path512_seq = self.data_path512_seq, data_path_clean = self.data_path_clean, data_sector=0)
         #========================================================================================
         # self.train_data =  dataloadercustom_Transformer(pretrain_model_tokenizer_path="./model/BPE_model/BPE_model_code_python_small_text_V01_10K.pkl",qaaidx_path="./data/PythonCodeDataSmall_TextOnly/BPE_data/BPE_idx_V01_10K.pkl",amount_data=10)
         self.train_dataloader = DataLoader(self.train_data,batch_size=self.batch_size,shuffle=True)
@@ -1085,14 +1074,14 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.criterion = nn.CrossEntropyLoss(ignore_index=0, reduction='mean').to(device=0)
         self.optimizer = optim.AdamW(self.Transformer.parameters(),
                                     #  lr=2e-4)
-                               lr=self.base_lr, betas=(0.9, 0.999), eps=1e-8) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
+                               lr=self.base_lr, betas=(0.9, 0.95), eps=1e-9) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
                                
 
         # Learning rate scheduler
         # self.warmup_steps = int(self.epochs*0.01*(math.ceil(len(self.train_data)/self.batch_size))) #5% 0.02
         # self.max_steps = int(self.epochs*0.9*(math.ceil(len(self.train_data)/self.batch_size))) #50% 0.025
-        self.warmup_steps = training_config['warmup_steps']#int(self.epochs*training_config['warmup_steps']*math.ceil(len(self.train_data)/self.batch_size)) #5% 0.02
-        self.max_steps = int(self.epochs*training_config['max_steps']*math.ceil(len(self.train_data)/self.batch_size))//self.accumulation_steps #50% 0.025
+        self.warmup_steps = int(self.epochs*training_config['warmup_steps']) #5% 0.02
+        self.max_steps = int(self.epochs*training_config['max_steps']) #50% 0.025
         self.scheduler = WarmupCosineScheduler(self.optimizer, self.warmup_steps, self.max_steps, base_lr=self.base_lr, start_step=None) #lr is max learning rate lr=5e-5 //1e-5 1e-4 5e-6
 
         if self.load_path:
@@ -1103,6 +1092,20 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
             self.load_embedding(self.load_embedding_path)
         else:
             pass
+
+
+        # DeepSpeed config path
+        ds_config = training_config['ds_config']
+
+        # Initialize with your own optimizer
+        self.Transformer, self.optimizer, _, _ = deepspeed.initialize(
+            model=self.Transformer,
+            optimizer=self.optimizer,
+            model_parameters=self.Transformer.parameters(),
+            config=ds_config
+        )
+
+
 
         # Count total parameters
         total_params = sum(p.numel() for p in self.Transformer.parameters())
@@ -1135,107 +1138,69 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
         self.g_loss = check_loss()
 
     def train(self):
-        scaler = GradScaler()
+        # scaler = GradScaler()
         self.Transformer.train()
-        for epoch in tqdm(range(self.start_epoch, self.epochs), desc="Epochs"):
+        for epoch in tqdm(range(self.start_epoch,self.epochs)):
             self.loss_epoch = []
-            self.loss_step = []
-            self.acc_loss = 0
-            with tqdm(self.train_dataloader, desc=f"Epoch {epoch+1}") as batch_bar:
-                for steps, (answer_in, answer_out) in enumerate(batch_bar):
-                    # print(answer_in.shape)
-                    # print(answer_out.shape)
-                    # print(length_answer)
-                    # length_answer = length_answer/length_answer.max()
-                    signal.signal(signal.SIGINT, signal_handler)
-                    # self.optimizer.zero_grad()
-                    with autocast(device_type='cuda'):  # Mixed precision context device_type='cuda'
-                        output = self.Transformer(answer_in)
-                        loss = self.criterion(output.contiguous().view(-1, self.tgt_vocab_size),
-                                         answer_out.contiguous().view(-1))
-                        loss = loss / self.accumulation_steps
-                        self.acc_loss += loss.item()
-                        # loss = loss.view(answer_in.shape[0],-1)
-                        # loss = loss.sum(dim=1)
-                        # loss = loss*length_answer
-                        # loss = loss.mean()
-                    # loss.backward()
-                    scaler.scale(loss).backward()
-                    self.loss_epoch.append(loss.item())
-                    torch.nn.utils.clip_grad_norm_(self.Transformer.parameters(), max_norm=self.max_norm)
-                    # self.optimizer.step()
-                    if (steps + 1) % self.accumulation_steps == 0:
-                        scaler.step(self.optimizer)
-                        scaler.update()
-                        self.optimizer.zero_grad()
-                        self.g_loss.add(loss=self.acc_loss, epoch=self.scheduler.current_step)
-                        self.loss_step.append(self.acc_loss)
-                        batch_bar.set_postfix(loss=self.acc_loss)
-                        self.acc_loss = 0
-                        self.scheduler.step()
-                        if (self.scheduler.current_step % self.save_every_step == 0):
-                            self.save_model_and_optimizer(self.save_dir + f"{self.save_file}", epoch = epoch)
-                            print(f"loss: {sum(self.loss_step)/len(self.loss_step)}")
-                            logging.info(f"loss: {sum(self.loss_step)/len(self.loss_step)}")
-                            self.loss_step = []
-                            self.g_loss.plot_save(file_path=self.save_g_loss, para=self.save_file.replace(".pth",""))
-                        if self.scheduler.current_step % self.eval_every_step == 0:
-                            del output
-                            del answer_in
-                            del answer_out
-                            del loss
-                            gc.collect()
-                            # Frees up unused memory from the CUDA memory cache
-                            torch.cuda.empty_cache()
-                            # Collects intermediately unused memory fragments (use with care)
-                            torch.cuda.ipc_collect()
-        
-                            # output_eval = self.eval_modelNew(self.sample_question)
-                            output_eval = self.eval_modelQ(self.sample_question)
-                            for o in output_eval:
-                                print(o)
-                                logging.info(o)
-                                print("\n=====================================\n")
-                            self.Transformer.train()
-                if (steps + 1) % self.accumulation_steps != 0:
-                        scaler.step(self.optimizer)
-                        scaler.update()
-                        self.optimizer.zero_grad()
-                if self.save_model and (((epoch + 1) % self.save_every_epoch) == 0):
-                    # self.save(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
-                    # self.save_model_and_optimizer(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
-                    self.save_model_and_optimizer(self.save_dir + f"{self.save_file}", epoch = epoch)
-                    # output_eval = self.eval_model(self.sample_question)
-                    # logging.info(f"batch_eval : epoch {epoch}")
-                    # for o in output_eval:
-                    #     print(o)
-                    #     logging.info(o)
-                    # self.Transformer.train()
-                print(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")
-                logging.info(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")  
-                # self.g_loss.add(loss=sum(self.loss_epoch)/len(self.loss_epoch), epoch=self.scheduler.current_step)
+            for answer_in, answer_out in tqdm(self.train_dataloader):
+                # print(answer_in.shape)
+                # print(answer_out.shape)
+                # print(length_answer)
+                # length_answer = length_answer/length_answer.max()
+                signal.signal(signal.SIGINT, signal_handler)
+                self.optimizer.zero_grad()
+                with autocast(device_type='cuda'):  # Mixed precision context device_type='cuda'
+                    output = self.Transformer(answer_in)
+                    loss = self.criterion(output.contiguous().view(-1, self.tgt_vocab_size),
+                                     answer_out.contiguous().view(-1))
+                    # loss = loss.view(answer_in.shape[0],-1)
+                    # loss = loss.sum(dim=1)
+                    # loss = loss*length_answer
+                    # loss = loss.mean()
+                # loss.backward()
+                # scaler.scale(loss).backward()
+                self.Transformer.backward(loss)
+                self.loss_epoch.append(loss.item())
+                torch.nn.utils.clip_grad_norm_(self.Transformer.parameters(), max_norm=self.max_norm)
+                # self.optimizer.step()
+                # scaler.step(self.optimizer)
+                # scaler.update()
+                self.Transformer.step()
+            self.scheduler.step()
+            if self.save_model and (((epoch + 1) % self.save_every_epoch) == 0):
+                # self.save(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
+                # self.save_model_and_optimizer(self.save_dir + f"Transformer01_{epoch + 1:0=5}.pth")
+                self.save_model_and_optimizer(self.save_dir + f"{self.save_file}", epoch = epoch)
+                # output_eval = self.eval_model(self.sample_question)
+                logging.info(f"batch_eval : epoch {epoch}")
+                # for o in output_eval:
+                #     print(o)
+                #     logging.info(o)
+                # self.Transformer.train()
+            print(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")
+            logging.info(f"Epoch: {epoch+1}, Loss: {sum(self.loss_epoch)/len(self.loss_epoch)}, lr: {self.optimizer.param_groups[0]['lr']}")  
+            self.g_loss.add(loss=sum(self.loss_epoch)/len(self.loss_epoch), epoch=self.scheduler.current_step)
 
-                if (epoch + 1) % self.sample_every_epoch == 0:
-                    # self.save_model_and_optimizer(self.save_dir + "cpk/" + f"epoch_{epoch}_{self.save_file}", epoch = epoch)
+            if (epoch + 1) % self.sample_every_epoch == 0:
+                # self.save_model_and_optimizer(self.save_dir + "cpk/" + f"epoch_{epoch}_{self.save_file}", epoch = epoch)
 
-                    del output
-                    del answer_in
-                    del answer_out
-                    del loss
-                    gc.collect()
-                    # Frees up unused memory from the CUDA memory cache
-                    torch.cuda.empty_cache()
-                    # Collects intermediately unused memory fragments (use with care)
-                    torch.cuda.ipc_collect()
+                del output
+                del answer_in
+                del answer_out
+                del loss
+                gc.collect()
+                # Frees up unused memory from the CUDA memory cache
+                torch.cuda.empty_cache()
+                # Collects intermediately unused memory fragments (use with care)
+                torch.cuda.ipc_collect()
 
-                    # output_eval = self.eval_modelNew(self.sample_question)
-                    output_eval = self.eval_modelQ(self.sample_question)
-                    for o in output_eval:
-                        print(o)
-                        logging.info(o)
-                        print("\n=====================================\n")
-                    self.g_loss.plot_save(file_path=self.save_g_loss, para=self.save_file.replace(".pth",""))
-                    self.Transformer.train()
+                output_eval = self.eval_modelQ(self.sample_question)
+                for o in output_eval:
+                    print(o)
+                    logging.info(o)
+                    print("\n=====================================\n")
+                self.g_loss.plot_save(file_path=self.save_g_loss, para=self.save_file.replace(".pth",""))
+                self.Transformer.train()
 
     def save(self,path):
         torch.save(self.Transformer.state_dict(),path)
@@ -1381,37 +1346,7 @@ class TransformerDecodeOnly: #Current==> 256 384 6 6 1536 10K in clound GPU
                 # output_list.append("\n" + question+ " :\n" + "".join(self.tokenizer.idx2token(answer_input[0,1:seq_idx].cpu().tolist())).replace("Ġ"," ").replace("Ċ","\n"))
                 output_list.append("\n" + question+ " :\n=============>\n" + self.BPE_model.decode_clean(answer_input[0,1:seq_idx].cpu().tolist()))
             return output_list
-        
-
-    def eval_modelNew(self, questions):
-        with torch.no_grad():
-            self.Transformer.eval()
-            output_list = []
-            for question in questions:
-                # answer_output = [1, ] + self.tokenizer.token2idx(self.tokenizer.tokenize(question))
-                answer_output = [1] + self.BPE_model.tokenizer.encode(question).ids
-                start_seq = len(answer_output) - 1
-                # print(start_seq)
-                answer_output = torch.tensor(answer_output, device=self.device)
-                answer_output = torch.nn.functional.pad(answer_output,(0,self.max_seq - len(answer_output)),"constant",0).unsqueeze(0)
-                # answer_output = torch.zeros((1,self.max_seq_length),device=self.device,dtype=torch.int32)
-                # answer_output[0,0] = 1
-                answer_input = answer_output.clone()
-                seq_idx = 0
-                for seq_idx in range(start_seq,self.max_seq - 1):
-                    if answer_output[0].clone().cpu().tolist()[min(seq_idx, self.max_seq_length - 1)] != 3:
-                        answer_input[0,seq_idx] = answer_output.clone()[0,min(seq_idx, self.max_seq_length - 1)]
-                        answer_output = self.Transformer(answer_input[:,max(0, seq_idx - self.max_seq_length + 1):max(self.max_seq_length, seq_idx+1)])
-                        answer_output = torch.argmax(torch.nn.functional.softmax(answer_output,dim=2),dim=2)
-                        # print(answer_output.size())
-                        # answer_output = torch.nn.functional.pad(answer_output,(0,self.max_seq - len(answer_output)),"constant",0)
-                        # print(f"seq_idx: {seq_idx}, answer_output: {answer_output}")
-                    else:
-                        break
-                answer_input[0,seq_idx] = answer_output.clone()[0,min(seq_idx, self.max_seq_length - 1)]
-                # output_list.append("\n" + question+ " :\n" + "".join(self.tokenizer.idx2token(answer_input[0,1:seq_idx].cpu().tolist())).replace("Ġ"," ").replace("Ċ","\n"))
-                output_list.append("\n" + question+ " :\n=============>\n" + self.BPE_model.decode_clean(answer_input[0,1:seq_idx].cpu().tolist()))
-            return output_list
+    
 
 
 

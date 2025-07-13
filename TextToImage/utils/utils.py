@@ -123,6 +123,7 @@ def show_tensor_image_t(image):
 def show_tensor_image(image):
     reverse_transforms = transforms.Compose([
         transforms.Lambda(lambda t: (t + 1) / 2),
+        transforms.Resize((256, 256)),  # Resize to 256x256
         transforms.Lambda(lambda t: t.permute(1, 2, 0)), # CHW to HWC
         transforms.Lambda(lambda t: t * 255.),
         transforms.Lambda(lambda t: t.detach().numpy().astype(np.uint8)),
@@ -260,7 +261,8 @@ def sample_plot_image_no_VQVAE(Denoise_model, names, size, CLIP_model,img_c,num_
     plt.savefig(f"TextToImage/output/sample_no_VQVAE_{names}_{datetime.datetime.now().strftime('%d_%m_%Y')}.png")
 
 @torch.no_grad()
-def generate_image_no_VQVAE(Denoise_model, CLIP_model, image_size, image_c, prompt):
+def generate_image_no_VQVAE(Denoise_model, CLIP_model, image_size, image_c, prompt, img_url):
+    data_path = []
     prompt = torch.tensor([int(prompts) for prompts in prompt],device=device, dtype=torch.long)
     num_prompt = prompt.size(0)
     encode_text = CLIP_model.text_encoding(prompt)
@@ -269,9 +271,13 @@ def generate_image_no_VQVAE(Denoise_model, CLIP_model, image_size, image_c, prom
         t = torch.ones(num_prompt, device=device, dtype=torch.long) * time_step
         img = sample_timestep(img, t, time_step, Denoise_model, encode_text)
     img = torch.clamp(img, -1.0, 1.0)
+    time_U = datetime.datetime.now().strftime('%d_%m_%Y')
     for p,i in zip(prompt.cpu().tolist(),img):
-        plt.imsave(f"./TextToImage/output/{p}_{datetime.datetime.now().strftime('%d_%m_%Y')}.png",show_tensor_image(i.cpu()))
-    return img
+        # plt.imsave(f"./TextToImage/output/{p}_{datetime.datetime.now().strftime('%d_%m_%Y')}.png",show_tensor_image(i.cpu()))
+
+        plt.imsave(f"{img_url}_{time_U}_{p}.png", show_tensor_image(i.cpu()))
+        data_path.append(f"{img_url}_{time_U}_{p}.png")
+    return img, data_path[0] if len(data_path) == 1 else data_path
 
 def show_img_VAE(batch,recon,names):
     fig = plt.figure(1,clear=True)

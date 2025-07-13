@@ -3,13 +3,14 @@ version: '3.8'
 services:
   app:
     build:
-      context: ..
+      context: .
       dockerfile: ai_agent_with_McpProtocol/Dockerfile
     ports:
       - "3000:3000"
     environment:
       - DATABASE_URL=postgres://athip:123456@db:5432/ai_agent # Example URL, adjust as needed
       - API_SERVER_URL=http://api_server:5000
+      - API_OLLAMA=http://ollama:11434/api/generate
       # Add any other necessary environment variables here
     depends_on:
       - db
@@ -32,23 +33,43 @@ services:
 
   api_server:
     build:
-      context: ..
+      context: .
       dockerfile: api_server/Dockerfile
     ports:
       - "5000:5000"
-    environment:
+    # environment:
       # Pass the OpenAI API key from the host environment or a .env file
       # Ensure OPENAI_API_KEY is set in your environment before running docker-compose up
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all # Or specify a specific number of GPUs
-              capabilities: [gpu]
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all # Or specify a specific number of GPUs
+    #           capabilities: [gpu]
+    runtime: nvidia
     networks:
       - app-network
+
+  ollama:
+    image: ollama/ollama
+    # ports:
+    #   - "11434:11434"
+    volumes:
+      - /usr/share/ollama/.ollama:/root/.ollama
+    networks:
+      - app-network
+    # Uncomment below if you want GPU access with NVIDIA
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    runtime: nvidia
+
 
 volumes:
   postgres_data:

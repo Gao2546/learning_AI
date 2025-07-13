@@ -29,18 +29,18 @@ window.addEventListener('beforeunload', async (event) => {
     // event.preventDefault(); // Some browsers require this
     // alert('Are you sure you want to leave?');
     // event.returnValue = ""; // This shows the native confirmation prompt
-    console.log('beforeunload-page')
-    await fetch('/auth/endsession')
-        .then(response => {
-            if (response.ok) {
-                console.log('Session ended successfully');
-            } else {
-                console.error('Failed to end session');
-            }
-        })
-        .catch(error => {
-            console.error('Error ending session:', error);
-        });
+    // console.log('beforeunload-page')
+    // await fetch('/auth/endsession')
+    //     .then(response => {
+    //         if (response.ok) {
+    //             console.log('Session ended successfully');
+    //         } else {
+    //             console.error('Failed to end session');
+    //         }
+    //     })
+    //     .catch(error => {
+    //         console.error('Error ending session:', error);
+    //     });
 });
 
 // window.addEventListener('unload', async (event) => {
@@ -93,9 +93,16 @@ document.addEventListener('DOMContentLoaded', async (event) => {
                     data.chatHistory.forEach(message => {
                         if (message.startsWith('user:')) {
                             displayMessage(message.substring(5).trim(), 'user-message');
-                        } else if (message.startsWith('assistance:')) {
+                        } 
+                        else if (message.startsWith('assistance:')) {
                             displayMarkdownMessage(message.substring(11).trim(), 'agent-message');
                         }
+                        else if (message.startsWith('img_url:')) {
+                        // Extract the URL by slicing the string after "img_url:"
+                        const imageUrl = message.substring("img_url:".length).trim();
+                        console.log(imageUrl);
+                        displayImageMessage(imageUrl, 'img-message');
+                    }
                     });
                 }
 
@@ -465,6 +472,7 @@ async function sendMessage() {
 
     let agentResponse = ''; // Variable to hold the latest agent response
     let attempt_completion = false;
+    let img_url = null;
     let loopCount = 0; // Add a counter to prevent infinite loops in case of unexpected issues
     const MAX_LOOPS = 2; // Set a maximum number of iterations
     const selectedMode = modeSelector ? modeSelector.value : defaultMode; // Get selected mode *before* loop
@@ -503,6 +511,7 @@ async function sendMessage() {
                 agentResponse = data.response; // Store the response
                 attempt_completion = data.attempt_completion;
                 followup_question = data.followup_question;
+                img_url = data.img_url;
                 // Display the agent's response, unless it's the final completion signal
                 if (followup_question) {
                     displayMarkdownMessage(agentResponse, 'agent-message');
@@ -519,6 +528,10 @@ async function sendMessage() {
                     // Optionally display a final completion message here if needed
                     displayMarkdownMessage(`Task completed. Result: ${agentResponse}`, 'agent-message');
                     // displayMessage("Task completed.", 'agent-message');
+                }
+
+                if (img_url){
+                    displayImageMessage(img_url, "img-message");
                 }
             } else if (data.error) {
                 // Display the error message received from the backend
@@ -667,6 +680,42 @@ function displayMarkdownMessage(text, className) {
     }
 }
 
+function displayImageMessage(imageUrl, className = '') {
+    // Create a div to hold the image, allowing for potential styling or future additions
+    const messageElement = document.createElement('div');
+    messageElement.className = className; // Apply the provided class name
+
+    // Create the image element
+    const imgElement = document.createElement('img');
+    imgElement.src = imageUrl;
+    imgElement.alt = 'Chat image'; // Provide a descriptive alt text for accessibility
+    imgElement.style.maxWidth = '100%'; // Ensure the image fits within its container
+    imgElement.style.height = 'auto'; // Maintain aspect ratio
+    imgElement.style.borderRadius = '8px'; // Add some rounded corners for aesthetics
+    imgElement.style.marginTop = '5px'; // Add a small margin top for spacing
+
+    // Optional: Add an error handler for broken image links
+    imgElement.onerror = function() {
+        console.error('Failed to load image:', imageUrl);
+        // You could replace the broken image with a placeholder or a "failed to load" message
+        imgElement.src = 'https://placehold.co/150x150/FF0000/FFFFFF?text=Image+Error';
+        imgElement.alt = 'Image failed to load';
+    };
+
+    // Append the image to the message container
+    messageElement.appendChild(imgElement);
+
+    // Assuming 'messagesDiv' is the container where all chat messages are appended
+    // Make sure 'messagesDiv' is defined in your scope.
+    if (typeof messagesDiv !== 'undefined' && messagesDiv instanceof Element) {
+        messagesDiv.appendChild(messageElement);
+        // Scroll to the bottom of the messages div to show the new message
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    } else {
+        console.error("Error: 'messagesDiv' is not defined or is not a valid DOM element. Please ensure your chat container element is correctly referenced.");
+    }
+}
+
 async function loadChatHistory(chatId) {
     await fetch(`/api/chat-history?chatId=${chatId}`)
         .then(response => response.json())
@@ -694,8 +743,16 @@ async function loadChatHistory(chatId) {
                 data.chatHistory.forEach(message => {
                     if (message.startsWith('user:')) {
                         displayMessage(message.substring(5).trim(), 'user-message');
-                    } else if (message.startsWith('assistance:')) {
+                    } 
+                    else if (message.startsWith('assistance:')) {
                         displayMarkdownMessage(message.substring(11).trim(), 'agent-message');
+                    }
+
+                    else if (message.startsWith('img_url:')) {
+                        // Extract the URL by slicing the string after "img_url:"
+                        const imageUrl = message.substring("img_url:".length).trim();
+                        console.log(imageUrl);
+                        displayImageMessage(imageUrl, 'img-message');
                     }
                 });
 
@@ -740,7 +797,7 @@ function populateModes(returnDefault = false) {
         { id: 'architect', name: 'Architect' },
         { id: 'debug', name: 'Debug' }
     ];
-    const defaultValue = modes.length > 0 ? modes[0].id : null;
+    const defaultValue = modes.length > 0 ? modes[1].id : null;
 
     if (returnDefault) {
         return defaultValue;
@@ -812,7 +869,7 @@ function populateModels(returnDefault = false) {
         { id: 'qwen2.5-coder:32b', name: 'qwen2.5-coder:32b' },
         { id: 'wizardlm2:7b', name: 'wizardlm2:7b' },
     ];
-    const defaultValue = models.length > 0 ? models[0].id : null;
+    const defaultValue = models.length > 0 ? models[10].id : null;
 
     if (returnDefault) {
         return defaultValue;
@@ -830,6 +887,8 @@ function populateModels(returnDefault = false) {
         option.textContent = model.name;
         modelSelector.appendChild(option);
     });
+    // modelSelector.value = 'gemma3:4b'
+    // modeSelector.name = "gemma3:4b"
     console.log('Models:', currentValue);
 
     // Try to restore previous value, otherwise set default

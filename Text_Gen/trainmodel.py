@@ -89,14 +89,26 @@ import torch
 #             "how old is alicia in 2009",
 #             "how can i open a usda slaughterhouse",
 #             "how deadly are brain tumors"]
-question = ["in the morning",
-            "what is the",
-            "starlings , new york",
-            "he gritted",
-            "at the gate",
-            "What is the purpose of the Python programming language?",
+question = [
+            "<|Q:|>I'm just going to go to the store and whatever will happen it's going to happen.<|A:|>",
+            "<|Q:|>What’s the best way to fix my kitchen drain?<|A:|>",
+            "<|Q:|>Can you provide me with some advice about a career in marketing.<|A:|>",
+            "<|Q:|>What is the purpose of the Python programming language?<|A:|>",
+            "<|Q:|>I just want to have fun.<|A:|>",
+            "<|Q:|>He was being a bitch and acting very stupid<|A:|>",
+            "<|Q:|>anubis placed a pair<|A:|>",
             "anubis placed a pair",
-            "Hello"
+            "<|Q:|>Why sky is blue?<|A:|>",
+            "<|Q:|>Hello<|A:|>",
+            "Hello",
+            # "in the morning",
+            # "what is the",
+            # "starlings , new york",
+            # "he gritted",
+            # "at the gate",
+            # "What is the purpose of the Python programming language?",
+            # "anubis placed a pair",
+            # "Hello"
             # "What’s the best way to fix my kitchen drain?",
             # "I'm just going to go to the store and whatever will happen it's going to happen.",
             # "What contribution did Samurai warriors make to Japanese culture?",
@@ -128,7 +140,7 @@ question = ["in the morning",
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 model = TransformerDecodeOnly()
-model.train()
-# output = model.eval_modelNew(question)
-# for o in output:
-#     print(o)
+# model.train()
+output = model.eval_modelNew(question)
+for o in output:
+    print(o)

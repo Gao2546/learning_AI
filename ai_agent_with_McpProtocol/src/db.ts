@@ -1,5 +1,8 @@
 import pkg from 'pg';
 import dotenv from 'dotenv';
+import fs from 'fs/promises'; // Use fs/promises for async/await
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -86,7 +89,25 @@ async function createTable() {
   }
 }
 
-createTable();
+await createTable();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Define the base upload folder
+const uploadFolder = path.join(__dirname, '..', 'user_files');
+
+async function ensureUploadFolderExists() {
+  try {
+    await fs.access(uploadFolder); // check if folder exists
+    console.log('Upload folder already exists.');
+  } catch (error) {
+    await fs.mkdir(uploadFolder, { recursive: true });
+    console.log('Upload folder created.');
+  }
+}
+
+await ensureUploadFolderExists();
 
 async function createUser(username: string, passwordHash: string, email: string) {
   const query = 'INSERT INTO users (username, password, email) VALUES ($1, $2, $3) RETURNING id, username, email';
@@ -421,6 +442,201 @@ async function setUserRole(userId: number, role: 'user' | 'admin'): Promise<void
   }
 }
 
+async function deleteAllGuestUsersAndChats() {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Find all guest users
+    const res = await client.query(
+      'SELECT id FROM users WHERE is_guest = TRUE'
+    );
+    const userIds = res.rows.map(row => row.id);
+
+    for (const userId of userIds) {
+      // Set current_chat_id to NULL to avoid FK constraint issues
+      await client.query(
+        'UPDATE users SET current_chat_id = NULL WHERE id = $1',
+        [userId]
+      );
+
+      // Delete all chat history for this user
+      await client.query(
+        'DELETE FROM chat_history WHERE user_id = $1',
+        [userId]
+      );
+
+      // Delete the user
+      await client.query(
+        'DELETE FROM users WHERE id = $1',
+        [userId]
+      );
+    }
+
+    await client.query('COMMIT');
+    console.log(`DB: Deleted ${userIds.length} guest users and their chat history`);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error deleting all guest users and chats:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+await deleteAllGuestUsersAndChats();
+await deleteOrphanedUserFolders();
+
+async function createUserFolder(userId: number): Promise<string> {
+  const userFolderPath = path.join(uploadFolder, `user_${userId}`);
+
+  try {
+    // Ensure the base upload folder exists (e.g., 'user_files')
+    await fs.mkdir(uploadFolder, { recursive: true });
+    console.log(`Ensured base upload folder exists: ${uploadFolder}`);
+
+    // Create the specific user folder
+    await fs.mkdir(userFolderPath, { recursive: true });
+    console.log(`User folder created or already exists: ${userFolderPath}`);
+    return userFolderPath;
+  } catch (error) {
+    console.error(`Error creating user folder for user ID ${userId}:`, error);
+    throw error; // Re-throw the error for the caller to handle
+  }
+}
+
+async function createChatFolder(userId: number, chatId: number): Promise<string> {
+  const userFolderPath = path.join(uploadFolder, `user_${userId}`);
+  const chatFolderPath = path.join(userFolderPath, `chat_${chatId}`);
+
+  try {
+    // Ensure the base upload folder exists (e.g., 'user_files')
+    await fs.mkdir(uploadFolder, { recursive: true });
+    console.log(`Ensured base upload folder exists: ${uploadFolder}`);
+
+    // Ensure the specific user folder exists
+    await fs.mkdir(userFolderPath, { recursive: true });
+    console.log(`Ensured user folder exists: ${userFolderPath}`);
+
+    // Create the specific chat folder
+    await fs.mkdir(chatFolderPath, { recursive: true });
+    console.log(`Chat folder created or already exists: ${chatFolderPath}`);
+    return chatFolderPath;
+  } catch (error) {
+    console.error(`Error creating chat folder for user ID ${userId}, chat ID ${chatId}:`, error);
+    throw error; // Re-throw the error for the caller to handle
+  }
+}
+
+async function deleteChatFolder(userId: number, chatId: number): Promise<void> {
+  const userFolderPath = path.join(uploadFolder, `user_${userId}`);
+  const chatFolderPath = path.join(userFolderPath, `chat_${chatId}`);
+
+  try {
+    await fs.access(chatFolderPath); // Check if the folder exists
+    await fs.rm(chatFolderPath, { recursive: true, force: true }); // Delete the folder and its contents
+    console.log(`Chat folder deleted: ${chatFolderPath}`);
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      console.warn(`Chat folder not found, no action needed: ${chatFolderPath}`);
+    } else {
+      console.error(`Error deleting chat folder for user ID ${userId}, chat ID ${chatId}:`, error);
+      throw error; // Re-throw other errors for upstream handling
+    }
+  }
+}
+
+async function deleteUserFolder(userId: number): Promise<void> {
+  const userFolderPath = path.join(uploadFolder, `user_${userId}`);
+
+  try {
+    await fs.access(userFolderPath); // Check if the folder exists
+    await fs.rm(userFolderPath, { recursive: true, force: true }); // Delete the folder and all its contents
+    console.log(`User folder deleted: ${userFolderPath}`);
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      console.warn(`User folder not found, no action needed: ${userFolderPath}`);
+    } else {
+      console.error(`Error deleting user folder for user ID ${userId}:`, error);
+      throw error; // Re-throw other errors for upstream handling
+    }
+  }
+}
+
+async function getAllUserIdsFromDatabase(): Promise<number[]> {
+  try {
+    const query = 'SELECT id FROM users';
+    const result = await pool.query(query);
+    return result.rows.map(row => row.id);
+  } catch (error) {
+    console.error('Error fetching all user IDs from database:', error);
+    throw error;
+  }
+}
+
+/**
+ * Deletes user folders in the 'user_files' directory that do not
+ * correspond to an existing user ID in the database.
+ * This helps in cleaning up orphaned folders.
+ */
+async function deleteOrphanedUserFolders(): Promise<void> {
+  try {
+    // 1. Get all user IDs from the database
+    const dbUserIds = new Set(await getAllUserIdsFromDatabase());
+    console.log('Database user IDs:', Array.from(dbUserIds));
+
+    // 2. Read the contents of the base upload folder
+    // let folderContents: string[] = [];
+    let folderContents;
+    try {
+      folderContents = await fs.readdir(uploadFolder, { withFileTypes: true });
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        console.log(`Base upload folder not found: ${uploadFolder}. No orphaned folders to delete.`);
+        return; // No folder to check, so nothing to delete
+      }
+      throw error;
+    }
+
+    // 3. Filter for directories that start with 'user_' and extract their IDs
+    const fileSystemUserFolders = folderContents
+      .filter(dirent => dirent.isDirectory() && dirent.name.startsWith('user_'))
+      .map(dirent => {
+        const userIdStr = dirent.name.replace('user_', '');
+        return parseInt(userIdStr, 10);
+      })
+      .filter(userId => !isNaN(userId)); // Ensure the parsed ID is a valid number
+
+    console.log('File system user folder IDs:', fileSystemUserFolders);
+
+    // 4. Identify orphaned folders (folders whose IDs are not in the database)
+    const orphanedFolderIds = fileSystemUserFolders.filter(fsId => !dbUserIds.has(fsId));
+
+    if (orphanedFolderIds.length === 0) {
+      console.log('No orphaned user folders found.');
+      return;
+    }
+
+    console.log('Orphaned user folder IDs to delete:', orphanedFolderIds);
+
+    // 5. Delete the orphaned folders
+    for (const userId of orphanedFolderIds) {
+      const folderToDeletePath = path.join(uploadFolder, `user_${userId}`);
+      try {
+        await fs.rm(folderToDeletePath, { recursive: true, force: true });
+        console.log(`Successfully deleted orphaned user folder: ${folderToDeletePath}`);
+      } catch (deleteError) {
+        console.error(`Failed to delete orphaned user folder ${folderToDeletePath}:`, deleteError);
+      }
+    }
+    console.log('Completed cleaning up orphaned user folders.');
+
+  } catch (error) {
+    console.error('Error in deleteOrphanedUserFolders:', error);
+    throw error;
+  }
+}
+
 export {
   createUser,
   createGuestUser,
@@ -439,10 +655,16 @@ export {
   getCurrentChatId,
   deleteUserAndHistory,
   deleteInactiveGuestUsersAndChats,
-  setChatMode, // Added export
-  getChatMode,  // Added export
-  setChatModel, // Added export
-  getChatModel,  // Added export
-  getUserRole, // Added export
-  setUserRole, // Added export
+  setChatMode,
+  getChatMode,
+  setChatModel,
+  getChatModel,
+  getUserRole,
+  setUserRole,
+  deleteAllGuestUsersAndChats, // Added export for the new function
+  createUserFolder,
+  createChatFolder,
+  deleteChatFolder,
+  deleteUserFolder,
+  deleteOrphanedUserFolders,
 };

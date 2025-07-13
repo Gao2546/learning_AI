@@ -1,3 +1,4 @@
+import dotenv
 from flask import Flask, request, jsonify
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -25,6 +26,10 @@ import random
 import os
 import sys
 import re
+import dotenv
+
+# Load environment variables from .env file
+dotenv.load_dotenv()
 
 # Add project root to sys.path to allow absolute imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -54,7 +59,8 @@ def init_driver():
     options.add_argument("--disable-infobars")
     options.add_argument("--disable-dev-shm-usage")
     # service = Service('/usr/local/bin/chromedriver')
-    driver = webdriver.Chrome(options=options)
+    # driver = webdriver.Chrome(options=options)
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),options=options)
     # driver = webdriver.ChromiumEdge(options=options)
     # driver = webdriver.Firefox(options=options)
     return driver
@@ -74,13 +80,14 @@ def get_page(driver, url):
 @app.route('/Generate', methods=['POST'])
 def generate():
     prompt = request.json['prompt']
+    img_url = request.json['img_url']
     prompts = re.split(r"[ ,]+", prompt)  # Splits on spaces and commas
     s_prompt = []
     for i in prompts:
         s_prompt.append(int(i))
-    model.generate(prompt=s_prompt, size=28)
+    _, data_path = model.generate(prompt=s_prompt, size=28, img_url=img_url)
     # Generate the model
-    return jsonify({'result': f'The model has been generated {prompt}'})
+    return jsonify({'result': f'The model has been generated {prompt}', 'data_path': data_path})
 
 @app.route('/GetPage' , methods=['GET','POST'])
 def get_page_route():
@@ -378,9 +385,9 @@ if __name__ == '__main__':
     # path_keys = os.popen("find ../ -name '.key'").read().split("\n")[0]
     # with open(path_keys, "r") as f:
     #     key = f.read().strip()
-    key = os.environ.get("OPENAI_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     if not os.environ.get("OPENAI_API_KEY"):
-        os.environ["OPENAI_API_KEY"] = key
+        os.environ["OPENAI_API_KEY"] = api_key
     # embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L12-v2") # *** ***
     # embeddings = OpenAIEmbeddings(model="text-embedding-3-small") *** *** ***
     # embeddings = HuggingFaceEmbeddings(model_name="nomic-ai/nomic-embed-text-v2-moe")

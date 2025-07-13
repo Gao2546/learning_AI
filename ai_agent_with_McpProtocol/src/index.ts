@@ -2,6 +2,8 @@ import express from 'express';
 import session from 'express-session';
 import cors from 'cors';
 import path from 'path';
+import multer from 'multer';
+import fs from 'fs';
 import authRouters from './auth.js';
 import agentRouters from './agent.js';
 import { createServer } from 'http';
@@ -16,8 +18,9 @@ import * as cheerio from 'cheerio';   // Import cheerio
 import { parseStringPromise } from 'xml2js';
 
 // Import DB functions for session timeout cleanup
-import { setCurrentChatId, setUserActiveStatus, deleteUserAndHistory, getUserByUsername, getUserActiveStatus, deleteInactiveGuestUsersAndChats, getUserByUserId } from './db.js';
-
+import { setCurrentChatId, setUserActiveStatus, deleteUserAndHistory, getUserByUsername, getUserActiveStatus, deleteInactiveGuestUsersAndChats, getUserByUserId, deleteUserFolder, deleteOrphanedUserFolders, deleteAllGuestUsersAndChats } from './db.js';
+deleteAllGuestUsersAndChats();
+deleteOrphanedUserFolders();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +33,13 @@ const port = process.env.PORT || 3000;
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(express.static(path.join(__dirname, "..",'user_files')));
+
+// สร้างโฟลเดอร์ uploads ถ้ายังไม่มี
+const uploadFolder = path.join(__dirname, '..', 'user_files');
+if (!fs.existsSync(uploadFolder)) {
+  fs.mkdirSync(uploadFolder);
+}
 
 // declare module 'express-session' {
 //   interface SessionData {
@@ -67,6 +77,7 @@ setInterval(async () => {
   // console.log('Starting periodic cleanup of inactive guest users and chats...');
   try {
     await deleteInactiveGuestUsersAndChats();
+    await deleteOrphanedUserFolders();
     console.log('Periodic cleanup completed.');
   } catch (error) {
     console.error('Error during periodic cleanup:', error);
@@ -122,6 +133,7 @@ app.use(async (req: express.Request, res: express.Response, next: express.NextFu
 
         if (isGuest) {
           await deleteUserAndHistory(userId);
+          await deleteUserFolder(userId);
         }
       } catch (cleanupErr) {
         console.error('Error during session timeout cleanup:', cleanupErr);
@@ -134,6 +146,7 @@ app.use(async (req: express.Request, res: express.Response, next: express.NextFu
       });
       console.log('Session expired');
       await deleteInactiveGuestUsersAndChats();
+      await deleteOrphanedUserFolders();
       // return res.redirect('/');
       return res.json({ exp: true });
     }

@@ -10,23 +10,24 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 import { GoogleGenAI } from "@google/genai";
 import fetch from 'node-fetch'; // Import the node-fetch library
-import * as cheerio from 'cheerio';   // Import cheerio
+// import * as cheerio from 'cheerio';   // Import cheerio
 import { parseStringPromise } from 'xml2js';
-import { Ollama } from 'ollama';
+// import { Ollama } from 'ollama';
 
-import bcrypt from 'bcrypt';
+// import bcrypt from 'bcrypt';
 import { setChatMode, setChatModel, getChatMode, getChatModel } from './db.js'; // Import necessary DB functions
-import pool, { createUser, getUserByUsername, newChatHistory, storeChatHistory, readChatHistory, deleteChatHistory, setCurrentChatId, listChatHistory, getUserActiveStatus, setUserActiveStatus } from './db.js';
+import pool, { createUser, getUserByUsername, newChatHistory, storeChatHistory, readChatHistory, deleteChatHistory, setCurrentChatId, listChatHistory, getUserActiveStatus, setUserActiveStatus, createUserFolder, createChatFolder, deleteChatFolder } from './db.js';
 
 // Initialize transport
 const transport_mcp_BrowserBase = new StdioClientTransport({
-  // "command": "bash",
-  "command": "node"
+  "command": "bash"
+  // "command": "node"
 ,  "args": [
-      // "-c",
-      //"cd /home/athip/psu/learning_AI/mcp_BrowserBase/ && ./build/index.js"
+      "-c",
+      "cd /home/athip/psu/learning_AI/mcp_BrowserBase/ && ./build/index.js"
       // path.join('/', 'app', 'mcp', 'mcp_BrowserBase', 'build', 'index.js')
-      path.join('.', 'mcp', 'mcp_BrowserBase', 'build', 'index.js')
+      // path.join('.', 'mcp', 'mcp_BrowserBase', 'build', 'index.js')
+      // path.join('..', 'mcp_BrowserBase', 'build', 'index.js')
     ],
 });
 console.log("Agent: Transport initialized.\n");
@@ -97,10 +98,29 @@ interface MyModel {
   answer: string;
 }
 
+// type resultsT = {
+//   content : [
+//               {
+//                 type: string ,
+//                 text: string
+//               },
+
+//               {
+//                 type: string,
+//                 text: string
+//               }
+            
+//             ]
+// };
+
 type resultsT = {
-  content : [{type: string ,
-              text: string}]
+  content: { // This means an object with 'type' and 'text' properties
+    type: string;
+    text: string;
+  }[]; // This means an array of the above objects (can have 0, 1, or many)
 };
+
+
 const parseXML = async (xmlString: string): Promise<Record<string , any>> => {
   // xmlString = xmlString.replace(/<\?xml.*?\?>/, ""); // Remove XML declaration if present
   // xmlString = xmlString.replace("\n", ""); // Replace
@@ -196,6 +216,7 @@ router.post('/message', async (req, res) => {
         // req.session.user.currentChatId = chatId;
         // req.session.user.chatIds = [chatId];
         await setUserActiveStatus(guestUser.id, true);
+        await createUserFolder(guestUser.id);
       } catch (err) {
         console.error('Error creating guest user/session:', err);
         return res.status(500).json({ error: 'Failed to create guest session' });
@@ -212,6 +233,7 @@ router.post('/message', async (req, res) => {
     if (currentChatId) {
       // Load existing chat content and potentially mode/model if not in session
       const rows = await readChatHistory(currentChatId);
+      await createChatFolder(userId, currentChatId);
       if (rows.length > 0) {
         chatContent = rows[0].message;
         // Ensure session reflects DB if somehow out of sync (e.g., server restart)
@@ -273,7 +295,8 @@ router.post('/message', async (req, res) => {
     } else if (modelToUse.startsWith("qwen") || modelToUse.startsWith("gemma3") || modelToUse.startsWith("deepseek") || modelToUse.startsWith("qwq") || modelToUse.startsWith("deepcoder") || modelToUse.startsWith("phi4") || modelToUse.startsWith("llama3.2") || modelToUse.startsWith("wizardlm") || modelToUse.startsWith("hhao")){
     try {
         console.log("Calling Ollama API...");
-        const ollamaFetchResponse = await fetch('http://127.0.0.1:11434/api/generate', {
+        console.log(process.env.API_OLLAMA!);
+        const ollamaFetchResponse = await fetch(process.env.API_OLLAMA!, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -365,11 +388,17 @@ router.post('/message', async (req, res) => {
       console.error("No response received from AI model");
       return res.status(500).json({ error: "No response received from AI model" });
     }
+    console.log("************************************")
+    console.log(response.text);
+    console.log("************************************")
 
     let responsetext = "";
     let tool_u = null;
+    let img_url = null;
     if (response && response.text){ // Check if response is not null before accessing text
-      responsetext = (response.text).replace("<thinking>","\n<thinking>\n")
+      responsetext = (response.text).replace("thinking ","\n<thinking>\n")
+                                    .replace("thinking\n","\n<thinking>\n")
+                                    .replace("<thinking>","\n<thinking>\n")
                                     .replace("</thinking>","\n</thinking>\n")
                                     .replace("```xml","\n```xml")
                                     .replace("```tool_code","\n```tool_code")
@@ -380,7 +409,8 @@ router.post('/message', async (req, res) => {
                                     .replace("</attempt_completion>\n```","</attempt_completion>")
                                     .replace("</attempt_completion>","</attempt_completion>\n```")
                                     .replace("</ask_followup_question>\n```","</ask_followup_question>")
-                                    .replace("</ask_followup_question>","</ask_followup_question>\n```");
+                                    .replace("</ask_followup_question>","</ask_followup_question>\n```")
+                                    .replace("assistance: assistance:","assistance:");
       let rrs = response.text;
       console.log("rrs");
       const rrss = rrs.match(/<use_mcp_tool>[\s\S]*?<\/use_mcp_tool>/);
@@ -414,9 +444,79 @@ router.post('/message', async (req, res) => {
       const xmloutput = await parseXML(prepraseXML);
       console.log(xmloutput);
       tool_u = xmloutput;
-      const stringoutput = "\n<thinking>\n" + xmloutput.thinking + "\n</thinking>\n" + "\n<use_mcp_tool>\n" + "<server_name>\n" + xmloutput.serverName + "\n</server_name>\n" + "<tool_name>\n" + xmloutput.toolName + "\n</tool_name>\n" + "<arguments>\n" + JSON.stringify(xmloutput.arguments) + "\n</arguments>\n" + "</use_mcp_tool>\n";
+
+      // const stringoutput = "\n<thinking>\n" + xmloutput.thinking + "\n</thinking>\n" + "\n<use_mcp_tool>\n" + "<server_name>\n" + xmloutput.serverName + "\n</server_name>\n" + "<tool_name>\n" + xmloutput.toolName + "\n</tool_name>\n" + "<arguments>\n" + JSON.stringify(xmloutput.arguments) + "\n</arguments>\n" + "</use_mcp_tool>\n";
+      }
+      if (userId) {
+        if (!currentChatId) {
+        // This is the first message in a new chat
+          try {
+            const newChatId = await newChatHistory(userId);
+            currentChatId = newChatId; // Use the new ID
+            await createChatFolder(userId, currentChatId);
+
+            // Store the mode and model selected on the frontend for this new chat
+            currentChatMode = initialMode; // Use the mode passed or default
+            currentChatModel = initialModel; // Use the model passed or default
+            await setChatMode(newChatId, currentChatMode);
+            await setChatModel(newChatId, currentChatModel);
+
+            // Update session
+            req.session.user!.currentChatId = newChatId;
+            req.session.user!.currentChatMode = currentChatMode;
+            req.session.user!.currentChatModel = currentChatModel;
+            await setCurrentChatId(userId, newChatId); // Update user's current chat in DB
+
+            // Update chat list in session
+            const chatHistories = await listChatHistory(userId);
+            req.session.user!.chatIds = chatHistories.map((chat: any) => chat.id);
+            
+
+          } catch (err) {
+            console.error('Error processing new chat history:', err);
+            // Decide how to handle this - maybe return error?
+          }
+        }
+      }
+
+      if (tool_u?.toolName == "IMG_Generate"){
+        // const uniqueId = Date.now();
+        tool_u.arguments.img_url = `ai_agent_with_McpProtocol/user_files/user_${userId}/chat_${currentChatId}/`;
+        img_url = tool_u.arguments.img_url
       }
     }
+
+    // if (userId) {
+    //     if (!currentChatId) {
+    //     // This is the first message in a new chat
+    //       try {
+    //         const newChatId = await newChatHistory(userId);
+    //         currentChatId = newChatId; // Use the new ID
+    //         await createChatFolder(userId, currentChatId);
+
+    //         // Store the mode and model selected on the frontend for this new chat
+    //         currentChatMode = initialMode; // Use the mode passed or default
+    //         currentChatModel = initialModel; // Use the model passed or default
+    //         await setChatMode(newChatId, currentChatMode);
+    //         await setChatModel(newChatId, currentChatModel);
+
+    //         // Update session
+    //         req.session.user!.currentChatId = newChatId;
+    //         req.session.user!.currentChatMode = currentChatMode;
+    //         req.session.user!.currentChatModel = currentChatModel;
+    //         await setCurrentChatId(userId, newChatId); // Update user's current chat in DB
+
+    //         // Update chat list in session
+    //         const chatHistories = await listChatHistory(userId);
+    //         req.session.user!.chatIds = chatHistories.map((chat: any) => chat.id);
+            
+
+    //       } catch (err) {
+    //         console.error('Error processing new chat history:', err);
+    //         // Decide how to handle this - maybe return error?
+    //       }
+    //     }
+    //   }
 
 
 
@@ -436,12 +536,26 @@ router.post('/message', async (req, res) => {
           await client.connect(transport_mcp_BrowserBase);
           console.log("Client connected.\n");
         }
+        console.log("Call Tool.\n");
         // Call a tool
         const response = await client.callTool({
             name: tool_u.toolName,
             arguments: tool_u.arguments,
         }) as resultsT;
         console.log("RESPONSE:\n", response.content[0].text, "\n================================================");
+        // const imageUrlContent = response.content.find(item => item.type === 'resource_link');
+        // if (imageUrlContent) {
+        // img_url = imageUrlContent.text
+        // console.log(img_url);
+        // }
+
+        if (response.content.length > 1){
+          // img_url = path.join("../../",response.content[1].text);
+          img_url = response.content[1].text.replace("ai_agent_with_McpProtocol/user_files","");
+          // img_url = path.resolve(__dirname, img_url);
+        }
+    
+        console.log(img_url);
         // resultText = response.content[0].text;
         resultText = `[use_mcp_tool for '${tool_u.serverName}'] Result:\n${response.content[0].text}\n current step using ${tool_u.toolName} is complete move to next step if task complete use tool <attempt_completion>`
         // res.json({ response: `[use_mcp_tool for '${tool_u.serverName}'] Result:\n${result.content[0].text}\n current step using ${tool_u.toolName} is complete move to next step if task complete use tool <attempt_completion>` }); // Return the result of the tool call
@@ -485,34 +599,15 @@ router.post('/message', async (req, res) => {
       all_response = responsetext;
     }
 
+    if (img_url){
+      chatContent += "\n<DATA_SECTION>\n" + "img_url:" + img_url;
+      // all_response += "\n\n" + img_url;
+    }
+
+    chatContent = chatContent.replace("assistance: assistance:","assistance:")
+    all_response = all_response.replace("assistance:","")
+
     if (userId) {
-      if (!currentChatId) {
-        // This is the first message in a new chat
-        try {
-          const newChatId = await newChatHistory(userId);
-          currentChatId = newChatId; // Use the new ID
-
-          // Store the mode and model selected on the frontend for this new chat
-          currentChatMode = initialMode; // Use the mode passed or default
-          currentChatModel = initialModel; // Use the model passed or default
-          await setChatMode(newChatId, currentChatMode);
-          await setChatModel(newChatId, currentChatModel);
-
-          // Update session
-          req.session.user!.currentChatId = newChatId;
-          req.session.user!.currentChatMode = currentChatMode;
-          req.session.user!.currentChatModel = currentChatModel;
-          await setCurrentChatId(userId, newChatId); // Update user's current chat in DB
-
-          // Update chat list in session
-          const chatHistories = await listChatHistory(userId);
-          req.session.user!.chatIds = chatHistories.map((chat: any) => chat.id);
-
-        } catch (err) {
-          console.error('Error processing new chat history:', err);
-          // Decide how to handle this - maybe return error?
-        }
-      }
       try {
         await storeChatHistory(currentChatId, chatContent);
       } catch (err) {
@@ -522,12 +617,12 @@ router.post('/message', async (req, res) => {
 
     if (tool_u?.results) {
       // console.log("Tool Name is attempt_completion.\n=============================================");
-      return res.json({ response: all_response, attempt_completion : true, followup_question : false }); // Return "attempt_completion";
+      return res.json({ response: all_response, attempt_completion : true, followup_question : false, img_url : img_url }); // Return "attempt_completion";
     }
     if (tool_u?.followupQuestion) {
-      return res.json({ response: all_response,attempt_completion : false ,followup_question : true }); // Return "attempt_completion";
+      return res.json({ response: all_response,attempt_completion : false ,followup_question : true, img_url : img_url }); // Return "attempt_completion";
     }
-    res.json({ response: all_response, attempt_completion : false, followup_question : false });
+    res.json({ response: all_response, attempt_completion : false, followup_question : false, img_url : img_url });
   } catch (error) {
     console.error('Error handling message:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -612,6 +707,7 @@ router.delete('/chat-history/:chatId', async (req, res) => {
 
   try {
     await deleteChatHistory(chatId);
+    await deleteChatFolder(req.session.user.id, chatId);
     if (req.session.user) {
       req.session.user.chatIds = req.session.user.chatIds.filter((id: any) => id !== chatId);
     };

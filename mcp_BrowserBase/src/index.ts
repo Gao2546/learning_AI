@@ -22,11 +22,14 @@ import {
 import { describe } from "node:test";
 import dotenv from "dotenv";
 import { stdout } from "process";
+import { text } from "stream/consumers";
 
 dotenv.config();
 
 const API_SERVER_URL = process.env.API_SERVER_URL;
-// const API_SERVER_URL = "http://api_server:5001";
+// const API_SERVER_URL = "http://localhost:5000";
+console.log(API_SERVER_URL);
+// const API_SERVER_URL = "http://api_server:5000";
 
 
 
@@ -84,8 +87,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "string",
               description: "Text to generate the image from (ex. {prompt: 0} , {prompt: 5} , {prompt: 4 5 6 7 8 9 3 1} , {prompt: 0 1 2 3 4 5 6 7 8 9} .etc)"
             },
+            img_url: {
+              type: "string",
+              description: "file path"
+            },
           },
-          required: ["prompt"]
+          required: ["prompt","img_url"]
         }
       },
 
@@ -225,31 +232,58 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   switch (request.params.name) {
 
     case "IMG_Generate": {
-      const prompt = String(request.params.arguments?.prompt);
-      if (!prompt) {
-        throw new Error("Text is required");
-      } else {
-        const response = await fetch(API_SERVER_URL + '/Generate', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-                    },
-          body: JSON.stringify({ prompt: prompt })
+        const prompt = String(request.params.arguments?.prompt);
+        const img_url = String(request.params.arguments?.img_url);
+        if (!prompt) {
+          // This would be caught by the outer try-catch
+          throw new Error("Prompt is required");
+        } else {
+          console.log(`--- MCP_DEBUG: IMG_Generate: Calling ${API_SERVER_URL}/Generate with prompt: "${prompt}"`);
+          const response = await fetch(API_SERVER_URL + '/Generate', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ prompt: prompt, img_url: img_url})
           });
-          const data = await response.json();
-          console.log(data.result);
-        return {
-          content: [{
-            type: "text",
-            text: data.result,
-          }]
-          // content: [{
-          //   type: "image",
-          //   url: `localhost:3000/Generate`
-          // }]
-        };
-      }
-    };
+
+          // Check if the fetch was successful (HTTP status 200-299)
+          if (!response.ok) {
+            const errorBody = await response.text(); // Get raw error body
+            console.error(`--- MCP_ERROR: /Generate API returned non-OK status: ${response.status}`);
+            console.error(`--- MCP_ERROR: /Generate API error body: ${errorBody}`);
+            throw new Error(`External API error: ${response.status} - ${errorBody}`);
+          }
+
+          let data;
+          try {
+            data = await response.json(); // Attempt to parse JSON
+          } catch (jsonError: any) { // Catch JSON parsing errors
+            const rawText = await response.text(); // Get raw text if JSON fails
+            console.error("--- MCP_ERROR: Failed to parse JSON response from /Generate API.");
+            console.error("--- MCP_ERROR: Raw response text:", rawText);
+            console.error("--- MCP_ERROR: JSON parsing error:", jsonError.message);
+            throw new Error(`Invalid JSON response from external API: ${jsonError.message}`);
+          }
+
+          console.log(`--- MCP_DEBUG: /Generate API data received: ${JSON.stringify(data)}`);
+          if (data && typeof data.result === 'string') { // Ensure data.result exists and is string
+              console.log(`--- MCP_DEBUG: IMG_Generate: Data result: ${data.result}`);
+              return {
+                content: [{
+                  type: "text",
+                  text: data.result,
+                },
+                  {type: "text",
+                   text: data.data_path,
+                  }]
+              };
+          } else {
+              console.error("--- MCP_ERROR: /Generate API response missing 'result' property or it's not a string.");
+              throw new Error("Invalid response format from image generation API.");
+          }
+        }
+      };
 
     case "get_page": {
       const url = String(request.params.arguments?.url);
