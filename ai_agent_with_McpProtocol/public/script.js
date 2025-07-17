@@ -474,7 +474,7 @@ async function sendMessage() {
     let attempt_completion = false;
     let img_url = null;
     let loopCount = 0; // Add a counter to prevent infinite loops in case of unexpected issues
-    const MAX_LOOPS = 2; // Set a maximum number of iterations
+    const MAX_LOOPS = 10; // Set a maximum number of iterations
     const selectedMode = modeSelector ? modeSelector.value : defaultMode; // Get selected mode *before* loop
     const selectedModel = modelSelector ? modelSelector.value : defaultModel; // Get selected model *before* loop
     let role = "user";
@@ -854,7 +854,7 @@ function populateModels(returnDefault = false) {
         { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'gemini-2.0-flash-thinking-exp-01-21' },
         { id: 'gemini-2.0-flash-thinking-exp-1219', name: 'gemini-2.0-flash-thinking-exp-1219' },
         { id: 'gemini-2.0-pro-exp-02-05', name: 'gemini-2.0-pro-exp-02-05' },
-        { id: 'gemini-2.5-pro-exp-03-25', name: 'gemini-2.5-pro-exp-03-25' },
+        { id: 'gemini-2.5-pro', name: 'gemini-2.5-pro' },
         { id: 'gemini-exp-1206', name: 'gemini-exp-1206' },
         { id: 'hhao/qwen2.5-coder-tools:7b', name: 'hhao/qwen2.5-coder-tools:7b' },
         { id: 'hhao/qwen2.5-coder-tools:14b', name: 'hhao/qwen2.5-coder-tools:14b' },

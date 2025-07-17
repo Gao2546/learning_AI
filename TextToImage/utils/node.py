@@ -491,7 +491,7 @@ class CLIPModel(nn.Module):
         state_dict = torch.load(path)
         self.text_encoding.load_state_dict(state_dict["text_encoding"])
         self.image_encoding.load_state_dict(state_dict["image_encoding"])
-        self.optim.load_state_dict(state_dict["optim"])
+        # self.optim.load_state_dict(state_dict["optim"])
         self.scaler.load_state_dict(state_dict["scaler"])
         for param_group in self.optim.param_groups:
             param_group["lr"] = state_dict["lr_rate"]

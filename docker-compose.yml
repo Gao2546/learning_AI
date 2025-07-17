@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: athip
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: ai_agent
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5433" # Expose DB port to host (optional, for debugging)
+    networks:
+      - app-network
+
   app:
     build:
       context: .
@@ -15,19 +28,6 @@ services:
     depends_on:
       - db
       # - api_server
-    networks:
-      - app-network
-
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: athip
-      POSTGRES_PASSWORD: 123456
-      POSTGRES_DB: ai_agent
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5433:5433" # Expose DB port to host (optional, for debugging)
     networks:
       - app-network
 

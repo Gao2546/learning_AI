@@ -1,5 +1,5 @@
 # Stage 1: Build the application
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -12,11 +12,13 @@ COPY ai_agent_with_McpProtocol/tsconfig.json ./
 COPY ai_agent_with_McpProtocol/src ./src
 COPY ai_agent_with_McpProtocol/public ./public
 
+RUN npm update @modelcontextprotocol/sdk
+
 # Build the TypeScript code
 RUN npm run build
 
 # Stage 2: Create the production image
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
@@ -40,7 +42,9 @@ COPY ai_agent_with_McpProtocol/.env ./.env
 COPY --from=builder /app/public ./public
 
 # Copy MCP server files
-COPY mcp_BrowserBase ./mcp/mcp_BrowserBase
+COPY mcp_BrowserBase ../mcp_BrowserBase
+
+RUN cd /mcp_BrowserBase && npm update @modelcontextprotocol/sdk
 
 # Expose the application port
 EXPOSE 3000
