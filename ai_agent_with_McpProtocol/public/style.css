@@ -297,6 +297,7 @@ thinking {
 
 /* Input container */
 .input-container {
+    position: relative;
     display: flex;
     align-items: center; /* Align items vertically */
     /* padding: 15px 15%; Adjust padding */
@@ -315,6 +316,7 @@ thinking {
     padding: 12px 15px; /* Increase padding */
     border: 1px solid #4a4a4a; /* Subtle border */
     border-radius: 18px 0 0 18px; /* Rounded corners */
+    border-right: none;
     background-color: #3c3c3c; /* Darker input background */
     color: #e0e0e0;
     resize: none;
@@ -608,6 +610,72 @@ strong {
     margin-bottom: 15px;
     margin-left: auto;
     margin-right: auto;
+}
+
+
+.file-input-label {
+    position: sticky;
+    background-color: #3c3c3c;
+    height: 44px; /* Match input height */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border-right: 1px solid #4a4a4a;
+    border-top: 1px solid #4a4a4a;
+    border-bottom: 1px solid #4a4a4a;
+    padding-right: 10px;
+    padding-left: 10px;
+}
+
+.file-input-label:hover {
+    background-color: #444;
+    color: #003cff;
+    /* border-color: #007acc; */
+    box-shadow: 0 2px 8px rgba(0, 122, 204, 0.15);
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+}
+
+/* Styling for the file input container */
+#fileInput {
+  display: none; /* Keeps the native file input hidden */
+  background-color: #3c3c3c;
+  margin-right: 5px;
+}
+
+/* You'll likely want to create a custom button or area that triggers the file input.
+   Here's an example of how you might style a label associated with the input. */
+.custom-file-upload {
+  display: inline-block; /* Allows for setting width, padding, etc. */
+  padding: 10px 20px;
+  cursor: pointer; /* Indicates it's clickable */
+  background-color: #007bff; /* Example background color */
+  color: white; /* Example text color */
+  border: none; /* Remove default border */
+  border-radius: 5px; /* Slightly rounded corners */
+  font-family: Arial, sans-serif; /* Example font */
+  font-size: 16px; /* Example font size */
+  text-align: center;
+  text-decoration: none; /* Remove underline if it's an anchor tag acting as a button */
+  transition: background-color 0.3s ease; /* Smooth transition for hover effect */
+}
+
+.custom-file-upload:hover {
+  background-color: #0056b3; /* Darker shade on hover */
+}
+
+.custom-file-upload:active {
+  background-color: #004085; /* Even darker on active/click */
+}
+
+/* If you want to show a "file selected" message or similar,
+   you might have a separate element for that and style it here. */
+.file-selected-info {
+  margin-top: 10px;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  color: #333;
 }
 
 

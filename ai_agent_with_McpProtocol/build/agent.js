@@ -1,8 +1,11 @@
 import { createRequire as _createRequire } from "module";
 const __require = _createRequire(import.meta.url);
 import express from 'express';
+import multer from 'multer';
+import axios from 'axios';
 import path from 'path';
 import dotenv from "dotenv";
+import FormData from 'form-data';
 dotenv.config();
 import { fileURLToPath } from 'url';
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -41,7 +44,11 @@ const client = new Client({
 });
 console.log("Agent: Client object initialized.\n");
 const ai = new GoogleGenAI({ apiKey: process.env.Google_API_KEY });
+// import readline = require('readline');
 const fs = __require("fs");
+// import { json } from 'stream/consumers';
+// import { Socket } from 'socket.io';
+const upload = multer({ dest: 'uploads/' });
 async function readFile(filename) {
     return new Promise((resolve, reject) => {
         fs.readFile(filename, 'utf8', (err, data) => {
@@ -103,22 +110,63 @@ const parseXML = async (xmlString) => {
 };
 // const ChatHistory : any[]= []
 // await addChatHistory(setting_prompt);
+let io;
 const router = express.Router();
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-// API endpoint to handle messages from the UI
-router.post('/message', async (req, res) => {
+export default function agentRouters(ios) {
+    io = ios;
+    // const router = Router();
+    // router.post('/notify', (req: Request, res: Response) => {
+    //   const message = req.body.message || 'default message';
+    //   // Emit to all connected clients
+    //   io.emit('agent_notification', { message });
+    //   res.json({ status: 'sent', message });
+    // });
+    return router;
+}
+router.post('/upload', upload.array('files'), async (req, res) => {
+    console.log("load api");
+    const text = req.body.text;
+    const files = req.files;
+    console.log("load api2");
+    console.log(files.length);
     try {
-        const { message: userMessage, model: selectedModel, mode: selectedMode, role: selectedRole } = req.body; // Get mode and model from body
-        // if (!userMessage) {
-        //   return res.status(400).json({ error: 'Message is required' });
-        // }
-        // Basic validation for mode and model if provided in this specific request
-        // Note: Mode/Model are primarily set via /set-mode and /set-model,
-        // but we need them here for the *first* message of a *new* chat.
-        const initialMode = selectedMode ?? 'code'; // Default if not provided on first message
-        const initialModel = selectedModel ?? 'gemini-2.0-flash-001'; // Default if not provided on first message
-        if (!req.session.user) {
+        // const FormData = require('form-data');
+        const form = new FormData();
+        form.append('user_id', req.session.user.id);
+        form.append('chat_history_id', req.session.user.currentChatId);
+        form.append('text', text);
+        for (const file of files) {
+            form.append('files', fs.createReadStream(file.path), file.originalname);
+        }
+        const flaskRes = await axios.post('http://localhost:5000/process', form, {
+            headers: form.getHeaders()
+        });
+        res.json(flaskRes.data.reply);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).send("Failed to process message");
+    }
+});
+router.post('/create_record', async (req, res) => {
+    const { message: userMessage, model: selectedModel, mode: selectedMode, role: selectedRole, socket: socketId } = req.body;
+    const initialMode = selectedMode ?? 'ask'; // Default if not provided on first message
+    const initialModel = selectedModel ?? 'gemma3:1b'; // Default if not provided on first message
+    try {
+        if (req.session.user) {
+            if (!req.session.user.currentChatId) {
+                //create chat
+                const chat_history_id = await newChatHistory(req.session.user.id);
+                await createChatFolder(req.session.user.id, chat_history_id);
+                req.session.user.currentChatId = chat_history_id;
+                const chatHistories = await listChatHistory(req.session.user.id);
+                req.session.user.chatIds = chatHistories.map((chat) => chat.id);
+                await setChatMode(chat_history_id, initialMode);
+                await setChatModel(chat_history_id, initialModel);
+                await setCurrentChatId(req.session.user.id, chat_history_id);
+            }
+        }
+        else {
             // Create guest user on first message
             const guestName = `guest_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
             try {
@@ -130,23 +178,112 @@ router.post('/message', async (req, res) => {
                     chatIds: [],
                     currentChatId: null,
                     currentChatMode: null, // Initialize mode/model in session
-                    currentChatModel: null
+                    currentChatModel: null,
+                    socketId: socketId
                 };
                 // const chatId = await import('./db.js').then(db => db.newChatHistory(guestUser.id));
                 // req.session.user.currentChatId = chatId;
                 // req.session.user.chatIds = [chatId];
                 await setUserActiveStatus(guestUser.id, true);
                 await createUserFolder(guestUser.id);
+                const chat_history_id = await newChatHistory(req.session.user.id);
+                await createChatFolder(req.session.user.id, chat_history_id);
+                req.session.user.currentChatId = chat_history_id;
+                const chatHistories = await listChatHistory(req.session.user.id);
+                req.session.user.chatIds = chatHistories.map((chat) => chat.id);
+                console.log("update and create session");
+                await setChatMode(chat_history_id, initialMode);
+                await setChatModel(chat_history_id, initialModel);
+                await setCurrentChatId(req.session.user.id, chat_history_id);
+                // return res.status(200).json({ok:"ok"})
             }
             catch (err) {
                 console.error('Error creating guest user/session:', err);
                 return res.status(500).json({ error: 'Failed to create guest session' });
             }
+            //create gusess user
+            //create chat_history
         }
+        req.session.user.currentChatMode = initialMode;
+        req.session.user.currentChatModel = initialModel;
+        return res.status(200).json({ ok: "ok" });
+    }
+    catch (err) {
+        console.log(err);
+    }
+});
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+// API endpoint to handle messages from the UI
+router.post('/message', async (req, res) => {
+    try {
+        const { message: userMessage, model: selectedModel, mode: selectedMode, role: selectedRole, socket: socketId } = req.body; // Get mode and model from body
+        const socket = io.sockets.sockets.get(socketId);
+        // if (!userMessage) {
+        //   return res.status(400).json({ error: 'Message is required' });
+        // }
+        // Basic validation for mode and model if provided in this specific request
+        // Note: Mode/Model are primarily set via /set-mode and /set-model,
+        // but we need them here for the *first* message of a *new* chat.
+        const initialMode = selectedMode ?? 'code'; // Default if not provided on first message
+        const initialModel = selectedModel ?? 'gemini-2.0-flash-001'; // Default if not provided on first message
+        // if (!req.session.user) {
+        //   // Create guest user on first message
+        //   const guestName = `guest_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+        //   try {
+        //     const guestUser = await import('./db.js').then(db => db.createGuestUser(guestName));
+        //     req.session.user = {
+        //       id: guestUser.id,
+        //       username: guestUser.username,
+        //       isGuest: true,
+        //       chatIds: [],
+        //       currentChatId: null,
+        //       currentChatMode: null, // Initialize mode/model in session
+        //       currentChatModel: null,
+        //       socketId: socketId
+        //     };
+        //     // const chatId = await import('./db.js').then(db => db.newChatHistory(guestUser.id));
+        //     // req.session.user.currentChatId = chatId;
+        //     // req.session.user.chatIds = [chatId];
+        //     await setUserActiveStatus(guestUser.id, true);
+        //     await createUserFolder(guestUser.id);
+        //   } catch (err) {
+        //     console.error('Error creating guest user/session:', err);
+        //     return res.status(500).json({ error: 'Failed to create guest session' });
+        //   }
+        // }
         let userId = req.session.user?.id;
         let currentChatId = req.session.user?.currentChatId ?? null;
         let currentChatMode = req.session.user?.currentChatMode ?? null;
         let currentChatModel = req.session.user?.currentChatModel ?? null;
+        console.log("***********************************");
+        console.log(userId);
+        console.log(currentChatId);
+        console.log(currentChatMode);
+        console.log(currentChatModel);
+        console.log("***********************************");
+        let serch_doc = "";
+        const response_similar_TopK = await fetch('http://localhost:5000/search_similar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                query: userMessage,
+                user_id: userId,
+                chat_history_id: currentChatId,
+                top_k: 3
+            }),
+        });
+        const result_similar_TopK = await response_similar_TopK.json();
+        console.log(result_similar_TopK);
+        console.log("ssssssssssssssssssssssssssssssss");
+        if (result_similar_TopK) {
+            result_similar_TopK.results.forEach(doc => {
+                console.log(`📄 ${doc.file_name} — score: ${doc.distance.toFixed(3)}`);
+                serch_doc += doc.text + "\n\n";
+            });
+        }
         let chatContent = "";
         if (currentChatId) {
             // Load existing chat content and potentially mode/model if not in session
@@ -166,6 +303,7 @@ router.post('/message', async (req, res) => {
                     req.session.user.currentChatModel = currentChatModel;
                 }
             }
+            req.session.user.socketId = socketId;
         }
         // Append user message
         if (selectedRole == "user") {
@@ -176,7 +314,7 @@ router.post('/message', async (req, res) => {
         }
         // Prepare prompt
         let question = "";
-        question = chatContent.replace(/\n<DATA_SECTION>\n/g, "\n");
+        question = "document" + ": " + serch_doc + chatContent.replace(/\n<DATA_SECTION>\n/g, "\n");
         // Determine model to use for the AI call (prioritize session)
         const modelToUse = currentChatModel || initialModel; // Use session model or default
         console.log(`Using AI model: ${modelToUse}`); // Log the model being used
@@ -195,48 +333,129 @@ router.post('/message', async (req, res) => {
         let response = null; // Variable to hold the response text compatible with later processing
         // Call AI model
         if (modelToUse.startsWith("gemini")) {
-            const Geminiresponse = await ai.models.generateContent({
-                model: modelToUse, // Use the determined model
-                contents: question,
-            });
-            if (Geminiresponse && typeof (Geminiresponse.text) === 'string') {
-                response = { text: Geminiresponse.text };
+            // const Geminiresponse = await ai.models.generateContent({
+            //   model: modelToUse, // Use the determined model
+            //   contents: question,
+            // });
+            // if (Geminiresponse && typeof(Geminiresponse.text) === 'string'){
+            //   response = { text: Geminiresponse.text };
+            // }
+            try {
+                // Set headers for streaming
+                // res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                // res.setHeader('Transfer-Encoding', 'chunked');
+                console.log(`Streaming response for prompt: "${question}"`);
+                // Call the Gemini API and get the stream
+                const result = await ai.models.generateContentStream({
+                    model: modelToUse, // Use the determined model
+                    contents: question,
+                    config: {
+                        maxOutputTokens: 1000,
+                    }
+                });
+                let out_res = '';
+                let assistancePrefixRemoved = false;
+                for await (const chunk of result) {
+                    let chunkText = chunk.text;
+                    out_res += chunkText;
+                    if (!assistancePrefixRemoved) {
+                        if (out_res.startsWith('assistance:')) {
+                            out_res = out_res.slice('assistance:'.length).trimStart();
+                            assistancePrefixRemoved = true;
+                            console.log("**********************////////////////////");
+                        }
+                    }
+                    socket?.emit('StreamText', out_res);
+                }
+                console.log('Streaming finished.');
+                console.log(out_res);
+                // End the response stream
+                // res.end();
+                response = { text: out_res };
+            }
+            catch (error) {
+                console.error('Error streaming from Gemini API:', error);
+                // Important: Only send error message if headers haven't been sent
+                if (!res.headersSent) {
+                    res.status(500).send('Error streaming response from AI');
+                }
+                else {
+                    // If stream has already started, we just end it.
+                    res.end();
+                }
             }
         }
         else if (modelToUse.startsWith("qwen") || modelToUse.startsWith("gemma3") || modelToUse.startsWith("deepseek") || modelToUse.startsWith("qwq") || modelToUse.startsWith("deepcoder") || modelToUse.startsWith("phi4") || modelToUse.startsWith("llama3.2") || modelToUse.startsWith("wizardlm") || modelToUse.startsWith("hhao")) {
             try {
                 console.log("Calling Ollama API...");
                 console.log(process.env.API_OLLAMA);
+                // const ollamaFetchResponse = await fetch(process.env.API_OLLAMA!, {
+                //     method: 'POST',
+                //     headers: {
+                //         'Content-Type': 'application/json'
+                //     },
+                //     body: JSON.stringify({
+                //         model: modelToUse,
+                //         prompt: question,
+                //         stream: false // Use boolean false for stream parameter
+                //     })
+                // });
+                // if (!ollamaFetchResponse.ok) {
+                //     const errorText = await ollamaFetchResponse.text();
+                //     console.error(`Ollama API error! status: ${ollamaFetchResponse.status}`, errorText);
+                //     // Send error response immediately if API call fails
+                //     return res.status(500).json({ error: `Ollama API error (${ollamaFetchResponse.status}): ${errorText}` });
+                // }
+                // // Use the OllamaResponse interface defined earlier (lines 81-87)
+                // const ollamaData = await ollamaFetchResponse.json() as OllamaResponse; // Explicitly cast to OllamaResponse
+                // console.log("Raw Ollama Response:", ollamaData);
+                // if (ollamaData && typeof ollamaData.response === 'string') {
+                //     // Store the response text in the 'response' variable for later processing
+                //     response = { text: ollamaData.response };
+                //     console.log("Extracted Ollama Response Text:", response.text);
+                // } else {
+                //     console.error("Invalid response format from Ollama:", ollamaData);
+                //     // Send error response immediately if format is invalid
+                //     return res.status(500).json({ error: "Invalid response format received from Ollama model" });
+                // }
                 const ollamaFetchResponse = await fetch(process.env.API_OLLAMA, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         model: modelToUse,
                         prompt: question,
-                        stream: false // Use boolean false for stream parameter
+                        stream: true
                     })
                 });
-                if (!ollamaFetchResponse.ok) {
-                    const errorText = await ollamaFetchResponse.text();
-                    console.error(`Ollama API error! status: ${ollamaFetchResponse.status}`, errorText);
-                    // Send error response immediately if API call fails
-                    return res.status(500).json({ error: `Ollama API error (${ollamaFetchResponse.status}): ${errorText}` });
-                }
-                // Use the OllamaResponse interface defined earlier (lines 81-87)
-                const ollamaData = await ollamaFetchResponse.json(); // Explicitly cast to OllamaResponse
-                console.log("Raw Ollama Response:", ollamaData);
-                if (ollamaData && typeof ollamaData.response === 'string') {
-                    // Store the response text in the 'response' variable for later processing
-                    response = { text: ollamaData.response };
-                    console.log("Extracted Ollama Response Text:", response.text);
-                }
-                else {
-                    console.error("Invalid response format from Ollama:", ollamaData);
-                    // Send error response immediately if format is invalid
-                    return res.status(500).json({ error: "Invalid response format received from Ollama model" });
-                }
+                let out_res = '';
+                let assistancePrefixRemoved = false;
+                const stream = ollamaFetchResponse.body;
+                const result = await new Promise((resolve, reject) => {
+                    stream.on('data', (chunk) => {
+                        const text = chunk.toString('utf8');
+                        const lines = text.split('\n').filter((line) => line.trim() !== '');
+                        for (const line of lines) {
+                            try {
+                                const json = JSON.parse(line);
+                                let chunkText = json.response;
+                                out_res += chunkText;
+                                if (!assistancePrefixRemoved) {
+                                    if (out_res.startsWith('assistance:')) {
+                                        out_res = out_res.slice('assistance:'.length).trimStart();
+                                        assistancePrefixRemoved = true;
+                                    }
+                                }
+                                socket?.emit('StreamText', out_res);
+                            }
+                            catch (e) {
+                                console.error('Invalid JSON:', line);
+                            }
+                        }
+                    });
+                    stream.on('end', () => resolve(out_res));
+                    stream.on('error', reject);
+                });
+                response = { text: result };
             }
             catch (err) {
                 console.error('Error calling Ollama API or processing response:', err);
@@ -345,33 +564,32 @@ router.post('/message', async (req, res) => {
                 tool_u = xmloutput;
                 // const stringoutput = "\n<thinking>\n" + xmloutput.thinking + "\n</thinking>\n" + "\n<use_mcp_tool>\n" + "<server_name>\n" + xmloutput.serverName + "\n</server_name>\n" + "<tool_name>\n" + xmloutput.toolName + "\n</tool_name>\n" + "<arguments>\n" + JSON.stringify(xmloutput.arguments) + "\n</arguments>\n" + "</use_mcp_tool>\n";
             }
-            if (userId) {
-                if (!currentChatId) {
-                    // This is the first message in a new chat
-                    try {
-                        const newChatId = await newChatHistory(userId);
-                        currentChatId = newChatId; // Use the new ID
-                        await createChatFolder(userId, currentChatId);
-                        // Store the mode and model selected on the frontend for this new chat
-                        currentChatMode = initialMode; // Use the mode passed or default
-                        currentChatModel = initialModel; // Use the model passed or default
-                        await setChatMode(newChatId, currentChatMode);
-                        await setChatModel(newChatId, currentChatModel);
-                        // Update session
-                        req.session.user.currentChatId = newChatId;
-                        req.session.user.currentChatMode = currentChatMode;
-                        req.session.user.currentChatModel = currentChatModel;
-                        await setCurrentChatId(userId, newChatId); // Update user's current chat in DB
-                        // Update chat list in session
-                        const chatHistories = await listChatHistory(userId);
-                        req.session.user.chatIds = chatHistories.map((chat) => chat.id);
-                    }
-                    catch (err) {
-                        console.error('Error processing new chat history:', err);
-                        // Decide how to handle this - maybe return error?
-                    }
-                }
-            }
+            // if (userId) {
+            //   if (!currentChatId) {
+            //   // This is the first message in a new chat
+            //     try {
+            //       const newChatId = await newChatHistory(userId);
+            //       currentChatId = newChatId; // Use the new ID
+            //       await createChatFolder(userId, currentChatId);
+            //       // Store the mode and model selected on the frontend for this new chat
+            //       currentChatMode = initialMode; // Use the mode passed or default
+            //       currentChatModel = initialModel; // Use the model passed or default
+            //       await setChatMode(newChatId, currentChatMode);
+            //       await setChatModel(newChatId, currentChatModel);
+            //       // Update session
+            //       req.session.user!.currentChatId = newChatId;
+            //       req.session.user!.currentChatMode = currentChatMode;
+            //       req.session.user!.currentChatModel = currentChatModel;
+            //       await setCurrentChatId(userId, newChatId); // Update user's current chat in DB
+            //       // Update chat list in session
+            //       const chatHistories = await listChatHistory(userId);
+            //       req.session.user!.chatIds = chatHistories.map((chat: any) => chat.id);
+            //     } catch (err) {
+            //       console.error('Error processing new chat history:', err);
+            //       // Decide how to handle this - maybe return error?
+            //     }
+            //   }
+            // }
             if (tool_u?.toolName == "IMG_Generate") {
                 // const uniqueId = Date.now();
                 tool_u.arguments.img_url = `ai_agent_with_McpProtocol/user_files/user_${userId}/chat_${currentChatId}/`;
@@ -461,7 +679,7 @@ router.post('/message', async (req, res) => {
             // }
         }
         else {
-            console.error("Server Name is not mcp_BrowserBase.");
+            console.log("Server Name is not mcp_BrowserBase.");
             // return res.status(500).json({ error: "Server Name is not mcp_BrowserBase." }); // Return "Server Name is not mcp_BrowserBase."; // Return the error for further handling
             // Handle the error appropriately, maybe return or throw
         }
@@ -573,6 +791,7 @@ router.delete('/chat-history/:chatId', async (req, res) => {
         await deleteChatFolder(req.session.user.id, chatId);
         if (req.session.user) {
             req.session.user.chatIds = req.session.user.chatIds.filter((id) => id !== chatId);
+            req.session.user.currentChatId = null;
         }
         ;
         res.status(200).json({ message: `Chat history ${chatId} 
@@ -714,7 +933,7 @@ router.post('/set-model', async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
-export default router;
+// export default router;
 // API endpoint to set the chat mode for the current chat
 router.post('/set-mode', async (req, res) => {
     try {

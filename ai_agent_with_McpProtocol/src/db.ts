@@ -22,9 +22,8 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     is_active BOOLEAN NOT NULL DEFAULT FALSE,
-    current_chat_id INTEGER NULL,
-    role VARCHAR(10) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')) -- Added role column
-    -- Remove foreign key for now
+    current_chat_id INTEGER,
+    role VARCHAR(10) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin'))
 );
 `;
 
@@ -33,12 +32,39 @@ CREATE TABLE IF NOT EXISTS chat_history (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     message TEXT NOT NULL,
-    chat_mode VARCHAR(50) NULL, -- Added chat mode column
-    chat_model VARCHAR(50) NULL, -- Added chat model column
+    chat_mode VARCHAR(50),
+    chat_model VARCHAR(50),
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    CONSTRAINT fk_chat_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
 );
 `;
+
+const createDocumentEmbeddingsTableQuery = `
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS document_embeddings (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    chat_history_id INTEGER NOT NULL,
+    file_name TEXT,
+    extracted_text TEXT,
+    embedding VECTOR(384),
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_doc_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_doc_chat
+        FOREIGN KEY (chat_history_id)
+        REFERENCES chat_history(id)
+        ON DELETE CASCADE
+);
+`;
+
+
 
 // Then after both are created, run this if you really want the reference:
 const alterUsersTableQuery = `
@@ -78,16 +104,23 @@ async function createTable() {
   try {
     await pool.query(createUsersTableQuery);
     console.log('DB: Users table created or already exists');
+
     await pool.query(createChatHistoryTableQuery);
     console.log('DB: Chat history table created or already exists');
+
+    await pool.query(createDocumentEmbeddingsTableQuery);
+    console.log('DB: Document embeddings table created or already exists');
+
     await pool.query(alterUsersTableQuery);
     console.log('DB: Foreign key added to users table');
+
     await pool.query(alterGuestSupportQuery);
     console.log('DB: Guest support columns added or already exist');
   } catch (error) {
-    console.error('Error creating users table:', error);
+    console.error('Error creating tables:', error);
   }
 }
+
 
 await createTable();
 

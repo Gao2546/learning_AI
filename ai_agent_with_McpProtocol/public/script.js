@@ -11,6 +11,12 @@ socket.on('ping', () => {
     socket.emit('pong');
 });
 
+socket.on('StreamText', (text) => {
+    console.log('Received stream text from server');
+    // socket.emit('pong');
+    displayMarkdownMessageStream(text,window.messageElementStream)
+});
+
 const messagesDiv = document.getElementById('messages');
 const userInput = document.getElementById('userInput');
 const sendButton = document.getElementById('sendButton');
@@ -444,11 +450,16 @@ async function sendMessage() {
     try {
         const middlewareResponse = await fetch(`/api/get-middlewares`);
         const middlewareData = await middlewareResponse.json();
+        // const loginForm = document.getElementsByClassName('login-form')
         console.log('Middleware data:', middlewareData);
         if (middlewareData.exp) {
             loginBtn.textContent = 'Login';
             loginBtn.href = '/auth/login';
             loginBtn.style.display = 'block';
+            const SocketInp = document.createElement('input')
+            SocketInp.className = 'socket'
+            SocketInp.value = socket.id
+            SocketInp.hidden = true //************************************************************************************************************* */
             messagesDiv.innerHTML = '';
             usernameDisplay.innerHTML = '';
             const chatListDiv = document.getElementById('chatListEle');
@@ -464,10 +475,13 @@ async function sendMessage() {
     }
 
     let currentMessage = userInput.value.trim();
+    const userFiles = document.getElementById('fileInput')
+    let currentFiles = userFiles.files;
     if (currentMessage === '') return;
 
     displayMessage(currentMessage, 'user-message'); // Display initial user message
     userInput.value = ''; // Clear input field
+    userFiles.value = '';
     userInput.style.height = 'auto'; // Reset height after sending
 
     let agentResponse = ''; // Variable to hold the latest agent response
@@ -478,6 +492,54 @@ async function sendMessage() {
     const selectedMode = modeSelector ? modeSelector.value : defaultMode; // Get selected mode *before* loop
     const selectedModel = modelSelector ? modelSelector.value : defaultModel; // Get selected model *before* loop
     let role = "user";
+    // let data = null;
+
+    const formData = new FormData();
+    formData.append("text", currentMessage);
+    if (currentFiles) {
+        for (let i = 0; i < currentFiles.length; i++) {
+            formData.append("files", currentFiles[i]); // Use same name: "files"
+        }
+    }
+    console.log("show dataaaaaaaaaaaaaaaa2")
+
+    try {
+        console.log("show dataaaaaaaaaaaaaaaa")
+
+        const create_record_res = await fetch('/api/create_record', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: currentMessage, // Use currentMessage for the loop
+                    // Use the actual current values from selectors or defaults captured *before* the loop
+                    mode: selectedMode,
+                    model: selectedModel,
+                    role: role,
+                    socket: socket.id //****************************************************************************************************************** */
+                })
+            });
+        console.log(create_record_res);
+        console.log("show dataaaaaaaaaaaaaaaa33")
+
+        const res = await fetch("/api/upload", {
+            method: "POST",
+            body: formData
+        });
+        console.log(res);
+
+        const result = await res.json();
+        console.log('show result')
+        console.log(result)
+        // Show result in UI
+        // document.getElementById("messages").innerHTML += `<p><strong>You:</strong> ${text}</p>`;
+        // document.getElementById("messages").innerHTML += `<p><strong>AI:</strong> ${result.reply}</p>`;
+    } catch (err) {
+        console.error(err);
+        // alert("Error sending message.");
+        console.log("Error sending message")
+    }
 
     try { // Wrap the loop in a try-catch
         do {
@@ -490,6 +552,7 @@ async function sendMessage() {
 
             console.log(`Loop iteration ${loopCount}, Mode: ${selectedMode}, sending message:`, currentMessage.substring(0, 100) + "..."); // Log message start and mode
 
+            window.messageElementStream = createMarkdownMessageStreamElement('agent-message')
             // Send message to the backend
             const response = await fetch('/api/message', {
                 method: 'POST',
@@ -502,8 +565,46 @@ async function sendMessage() {
                     mode: selectedMode,
                     model: selectedModel,
                     role: role,
+                    socket: socket.id //****************************************************************************************************************** */
                 })
             });
+
+
+
+
+
+
+
+
+
+
+            // if (!response.ok) {
+            //         throw new Error(`HTTP error! status: ${response.status}`);
+            //     }
+
+            //     // --- Stream Processing ---
+            //     const reader = response.body.getReader();
+            //     const decoder = new TextDecoder();
+            //     // responseContainer.innerHTML = ''; // Clear for new content
+            //     messageElement = createMarkdownMessageStreamElement('agent-message')
+
+            //     while (true) {
+            //         const { value, done } = await reader.read();
+            //         if (done) break;
+                    
+            //         const chunk = decoder.decode(value, { stream: true });
+            //         // Sanitize HTML to prevent injection, although we expect plain text
+            //         const sanitizedChunk = chunk.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            //         // responseContainer.innerHTML += sanitizedChunk;
+            //         displayMarkdownMessageStream(sanitizedChunk,messageElement)
+                    
+            //         // Optional: auto-scroll to the bottom
+            //         // responseContainer.scrollTop = responseContainer.scrollHeight;
+            //     }
+
+            
+
+
 
             const data = await response.json();
 
@@ -519,7 +620,11 @@ async function sendMessage() {
                     currentMessage = ""; // Update message for the next loop iteration (only relevant if looping)
                 
                 } else if (!attempt_completion) {
-                    displayMarkdownMessage(agentResponse, 'agent-message');
+                    console.log(window.messageElementStream.innerHTML)
+                    if (window.messageElementStream.innerHTML.length == 0){
+                        console.log("display double")
+                        displayMarkdownMessage(agentResponse, 'agent-message');
+                    }
                     currentMessage = ""; // Update message for the next loop iteration (only relevant if looping)
                 }
                 else {
@@ -680,6 +785,30 @@ function displayMarkdownMessage(text, className) {
     }
 }
 
+function displayMarkdownMessageStream(text, messageElement) {
+    const html = markdown.render(text);
+    messageElement.innerHTML = html;
+
+    // Only auto-scroll if user is already at (or near) the bottom
+    const threshold = 30; // px, how close to bottom counts as "at the bottom"
+    const isAtBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < threshold;
+
+    if (isAtBottom) {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    if (window.MathJax) {
+        MathJax.typesetPromise([messageElement]).catch(err => console.error(err));
+    }
+}
+
+function createMarkdownMessageStreamElement(className){
+    const messageElement = document.createElement('div');
+    messageElement.className = className;
+    messagesDiv.appendChild(messageElement);
+    return messageElement
+}
+
 function displayImageMessage(imageUrl, className = '') {
     // Create a div to hold the image, allowing for potential styling or future additions
     const messageElement = document.createElement('div');
@@ -836,6 +965,7 @@ function populateModels(returnDefault = false) {
         { id: 'deepseek-coder:1.3b', name: 'deepseek-coder:1.3b' },
         { id: 'deepseek-coder:6.7b', name: 'deepseek-coder:6.7b' },
         { id: 'deepseek-r1:1.5b', name: 'deepseek-r1:1.5b' },
+        { id: 'deepseek-r1:8b', name: 'deepseek-r1:8b'},
         { id: 'deepseek-r1:14b', name: 'deepseek-r1:14b' },
         { id: 'deepseek-r1:32b', name: 'deepseek-r1:32b' },
         { id: 'deepseek-r1:latest', name: 'deepseek-r1:latest' },
@@ -843,6 +973,7 @@ function populateModels(returnDefault = false) {
         { id: 'gemma3:4b', name: 'gemma3:4b' },
         { id: 'gemma3:12b', name: 'gemma3:12b' },
         { id: 'gemma3:27b', name: 'gemma3:27b' },
+        { id: 'gemma3n:e4b', name: 'gemma3n:e4b'},
         { id: 'gemini-1.5-flash-002', name: 'gemini-1.5-flash-002' },
         { id: 'gemini-1.5-flash-8b-exp-0827', name: 'gemini-1.5-flash-8b-exp-0827' },
         { id: 'gemini-1.5-flash-exp-0827', name: 'gemini-1.5-flash-exp-0827' },
@@ -856,6 +987,7 @@ function populateModels(returnDefault = false) {
         { id: 'gemini-2.0-pro-exp-02-05', name: 'gemini-2.0-pro-exp-02-05' },
         { id: 'gemini-2.5-pro', name: 'gemini-2.5-pro' },
         { id: 'gemini-exp-1206', name: 'gemini-exp-1206' },
+        { id: 'gemini-2.5-flash-lite-preview-06-17', name: 'gemini-2.5-flash-lite'},
         { id: 'hhao/qwen2.5-coder-tools:7b', name: 'hhao/qwen2.5-coder-tools:7b' },
         { id: 'hhao/qwen2.5-coder-tools:14b', name: 'hhao/qwen2.5-coder-tools:14b' },
         { id: 'llama3.2:latest', name: 'llama3.2:latest' },

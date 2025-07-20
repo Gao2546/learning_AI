@@ -192,19 +192,32 @@ def get_page_source_as_list(url):
         return None
     
 from duckduckgo_search import DDGS
+import time
+from googlesearch import search
 
 def search_duckduckgo(query, max_results=5):
-    with DDGS() as ddgs:
-        results = ddgs.text(query, max_results=max_results, region="th-th")
-        print(results)
-        for i, result in enumerate(results, 1):
-            print(f"{i}. {result['title']}\n{result['href']}\n")
+    o = search(term=query,num_results=max_results, lang="th", region="th", ssl_verify=True)
+    print("Search results from Google:")
+    print(list(o)[0])
+    # with DDGS() as ddgs:
+    #     results = ddgs.text(query, max_results=max_results, region="th-th")
+    #     for i, result in enumerate(results, 1):
+    #         print(f"{i}. {result['title']}\n{result['href']}\n")
+    #         out_text += f"{i}. {result['title']}\n{result['href']}\n\n"
+    #     print("Search completed.")
+    #     print("out_text:", out_text)
+    # with DDGS() as ddgs:
+    #     time.sleep(1)  # Sleep to avoid hitting rate limits
+    #     results = ddgs.text(query, max_results=max_results, region="th-th")
+    #     print(results)
+    #     for i, result in enumerate(results, 1):
+    #         print(f"{i}. {result['title']}\n{result['href']}\n")
 
 if __name__ == "__main__":
     # emm = HuggingFaceEmbeddings(model_name = "sentence-transformers/all-mpnet-base-v2")
     # embeddings = HuggingFaceEmbeddings(model_name="paraphrase-MiniLM-L6-v2")
-    url_to_open = "https://music.youtube.com/search?q=%E0%B8%82%E0%B8%AD%E0%B9%83%E0%B8%AB%E0%B9%89%E0%B9%82%E0%B8%8A%E0%B8%84%E0%B9%80%E0%B8%A5%E0%B8%A7"  # Replace with the URL you want to open
-    elements = get_page_source_as_list(url_to_open)
+    # url_to_open = "https://music.youtube.com/search?q=%E0%B8%82%E0%B8%AD%E0%B9%83%E0%B8%AB%E0%B9%89%E0%B9%82%E0%B8%8A%E0%B8%84%E0%B9%80%E0%B8%A5%E0%B8%A7"  # Replace with the URL you want to open
+    # elements = get_page_source_as_list(url_to_open)
 
     # if elements:
     #     print("HTML Elements (excluding script, img, and link):")
@@ -219,6 +232,6 @@ if __name__ == "__main__":
     # aa.replace("\n", "")
     # print(aa)
 
-    # query = input("Enter your search query: ")
-    # query = "google cloud storage"
-    # search_duckduckgo(query)
+    query = input("Enter your search query: ")
+    query = "google cloud storage"
+    search_duckduckgo(query)

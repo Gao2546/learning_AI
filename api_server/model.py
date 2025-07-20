@@ -27,6 +27,8 @@ import os
 import sys
 import re
 import dotenv
+from googlesearch import search
+from utils.util import extract_pdf_text, extract_image_text, encode_text_for_embedding, save_vector_to_db, search_similar_documents_by_chat
 
 # Load environment variables from .env file
 dotenv.load_dotenv()
@@ -371,14 +373,82 @@ def Search_By_DuckDuckGo():
     query = request.json['query']
     max_results = request.json['max_results']
     out_text = ""
-    with DDGS() as ddgs:
-        results = ddgs.text(query, max_results=int(max_results), region="th-th")
+    try:
+        with DDGS() as ddgs:
+            results = ddgs.text(query, max_results=int(max_results), region="th-th")
+            for i, result in enumerate(results, 1):
+                print(f"{i}. {result['title']}\n{result['href']}\n")
+                out_text += f"{i}. {result['title']}\n{result['href']}\n\n"
+        sto = time.time()
+    except Exception as e:
+        results = list(search(term=query,num_results=int(max_results), lang="th", region="th", ssl_verify=True))
         for i, result in enumerate(results, 1):
-            print(f"{i}. {result['title']}\n{result['href']}\n")
-            out_text += f"{i}. {result['title']}\n{result['href']}\n\n"
-    sto = time.time()
+            print(f"{i}. {result}\n")
+            out_text += f"{i}. {result}\n\n"
+        sto = time.time()
+        print(f"Error occurred: {e}")
     print(f'complete dT = {sto - st} Sec')
+    results = "\n".join(results)
     return jsonify({'result': results})
+
+
+@app.route('/process', methods=['POST'])
+def process():
+    text = request.form.get('text', '')
+    files = request.files.getlist('files')
+    user_id = request.form.get('user_id', 'default_user')
+    chat_history_id = request.form.get('chat_history_id', 'default_chat')
+
+    print(len(files), "files")
+    print(f"Received files: {[file.filename for file in files]}")
+
+    extracted_texts = []
+    for file in files:
+        if file.filename.endswith('.pdf'):
+            text = extract_pdf_text(file)
+            extracted_texts.append(text)
+            data_vector = encode_text_for_embedding(text)
+            save_vector_to_db(user_id, chat_history_id, file.filename, text, data_vector)
+        else:
+            text = extract_image_text(file)
+            extracted_texts.append(text)
+            data_vector = encode_text_for_embedding(text)
+            save_vector_to_db(user_id, chat_history_id, file.filename, text, data_vector)
+
+    combined_text = text + "\n" + "\n".join(extracted_texts)
+    # data_vector = encode_text_for_embedding(combined_text)
+    # save_vector_to_db(user_id, chat_history_id, ','.join(file.filename for file in files), combined_text, data_vector)
+    
+    # embedding = model.encode(combined_text).tolist()
+    # print(f"Combined text length: {len(combined_text)} characters")
+    # print(combined_text)
+    # Simulated response
+    return jsonify({'reply': f'Processed input with {len(files)} file(s). Preview: ' + combined_text[:100]})
+
+
+@app.route('/search_similar', methods=['POST'])
+def search_similar_api():
+    data = request.get_json()
+    
+    query = data.get('query')
+    user_id = data.get('user_id')
+    chat_history_id = data.get('chat_history_id')
+    top_k = int(data.get('top_k', 5))
+
+    print(f"Searching for similar documents with query: {query}, user_id: {user_id}, chat_history_id: {chat_history_id}, top_k: {top_k}")
+
+    if not query or not user_id or not chat_history_id:
+        return jsonify({"error": "Missing required fields: query, user_id, chat_history_id"}), 400
+
+    results = search_similar_documents_by_chat(
+        query_text=query,
+        user_id=int(user_id),
+        chat_history_id=int(chat_history_id),
+        top_k=top_k
+    )
+
+    return jsonify({"results": results})
+
 
 
 if __name__ == '__main__':

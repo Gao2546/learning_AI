@@ -36,7 +36,7 @@ router.post('/register', async (req, res) => {
 // Login endpoint
 router.post('/login', async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { username, password, socketId } = req.body;
         // Check if the user exists
         const user = await getUserByUsername(username);
         if (!user) {
@@ -60,7 +60,7 @@ router.post('/login', async (req, res) => {
             }
         }
         // Create a session
-        req.session.user = { id: user.id, username: user.username };
+        req.session.user = { id: user.id, username: user.username, socketId: socketId };
         console.log("Auth: session has create");
         // await createUserFolder(user.id); // comment it in new patch
         try {

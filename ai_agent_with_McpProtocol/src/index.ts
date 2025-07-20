@@ -84,7 +84,7 @@ setInterval(async () => {
   }
 }, CLEANUP_INTERVAL_MS);
 
-const BypassSession = ["/auth/login", "/auth/register", "/auth/logout", "/auth/styleRL.css", "/api/message", "/auth/login.js", "/auth/register.js","/auth/admin", "/auth/login?error=invalide_username_or_password", "/auth/login?success=registered", "/auth/login?error=server_error", "/auth/register?error=server_error", "/auth/register?error=username_exists", "/auth/register?error=email_exists"];
+const BypassSession = ["/auth/login", "/auth/register", "/auth/logout", "/auth/styleRL.css", "/api/message", "/api/create_record", "/auth/login.js", "/auth/register.js","/auth/admin", "/auth/login?error=invalide_username_or_password", "/auth/login?success=registered", "/auth/login?error=server_error", "/auth/register?error=server_error", "/auth/register?error=username_exists", "/auth/register?error=email_exists"];
 
 // Session timeout cleanup middleware
 app.use(async (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -165,15 +165,16 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-// Use authentication routes
-app.use('/auth', authRouters);
-app.use('/api', agentRouters);
 
 // Create HTTP + WebSocket server
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
+
+// Use authentication routes
+app.use('/auth', authRouters);
+app.use('/api', agentRouters(io));
 
 // Share session middleware with Socket.IO
 // io.use((socket, next) => {
@@ -186,7 +187,7 @@ const clients = new Map<string, { userId: number; lastSeen: number }>();
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
 
-  socket.on('register', async (data) => {
+  socket.on('register', async (data) => { //for update socket if when reload page
     const userId = typeof data === 'object' && data?.userId ? data.userId : data;
     if (!userId) {
       console.log("no data")
@@ -228,6 +229,10 @@ io.on('connection', (socket) => {
     console.log(`Received pong from client${client?.userId}`);
     if (client) client.lastSeen = Date.now();
   });
+
+  socket.on('SetNewSocket', (userId) => {
+    clients.set(socket.id, { userId, lastSeen: Date.now() });
+  })
 
   // socket.on('disconnect', async () => {
   //   console.log("disconnecting")

@@ -38,7 +38,14 @@
             <h1 class="header1"><button id="toggleSidebarButton"><i class="fas fa-bars"></i></button> AI Agent Interface</h1>
             <div id="messages"></div>
             <div class="input-container">
-                <textarea id="userInput" placeholder="Enter your command..." rows="1"></textarea>
+                <textarea id="userInput" placeholder="Ask any qusetion..." rows="1"></textarea>
+                        
+                <input type="file" id="fileInput" accept=".pdf,image/*" multiple style="display: none;"/>
+                        
+                <label for="fileInput" class="file-input-label">
+                    <i class="fas fa-paperclip"></i>
+                </label>
+                
                 <button id="sendButton">Send</button>
             </div>
             <div class="warning">warning: is Alpha version</div>
