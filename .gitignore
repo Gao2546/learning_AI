@@ -7,6 +7,12 @@ image/
 env/
 data_base/
 node_modules/
+output/
+outputs/
+uploads/
+tmp/
+.roo/
+.save
 .env/
 *.png
 *.jpg
@@ -20,6 +26,8 @@ node_modules/
 *.zip
 .key
 __pycache__/
+data*/
+low_save/
 
 # Environment variables
 .env
