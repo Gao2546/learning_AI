@@ -988,6 +988,7 @@ function populateModels(returnDefault = false) {
         { id: 'gemini-2.5-pro', name: 'gemini-2.5-pro' },
         { id: 'gemini-exp-1206', name: 'gemini-exp-1206' },
         { id: 'gemini-2.5-flash-lite-preview-06-17', name: 'gemini-2.5-flash-lite'},
+        { id: 'gemini-2.5-flash', name: 'gemini-2.5-flash'},
         { id: 'hhao/qwen2.5-coder-tools:7b', name: 'hhao/qwen2.5-coder-tools:7b' },
         { id: 'hhao/qwen2.5-coder-tools:14b', name: 'hhao/qwen2.5-coder-tools:14b' },
         { id: 'llama3.2:latest', name: 'llama3.2:latest' },
@@ -999,6 +1000,7 @@ function populateModels(returnDefault = false) {
         { id: 'qwen2.5-coder:7b', name: 'qwen2.5-coder:7b' },
         { id: 'qwen2.5-coder:14b', name: 'qwen2.5-coder:14b' },
         { id: 'qwen2.5-coder:32b', name: 'qwen2.5-coder:32b' },
+        { id: 'qwen3:4b', name: 'qwen3:4b'},
         { id: 'wizardlm2:7b', name: 'wizardlm2:7b' },
     ];
     const defaultValue = models.length > 0 ? models[10].id : null;

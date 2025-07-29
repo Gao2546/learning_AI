@@ -4,7 +4,10 @@ import pytesseract
 import io
 from sentence_transformers import SentenceTransformer
 import psycopg2
+import dotenv
 import os
+
+dotenv.load_dotenv()
 
 model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
@@ -35,7 +38,7 @@ def extract_image_text(file_storage) -> str:
     image = Image.open(io.BytesIO(image_bytes))
 
     # Use Tesseract to do OCR on the image
-    text = pytesseract.image_to_string(image)
+    text = pytesseract.image_to_string(image, lang='tha+eng')
 
     return text.strip()
 

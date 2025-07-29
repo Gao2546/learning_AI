@@ -3,6 +3,8 @@ FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04
 # Optional: use a Python version of your choice
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Set DEBIAN_FRONTEND to avoid interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies + Python
 RUN apt-get update && \
@@ -81,7 +83,68 @@ COPY api_server/requirements.txt .
 # --no-cache-dir: Prevents pip from storing downloaded packages in a cache.
 # --break-system-packages: Allows pip to install into system directories,
 #                          necessary on some Debian-based systems when not using a venv.
-RUN pip install --no-cache-dir -r requirements.txt --break-system-packages
+
+RUN apt-get update && \
+    apt-get install -y \
+        software-properties-common \
+        lsb-release \
+        wget \
+        curl \
+        gnupg \
+        ca-certificates && \
+    apt-get install -y \
+        tesseract-ocr \
+        libtesseract-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && \
+    apt-get install -y tesseract-ocr-tha
+
+RUN tesseract --version
+
+RUN apt-get update && \
+    apt-get install -y \
+        tesseract-ocr \
+        libtesseract-dev \
+        libglib2.0-0 \
+        libsm6 \
+        libxrender1 \
+        libxext6 \
+        ffmpeg \
+        fonts-liberation \
+        libnss3 \
+        libatk-bridge2.0-0 \
+        libgtk-3-0 \
+        curl \
+        unzip && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+
+
+
+# Install Chrome and ChromeDriver
+RUN apt-get update && apt-get install -y wget unzip gnupg ca-certificates && \
+    wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | \
+      gpg --dearmor -o /etc/apt/trusted.gpg.d/google.gpg && \
+    echo "deb [arch=amd64 signed-by=/etc/apt/trusted.gpg.d/google.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
+      > /etc/apt/sources.list.d/google-chrome.list && \
+    apt-get update && apt-get install -y google-chrome-stable
+
+# Detect Chrome major version
+RUN CHROME_VERSION=$(google-chrome-stable --version | grep -oP '\d+\.\d+\.\d+\.\d+' || true) && \
+    CHROME_MAJOR_VERSION=$(echo "$CHROME_VERSION" | cut -d'.' -f1 || echo "114") && \
+    echo "Detected Chrome Version: $CHROME_VERSION (Major: $CHROME_MAJOR_VERSION)" && \
+    CHROMEDRIVER_VERSION=$(wget -qO- "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_MAJOR_VERSION" || echo "114.0.5735.90") && \
+    echo "Installing ChromeDriver version: $CHROMEDRIVER_VERSION" && \
+    wget -O /tmp/chromedriver.zip "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip" && \
+    unzip /tmp/chromedriver.zip -d /usr/local/bin && \
+    chmod +x /usr/local/bin/chromedriver && \
+    rm /tmp/chromedriver.zip
+
+
+
+RUN pip install --no-cache-dir --ignore-installed -r requirements.txt --break-system-packages
 
 # Copy the application code and necessary directories
 # Assumes the Docker build context is the parent directory (e.g., your project root)

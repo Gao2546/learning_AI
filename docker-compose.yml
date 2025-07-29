@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: athip
       POSTGRES_PASSWORD: 123456
@@ -27,7 +27,7 @@ services:
       # Add any other necessary environment variables here
     depends_on:
       - db
-      # - api_server
+      - api_server
     networks:
       - app-network
 
@@ -35,9 +35,14 @@ services:
     build:
       context: .
       dockerfile: api_server/Dockerfile
-    ports:
-      - "5000:5000"
-    # environment:
+    # ports:
+      # - "5000:5000"
+    environment:
+      - PGDATABASE=ai_agent
+      - PGUSER=athip
+      - PGPASSWORD=123456
+      - PGHOST=db
+      - PGPORT=5432
       # Pass the OpenAI API key from the host environment or a .env file
       # Ensure OPENAI_API_KEY is set in your environment before running docker-compose up
       # - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -49,6 +54,9 @@ services:
     #           count: all # Or specify a specific number of GPUs
     #           capabilities: [gpu]
     runtime: nvidia
+    depends_on:
+      - db
+      - ollama
     networks:
       - app-network
 

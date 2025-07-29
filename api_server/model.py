@@ -1,4 +1,3 @@
-import dotenv
 from flask import Flask, request, jsonify
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -57,9 +56,16 @@ def init_driver():
 
     options.add_argument("--start-maximized")  # Open browser in full-screen
     options.add_argument("--disable-blink-features=AutomationControlled")
+    # options.add_argument("--no-sandbox")
+    # options.add_argument("--disable-infobars")
+    # options.add_argument("--disable-dev-shm-usage")
+
+    options.add_argument("--headless")  # สำคัญสำหรับ docker
     options.add_argument("--no-sandbox")
-    options.add_argument("--disable-infobars")
-    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-dev-shm-usage")  # แก้ปัญหา /dev/shm space
+    options.add_argument("--disable-gpu")  # ป้องกันบางปัญหาใน Linux
+    options.add_argument("--remote-debugging-port=9222")
+
     # service = Service('/usr/local/bin/chromedriver')
     # driver = webdriver.Chrome(options=options)
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),options=options)
@@ -375,11 +381,15 @@ def Search_By_DuckDuckGo():
     out_text = ""
     try:
         with DDGS() as ddgs:
+            results_tmp = []
             results = ddgs.text(query, max_results=int(max_results), region="th-th")
             for i, result in enumerate(results, 1):
                 print(f"{i}. {result['title']}\n{result['href']}\n")
+                results_tmp.append(f"{i}. {result['title']}\n{result['href']}\n")
                 out_text += f"{i}. {result['title']}\n{result['href']}\n\n"
+            results = results_tmp
         sto = time.time()
+        print("use DDGS")
     except Exception as e:
         results = list(search(term=query,num_results=int(max_results), lang="th", region="th", ssl_verify=True))
         for i, result in enumerate(results, 1):

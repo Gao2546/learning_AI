@@ -6,6 +6,8 @@ import path from 'path';
 import dotenv from "dotenv";
 import { Readable } from 'stream';
 import FormData from 'form-data';
+// import { DOMParser } from 'xmldom';
+import { XMLParser } from 'fast-xml-parser';
 
 
 dotenv.config();
@@ -23,36 +25,43 @@ import { parseStringPromise } from 'xml2js';
 // import bcrypt from 'bcrypt';
 import { setChatMode, setChatModel, getChatMode, getChatModel } from './db.js'; // Import necessary DB functions
 import pool, { createUser, getUserByUsername, newChatHistory, storeChatHistory, readChatHistory, deleteChatHistory, setCurrentChatId, listChatHistory, getUserActiveStatus, setUserActiveStatus, createUserFolder, createChatFolder, deleteChatFolder } from './db.js';
+import { callToolFunction } from "./api.js"
 
+// const controller = new AbortController();
+// const timeoutMs = 100000; // 5 seconds timeout
+
+// const timeoutId = setTimeout(() => {
+//   controller.abort();
+// }, timeoutMs);
 // Initialize transport
-const transport_mcp_BrowserBase = new StdioClientTransport({
-  // "command": "bash"
-  "command": "node"
-,  "args": [
-      // "-c",
-      // "cd /home/athip/psu/learning_AI/mcp_BrowserBase/ && ./build/index.js"
-      // path.join('/', 'app', 'mcp', 'mcp_BrowserBase', 'build', 'index.js')
-      // path.join('.', 'mcp', 'mcp_BrowserBase', 'build', 'index.js')
-      path.join('..', 'mcp_BrowserBase', 'build', 'index.js')
-    ],
-});
-console.log("Agent: Transport initialized.\n");
+// const transport_mcp_BrowserBase = new StdioClientTransport({
+//   // "command": "bash"
+//   "command": "node"
+// ,  "args": [
+//       // "-c",
+//       // "cd /home/athip/psu/learning_AI/mcp_BrowserBase/ && ./build/index.js"
+//       // path.join('/', 'app', 'mcp', 'mcp_BrowserBase', 'build', 'index.js')
+//       // path.join('.', 'mcp', 'mcp_BrowserBase', 'build', 'index.js')
+//       path.join('..', 'mcp_BrowserBase', 'build', 'index.js')
+//     ],
+// });
+// console.log("Agent: Transport initialized.\n");
 
 // Initialize client
-const client = new Client(
-  {
-    name: "example-client",
-    version: "1.0.0"
-  },
-  {
-    capabilities: {
-      prompts: {},
-      resources: {},
-      tools: {}
-    }
-  }
-);
-console.log("Agent: Client object initialized.\n");
+// const client = new Client(
+//   {
+//     name: "example-client",
+//     version: "1.0.0"
+//   },
+//   {
+//     capabilities: {
+//       prompts: {},
+//       resources: {},
+//       tools: {}
+//     }
+//   }
+// );
+// console.log("Agent: Client object initialized.\n");
 
 const ai = new GoogleGenAI({apiKey:process.env.Google_API_KEY});
 
@@ -74,24 +83,33 @@ async function readFile(filename: string) {
   })
 }
 
-let setting_prompt : string = await readFile("./build/setting_prompt.txt") as string;
+let setting_prompt : string = await readFile("./build/setting.txt") as string;
 
-interface MCPToolData {
-  attempt_completion: {
-    result: string[];
-  };
-  ask_followup_question: {
-    question: string[];
-    follow_up: {
-      suggest: string[];
-    }[];
-  };
-  thinking: string[];
-  use_mcp_tool: {
-    server_name: string[];
-    tool_name: string[];
-    arguments: string[];
-  };
+// interface MCPToolData {
+//   attempt_completion: {
+//     result: string[];
+//   };
+//   ask_followup_question: {
+//     question: string[];
+//     follow_up: {
+//       suggest: string[];
+//     }[];
+//   };
+//   thinking: string[];
+//   use_mcp_tool: {
+//     server_name: string[];
+//     tool_name: string[];
+//     arguments: string[];
+//   };
+// }
+
+// interface Argument {
+//   [key: string]: string; // This defines an object where keys are strings and values are strings
+// }
+
+interface ToolData {
+  toolName: string;
+  arguments: {[key: string]: string[]}; // arguments is now an array of Argument objects
 }
 
 // Define an interface for the expected structure of the JSON response from Ollama
@@ -138,57 +156,74 @@ interface SimilarDocument {
 interface SearchSimilarResponse {
   results: SimilarDocument[];
 }
+const xmlToJson = async (xml: string): Promise<Record<string , any>> => {
+  const parser = new XMLParser();
+  const jsonObj = parser.parse(xml);
 
+  const toolName = Object.keys(jsonObj)[0];  // สมมุติว่า root element มีแค่หนึ่ง
+  const content = jsonObj[toolName];
 
-const parseXML = async (xmlString: string): Promise<Record<string , any>> => {
-  // xmlString = xmlString.replace(/<\?xml.*?\?>/, ""); // Remove XML declaration if present
-  // xmlString = xmlString.replace("\n", ""); // Replace
-  // console.log(xmlString);
-  try {
-    const result = (await parseStringPromise(xmlString)) as MCPToolData;
+  const toolData: ToolData = {
+    toolName,
+    arguments: {}
+  };
 
-    const thinking = result?.thinking? result.thinking[0] : null;
-    const serverName = result?.use_mcp_tool?.server_name? result.use_mcp_tool.server_name[0] : null;
-    const toolName = result?.use_mcp_tool?.tool_name? result.use_mcp_tool.tool_name[0] : null;
-    const argumentsText = result?.use_mcp_tool?.arguments? result.use_mcp_tool.arguments[0] : null;
-
-    const results = result?.attempt_completion?.result? result.attempt_completion.result[0] : null;
-
-    const followupQuestion = result?.ask_followup_question?.question? result.ask_followup_question.question[0] : null;
-    // Use nullish coalescing to default to an empty array if suggestions are missing
-    // Access the first element of the follow_up array before getting suggestions
-    const followupSuggestions: string[] = result?.ask_followup_question?.follow_up?.[0]?.suggest ?? [];
-
-    // Optional: Log a warning if a question exists but suggestions are empty
-    if (followupQuestion && followupSuggestions.length === 0) {
-      console.warn("Follow-up question received, but no suggestions were provided.");
-    }
-    // console.log("Follow-up Suggestions:", followupSuggestions); // Adjusted log if needed
-
-    let argumentsObj: Record<string, any> = {}; // Default to empty object
-    if (argumentsText) {
-      try {
-        argumentsObj = JSON.parse(argumentsText);
-      } catch (parseError) {
-        console.error("Error parsing arguments JSON:", parseError, "Raw arguments text:", argumentsText);
-        // Keep argumentsObj as {} or handle error as needed
-      }
-    }
-    const parsedData = {
-      thinking,
-      serverName,
-      toolName,
-      arguments: argumentsObj,
-      results,
-      followupQuestion,
-      followupSuggestions,
-    };
-    return parsedData;
-  } catch (error) {
-    console.error("Error parsing XML:", error);
-    throw error;
+  for (const key in content) {
+    toolData.arguments[key] = content[key];//.push({ [key]: content[key] });
   }
+
+  return toolData;
 };
+
+// const parseXML = async (xmlString: string): Promise<Record<string , any>> => {
+//   // xmlString = xmlString.replace(/<\?xml.*?\?>/, ""); // Remove XML declaration if present
+//   // xmlString = xmlString.replace("\n", ""); // Replace
+//   // console.log(xmlString);
+//   try {
+//     const result = (await parseStringPromise(xmlString)) as MCPToolData;
+
+//     const thinking = result?.thinking? result.thinking[0] : null;
+//     const serverName = result?.use_mcp_tool?.server_name? result.use_mcp_tool.server_name[0] : null;
+//     const toolName = result?.use_mcp_tool?.tool_name? result.use_mcp_tool.tool_name[0] : null;
+//     const argumentsText = result?.use_mcp_tool?.arguments? result.use_mcp_tool.arguments[0] : null;
+
+//     const results = result?.attempt_completion?.result? result.attempt_completion.result[0] : null;
+
+//     const followupQuestion = result?.ask_followup_question?.question? result.ask_followup_question.question[0] : null;
+//     // Use nullish coalescing to default to an empty array if suggestions are missing
+//     // Access the first element of the follow_up array before getting suggestions
+//     const followupSuggestions: string[] = result?.ask_followup_question?.follow_up?.[0]?.suggest ?? [];
+
+//     // Optional: Log a warning if a question exists but suggestions are empty
+//     if (followupQuestion && followupSuggestions.length === 0) {
+//       console.warn("Follow-up question received, but no suggestions were provided.");
+//     }
+//     // console.log("Follow-up Suggestions:", followupSuggestions); // Adjusted log if needed
+
+//     let argumentsObj: Record<string, any> = {}; // Default to empty object
+//     if (argumentsText) {
+//       try {
+//         argumentsObj = JSON.parse(argumentsText);
+//       } catch (parseError) {
+//         console.error("Error parsing arguments JSON:", parseError, "Raw arguments text:", argumentsText);
+//         // Keep argumentsObj as {} or handle error as needed
+//       }
+//     }
+//     const parsedData = {
+//       thinking,
+//       serverName,
+//       toolName,
+//       arguments: argumentsObj,
+//       results,
+//       followupQuestion,
+//       followupSuggestions,
+//     };
+//     return parsedData;
+//   } catch (error) {
+//     console.error("Error parsing XML:", error);
+//     throw error;
+//   }
+// };
 
 // const ChatHistory : any[]= []
 // await addChatHistory(setting_prompt);
@@ -213,11 +248,8 @@ export default function agentRouters(ios: SocketIOServer) {
 
 
 router.post('/upload', upload.array('files'), async (req, res) => {
-    console.log("load api");
     const text = req.body.text;
     const files = req.files as Express.Multer.File[];
-    console.log("load api2")
-    console.log(files.length);
 
     try {
         // const FormData = require('form-data');
@@ -230,7 +262,8 @@ router.post('/upload', upload.array('files'), async (req, res) => {
             form.append('files', fs.createReadStream(file.path), file.originalname);
         }
 
-        const flaskRes = await axios.post('http://localhost:5000/process', form, {
+        const API_SERVER_URL = process.env.API_SERVER_URL || 'http://localhost:5000';
+        const flaskRes = await axios.post(`${API_SERVER_URL}/process`, form, {
             headers: form.getHeaders()
         });
         res.json(flaskRes.data.reply);
@@ -359,37 +392,33 @@ router.post('/message', async (req : Request, res : Response) => {
     let currentChatMode = req.session.user?.currentChatMode ?? null;
     let currentChatModel = req.session.user?.currentChatModel ?? null;
 
-    console.log("***********************************")
-    console.log(userId);
-    console.log(currentChatId);
-    console.log(currentChatMode);
-    console.log(currentChatModel);
-    console.log("***********************************")
-
     let serch_doc = ""
 
-    const response_similar_TopK = await fetch('http://localhost:5000/search_similar', {
-      method: 'POST',
-      headers: {
+    if (currentChatMode != 'code'){
+      const API_SERVER_URL = process.env.API_SERVER_URL || 'http://localhost:5000';
+      const response_similar_TopK = await fetch(`${API_SERVER_URL}/search_similar`, {
+        method: 'POST',
+        headers: {
         'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+        },
+        body: JSON.stringify({
         query: userMessage,
         user_id: userId,
         chat_history_id: currentChatId,
-        top_k: 3
-      }),
-    });
+        top_k: 10
+        }),
+      });
 
-    const result_similar_TopK = await response_similar_TopK.json() as SearchSimilarResponse;
-    console.log(result_similar_TopK);
-    console.log("ssssssssssssssssssssssssssssssss")
-    if (result_similar_TopK){
-    result_similar_TopK.results.forEach(doc => {
-      console.log(`📄 ${doc.file_name} — score: ${doc.distance.toFixed(3)}`);
-      serch_doc += doc.text + "\n\n";
-    });
+      const result_similar_TopK = await response_similar_TopK.json() as SearchSimilarResponse;
+      if (result_similar_TopK){
+      result_similar_TopK.results.forEach(doc => {
+        console.log(`📄 ${doc.file_name} — score: ${doc.distance.toFixed(3)}`);
+        serch_doc += doc.text + "\n\n";
+      });
+      }
     }
+    console.log(serch_doc);
+    console.log("*-*--*--*-*-*--*-*--*-*-*-*--**--")
 
 
     let chatContent = "";
@@ -426,7 +455,12 @@ router.post('/message', async (req : Request, res : Response) => {
 
     // Prepare prompt
     let question : string = "";
-    question = "document" + ": " + serch_doc  + chatContent.replace(/\n<DATA_SECTION>\n/g, "\n");
+    if ((currentChatMode != 'code') && (serch_doc != '')){
+      question = "document" + ": " + serch_doc + "\n\n" + chatContent.replace(/\n<DATA_SECTION>\n/g, "\n");
+    }
+    else{
+      question = chatContent.replace(/\n<DATA_SECTION>\n/g, "\n");
+    }
 
     // Determine model to use for the AI call (prioritize session)
     const modelToUse = currentChatModel || initialModel; // Use session model or default
@@ -446,7 +480,6 @@ router.post('/message', async (req : Request, res : Response) => {
       res.status(500).json({ error: `${err}` });
     }
 
-
     let response: { text: string } | null = null; // Variable to hold the response text compatible with later processing
     // Call AI model
     if (modelToUse.startsWith("gemini")){
@@ -465,7 +498,7 @@ router.post('/message', async (req : Request, res : Response) => {
         // res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         // res.setHeader('Transfer-Encoding', 'chunked');
 
-        console.log(`Streaming response for prompt: "${question}"`);
+        // console.log(`Streaming response for prompt: "${question}"`);
 
         // Call the Gemini API and get the stream
         const result = await ai.models.generateContentStream({
@@ -481,14 +514,14 @@ router.post('/message', async (req : Request, res : Response) => {
 
         for await (const chunk of result) {
           let chunkText = chunk.text;
-
-          out_res += chunkText;
+          if (chunkText != undefined){
+            out_res += chunkText;
+          }
         
           if (!assistancePrefixRemoved) {
             if (out_res.startsWith('assistance:')) {
               out_res = out_res.slice('assistance:'.length).trimStart();
               assistancePrefixRemoved = true;
-              console.log("**********************////////////////////")
             }
           }
       
@@ -498,8 +531,6 @@ router.post('/message', async (req : Request, res : Response) => {
       
         console.log('Streaming finished.');
         console.log(out_res)
-        // End the response stream
-        // res.end();
         response = { text: out_res };
       
       } catch (error) {
@@ -668,6 +699,7 @@ router.post('/message', async (req : Request, res : Response) => {
     let tool_u = null;
     let img_url = null;
     if (response && response.text){ // Check if response is not null before accessing text
+      console.log(",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,")
       responsetext = (response.text).replace("thinking ","\n<thinking>\n")
                                     .replace("thinking\n","\n<thinking>\n")
                                     .replace("<thinking>","\n<thinking>\n")
@@ -683,18 +715,18 @@ router.post('/message', async (req : Request, res : Response) => {
                                     .replace("</ask_followup_question>\n```","</ask_followup_question>")
                                     .replace("</ask_followup_question>","</ask_followup_question>\n```")
                                     .replace("assistance: assistance:","assistance:");
-      let rrs = response.text;
-      console.log("rrs");
-      const rrss = rrs.match(/<use_mcp_tool>[\s\S]*?<\/use_mcp_tool>/);
-      const rrss2 = rrs.match(/<attempt_completion>[\s\S]*?<\/attempt_completion>/);
-      const rrss3 = rrs.match(/<ask_followup_question>[\s\S]*?<\/ask_followup_question>/);
-      let rrss4 : string[] | null = [""];
+      let rrs = responsetext;
+      // console.log("rrs");
+      // const rrss = rrs.match(/<use_mcp_tool>[\s\S]*?<\/use_mcp_tool>/);
+      // const rrss2 = rrs.match(/<attempt_completion>[\s\S]*?<\/attempt_completion>/);
+      // const rrss3 = rrs.match(/<ask_followup_question>[\s\S]*?<\/ask_followup_question>/);
+      // let rrss4 : string[] | null = [""];
 
-      const val1 = rrss?.[0]?.toString() ?? "";
-      const val2 = rrss2?.[0]?.toString() ?? "";
-      const val3 = rrss3?.[0]?.toString() ?? "";
-      rrss4 = [val1 + val2 + val3];
-      console.log(rrss4);
+      // const val1 = rrss?.[0]?.toString() ?? "";
+      // const val2 = rrss2?.[0]?.toString() ?? "";
+      // const val3 = rrss3?.[0]?.toString() ?? "";
+      // rrss4 = [val1 + val2 + val3];
+      // console.log(rrss4);
       // if (rrss && rrss[0] && rrss2 && rrss2[0]){
       //   rrss4 = [rrss[0].toString() + rrss2[0].toString()];
       //   console.log(rrss4);
@@ -705,15 +737,18 @@ router.post('/message', async (req : Request, res : Response) => {
       // else if (rrss2){
       //   rrss4 = rrss2;
       // }
-      if (rrss4 && rrss4[0]){
-      const prepraseXML = rrss4[0].replace(/\\n/g, '')                        // Remove \n
-                                       .replace(/\(\\?`[^)]*\\?`\)/g, '')          // Remove (`...`) including escaped backticks
-                                       .replace(/\\`/g, '`')                       // Unescape backticks (just in case)
-                                       .replace(/\\\\/g, '\\')
-                                       .replace(/\\/g, '');      
+      if (rrs){
+      // if (rrss4 && rrss4[0]){
+      // const prepraseXML = rrss4[0].replace(/\\n/g, '')                        // Remove \n
+      //                                  .replace(/\(\\?`[^)]*\\?`\)/g, '')          // Remove (`...`) including escaped backticks
+      //                                  .replace(/\\`/g, '`')                       // Unescape backticks (just in case)
+      //                                  .replace(/\\\\/g, '\\')
+      //                                  .replace(/\\/g, '');      
                                                   // Fix double backslashes
-      console.log(prepraseXML);
-      const xmloutput = await parseXML(prepraseXML);
+      // console.log(prepraseXML);
+      // const xmloutput = await parseXML(prepraseXML);
+      const xmloutput = await xmlToJson(rrs)
+      console.log("/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*");
       console.log(xmloutput);
       tool_u = xmloutput;
 
@@ -793,33 +828,45 @@ router.post('/message', async (req : Request, res : Response) => {
 
 
     let resultText = "";
-    if (tool_u?.results) {
-      // console.log("Tool Name is attempt_completion.\n=============================================");
-      // return res.json({ response: `attempt_completion : ${tool_u.results}`, attempt_completion : true, followup_question : false }); // Return "attempt_completion";
-      responsetext += `\n\nattempt_completion : ${tool_u.results}`
-    }
-    if (tool_u?.followupQuestion) {
-      // return res.json({ response: `**ask_followup_question :**  ${tool_u.followupQuestion} \n\n ${tool_u.followupSuggestions.map((item:string) => `* **suggest** ${tool_u.followupSuggestions.indexOf(item) + 1}: ${item}`).join('\n')} \n\nselect suggestion and send it back to me.`,attempt_completion : false ,followup_question : true }); // Return "attempt_completion";
-      responsetext += `\n\n**ask_followup_question :**  ${tool_u.followupQuestion} \n\n ${tool_u.followupSuggestions.map((item:string) => `* **suggest** ${tool_u.followupSuggestions.indexOf(item) + 1}: ${item}`).join('\n')} \n\nselect suggestion and send it back to me.`
-    }
-    else if (tool_u?.serverName?.trim() === "mcp_BrowserBase") {
+    // if (tool_u?.results) {
+    //   // console.log("Tool Name is attempt_completion.\n=============================================");
+    //   // return res.json({ response: `attempt_completion : ${tool_u.results}`, attempt_completion : true, followup_question : false }); // Return "attempt_completion";
+    //   responsetext += `\n\nattempt_completion : ${tool_u.results}`
+    // }
+    // if (tool_u?.followupQuestion) {
+    //   // return res.json({ response: `**ask_followup_question :**  ${tool_u.followupQuestion} \n\n ${tool_u.followupSuggestions.map((item:string) => `* **suggest** ${tool_u.followupSuggestions.indexOf(item) + 1}: ${item}`).join('\n')} \n\nselect suggestion and send it back to me.`,attempt_completion : false ,followup_question : true }); // Return "attempt_completion";
+    //   responsetext += `\n\n**ask_followup_question :**  ${tool_u.followupQuestion} \n\n ${tool_u.followupSuggestions.map((item:string) => `* **suggest** ${tool_u.followupSuggestions.indexOf(item) + 1}: ${item}`).join('\n')} \n\nselect suggestion and send it back to me.`
+    // }
+    // else if (tool_u?.serverName?.trim() === "mcp_BrowserBase") {
+    const list_toolname = ['GenerateModel', 'GetPage', 'ClickElement', 'GetSourcePage', 'GetTextPage', 'GetData', 'SearchByID', 'SearchByDuckDuckGo', 'ProcessFiles', 'SearchSimilar', 'attempt_completion', 'ask_followup_question']
+    if (tool_u?.toolName != null && list_toolname.includes(tool_u.toolName)){
       try {
-        if (!client.transport) { // Check if transport is not set (i.e., not connected)
-          await client.connect(transport_mcp_BrowserBase);
-          console.log("Client connected.\n");
-        }
-        console.log("Call Tool.\n");
-        // Call a tool
-        const response = await client.callTool({
-            name: tool_u.toolName,
-            arguments: tool_u.arguments,
-        }) as resultsT;
-        console.log("RESPONSE:\n", response.content[0].text, "\n================================================");
-        // const imageUrlContent = response.content.find(item => item.type === 'resource_link');
-        // if (imageUrlContent) {
-        // img_url = imageUrlContent.text
-        // console.log(img_url);
+        // if (!client.transport) { // Check if transport is not set (i.e., not connected)
+        //   await client.connect(transport_mcp_BrowserBase);
+        //   console.log("Client connected.\n");
         // }
+        // console.log("Call Tool.\n");
+        // // Call a tool
+        // const response = await client.callTool({
+        //     name: tool_u.toolName,
+        //     arguments: tool_u.arguments,
+        //     signal: controller.signal, // Pass signal to support abort
+        // }) as resultsT;
+        // clearTimeout(timeoutId); // Clear timeout on success
+
+        const response = await callToolFunction(tool_u.toolName,tool_u.arguments) as resultsT;
+        if (tool_u.toolName == "attempt_completion"){
+          responsetext += `\n\nattempt_completion : ${tool_u.arguments.results}`
+        }
+        else if (tool_u.toolName == "ask_followup_question"){
+          responsetext += `\n\n**ask_followup_question :**  ${tool_u.arguments.question} \n\n ${tool_u.arguments.follow_up.suggest.map((item:string) => `* **suggest** ${tool_u.arguments.follow_up.suggest.indexOf(item) + 1}: ${item}`).join('\n')} \n\nselect suggestion and send it back to me.`
+        }
+        console.log("RESPONSE:\n", response.content[0].text, "\n================================================");
+        const imageUrlContent = response.content.find(item => item.type === 'resource_link');
+        if (imageUrlContent) {
+        img_url = imageUrlContent.text
+        console.log(img_url);
+        }
 
         if (response.content.length > 1){
           // img_url = path.join("../../",response.content[1].text);
@@ -829,11 +876,12 @@ router.post('/message', async (req : Request, res : Response) => {
     
         console.log(img_url);
         // resultText = response.content[0].text;
-        resultText = `[use_mcp_tool for '${tool_u.serverName}'] Result:\n${response.content[0].text}\n current step using ${tool_u.toolName} is complete move to next step if task complete use tool <attempt_completion>`
+        resultText = `[Result:\n${response.content[0].text}\n current step using ${tool_u.toolName} \n user: is complete move to next step if task complete use tool <attempt_completion>`
         // res.json({ response: `[use_mcp_tool for '${tool_u.serverName}'] Result:\n${result.content[0].text}\n current step using ${tool_u.toolName} is complete move to next step if task complete use tool <attempt_completion>` }); // Return the result of the tool call
       } catch (toolError) {
-          console.error("Error during MCP tool connection or call:", tool_u.toolName, toolError);
-          return res.status(500).json({ error: `Error during MCP tool connection or call: ${tool_u.toolName}\n${toolError}` }); // Return the error for further handling
+          // clearTimeout(timeoutId); // Clear timeout on success
+          console.error("Error during call Tool:", tool_u.toolName, toolError);
+          return res.status(500).json({ error: `Error during call Tool: ${tool_u.toolName}\n${toolError}` }); // Return the error for further handling
           // Handle or re-throw the error as appropriate for your application
       } 
       // finally {
@@ -872,7 +920,7 @@ router.post('/message', async (req : Request, res : Response) => {
     }
 
     if (img_url){
-      chatContent += "\n<DATA_SECTION>\n" + "img_url:" + img_url;
+      chatContent += "\n<DATA_SECTION>\n" + "img_url:" + img_url + "\n";
       // all_response += "\n\n" + img_url;
     }
 
@@ -887,11 +935,11 @@ router.post('/message', async (req : Request, res : Response) => {
       }
     }
 
-    if (tool_u?.results) {
-      // console.log("Tool Name is attempt_completion.\n=============================================");
+    if (tool_u?.toolName == "attempt_completion") {
+      console.log("Tool Name is attempt_completion.\n=============================================");
       return res.json({ response: all_response, attempt_completion : true, followup_question : false, img_url : img_url }); // Return "attempt_completion";
     }
-    if (tool_u?.followupQuestion) {
+    if (tool_u?.toolName == "ask_followup_question") {
       return res.json({ response: all_response,attempt_completion : false ,followup_question : true, img_url : img_url }); // Return "attempt_completion";
     }
     res.json({ response: all_response, attempt_completion : false, followup_question : false, img_url : img_url });
@@ -951,12 +999,14 @@ router.get('/chat-history', async (req: express.Request, res: express.Response) 
       req.session.user!.currentChatModel = null;
     }
 
-    const chatHistoryArray = (chatContent ? chatContent.split('\n<DATA_SECTION>\n') : []).map((item) => item.replace("</thinking>","</thinking>\n")
-                                                                                                            .replace("```xml","\n```xml")
-                                                                                                            .replace("TOOL USE\n```xml", "TOOL USE")
-                                                                                                            .replace("TOOL USE", "TOOL USE\n```xml")
-                                                                                                            .replace("</use_mcp_tool>\n```","</use_mcp_tool>")
-                                                                                                            .replace("</use_mcp_tool>","</use_mcp_tool>\n```"));
+    // const chatHistoryArray = (chatContent ? chatContent.split('\n<DATA_SECTION>\n') : []).map((item) => item.replace("</thinking>","</thinking>\n")
+    //                                                                                                         .replace("```xml","\n```xml")
+    //                                                                                                         .replace("TOOL USE\n```xml", "TOOL USE")
+    //                                                                                                         .replace("TOOL USE", "TOOL USE\n```xml")
+    //                                                                                                         .replace("</use_mcp_tool>\n```","</use_mcp_tool>")
+    //                                                                                                         .replace("</use_mcp_tool>","</use_mcp_tool>\n```"));
+
+    const chatHistoryArray = (chatContent ? chatContent.split('\n<DATA_SECTION>\n') : [])
 
     res.json({
       chatHistory: chatHistoryArray,

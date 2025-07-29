@@ -1,53 +1,55 @@
-# Stage 1: Build the application
-FROM node:22-alpine AS builder
+# Stage 1: Build ai_agent_with_McpProtocol
+FROM node:22-bookworm AS builder_app
 
 WORKDIR /app
 
-# Copy package files and install production dependencies
-COPY ai_agent_with_McpProtocol/package.json ai_agent_with_McpProtocol/package-lock.json ./
-RUN npm ci
+COPY ai_agent_with_McpProtocol/package*.json ./
+RUN npm install
 
-# Copy the rest of the application code
 COPY ai_agent_with_McpProtocol/tsconfig.json ./
 COPY ai_agent_with_McpProtocol/src ./src
 COPY ai_agent_with_McpProtocol/public ./public
 
 RUN npm update @modelcontextprotocol/sdk
-
-# Build the TypeScript code
 RUN npm run build
 
-# Stage 2: Create the production image
-FROM node:22-alpine
+
+# Stage 2: Build mcp_BrowserBase
+# FROM node:22-bookworm AS builder_mcp
+
+# WORKDIR /mcp
+
+# COPY mcp_BrowserBase/package*.json ./
+# RUN npm install
+
+# COPY mcp_BrowserBase/tsconfig.json ./
+# COPY mcp_BrowserBase/src ./src
+# # Adjust based on your build tool (webpack, tsc, etc.)
+# RUN ls -al && npm run build
+# RUN npm run build
+
+
+# Stage 3: Production image
+FROM node:22-bookworm
 
 WORKDIR /app
 
-RUN apk add --no-cache bash
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y bash
 
-# Copy package.json (needed for npm start)
+# Setup ai_agent_with_McpProtocol
 COPY ai_agent_with_McpProtocol/package.json ./
-
-# Copy dependencies from the builder stage
-COPY --from=builder /app/node_modules ./node_modules
-
-# Copy the built application from the builder stage
-COPY --from=builder /app/build ./build
-
-# setting_prompt.txt is copied with the rest of the build output above
-COPY ai_agent_with_McpProtocol/build/setting_prompt.txt ./build/setting_prompt.txt
-
+COPY --from=builder_app /app/node_modules ./node_modules
+COPY --from=builder_app /app/build ./build
 COPY ai_agent_with_McpProtocol/.env ./.env
+COPY ai_agent_with_McpProtocol/build/setting.txt ./build/setting.txt
+COPY --from=builder_app /app/public ./public
 
-# Copy the public assets from the builder stage
-COPY --from=builder /app/public ./public
+# Setup mcp_BrowserBase build output (e.g., dist or build folder)
+# Change `/dist` to your actual build output if needed
+# COPY --from=builder_mcp /mcp ../mcp_BrowserBase
 
-# Copy MCP server files
-COPY mcp_BrowserBase ../mcp_BrowserBase
-
-RUN cd /mcp_BrowserBase && npm update @modelcontextprotocol/sdk
-
-# Expose the application port
 EXPOSE 3000
 
-# Command to run the application
 CMD ["npm", "start"]
