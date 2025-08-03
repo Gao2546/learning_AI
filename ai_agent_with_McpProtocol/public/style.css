@@ -19,6 +19,7 @@ body {
     height: 100%;
 }
 
+
 thinking {
     display: inline-block;
 }
@@ -51,8 +52,9 @@ thinking {
     /* align-items: center; */
     /* justify-content: center; */
     width: calc(100% - 15px); /* Adjust width to account for padding */
-    max-height: calc(100% - 210px - 65px);
-    min-height: 200px;
+    max-height: calc(100% - 210px - 65px - 64px - 5px);
+    /* min-height: 200px; */
+    min-height: calc(100% - 210px - 65px - 64px - 5px);;
     overflow-y: auto; /* Allow scrolling for chat list */
     flex-grow: 1; /* Allow list to take available space */
     overflow-x: hidden; /* Hide content when collapsed */
@@ -60,7 +62,8 @@ thinking {
     text-overflow: clip;
     scrollbar-width: none;
     margin: auto;
-    padding: auto
+    padding: auto;
+    margin-bottom: 5px;
 }
 
 .btn-sidebar-container {
@@ -595,13 +598,17 @@ strong {
 }
 
 #chathishead {
-    margin-bottom: 15px; /* Restore bottom margin */
-    margin-right: auto; /* Remove right margin */
+    margin-bottom: 15px;
+    margin-right: auto;
     margin-left: auto;
-    width:fit-content; /* Full width */
+    width: fit-content;
     flex-shrink: 0;
-    padding: 10px 15px; /* Restore padding */
+    padding: 10px 15px;
+    overflow: hidden;
+    white-space: nowrap;       /* Prevent text from wrapping to a new line */
+    text-overflow: ellipsis;   /* Optionally adds "..." if text is clipped */
 }
+
 
 .warning {
     color: #ff6b6b; /* Softer red */
@@ -677,6 +684,164 @@ strong {
   font-size: 14px;
   color: #333;
 }
+
+/* --- Popup Modal Styles --- */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 999;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.5); /* more transparent backdrop */
+    backdrop-filter: blur(8px);
+    justify-content: center;
+    align-items: center;
+    transition: opacity 0.3s ease;
+}
+
+.modal.show {
+    display: flex;
+    opacity: 1;
+}
+
+/* Content box styling */
+.modal-content {
+    background: rgba(255, 255, 255, 0.05); /* more transparent */
+    color: rgba(255, 255, 255, 0.8); /* semi-transparent white text */
+    padding: 2rem;
+    border-radius: 1rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transform: scale(0.95);
+    opacity: 0;
+    animation: fadeInScale 0.3s ease forwards;
+}
+
+/* Animation for smooth entrance */
+@keyframes fadeInScale {
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Close Button */
+.close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.5); /* semi-transparent close icon */
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.close:hover {
+    color: rgba(255, 255, 255, 0.9); /* brighter on hover */
+}
+
+/* Header */
+.modal-content > h1 {
+    font-size: 1.75rem;
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: rgba(0, 123, 255, 0.7); /* transparent primary */
+}
+
+/* Primary Button */
+.modal-content > button {
+    background: rgba(0, 123, 255, 0.2); /* transparent button bg */
+    color: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 0.2s ease, color 0.2s ease;
+    margin-top: 1rem;
+}
+
+.modal-content > button:hover {
+    background: rgba(0, 86, 179, 0.3);
+    color: rgba(255, 255, 255, 1);
+}
+
+/* Code Block */
+.modal-content > pre {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.9);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    margin-top: 1rem;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.9rem;
+}
+
+/* Responsive fix: prevent modal content from going off screen */
+@media (max-width: 500px) {
+    .modal-content {
+        padding: 1.5rem;
+    }
+
+    .modal-content > h1 {
+        font-size: 1.5rem;
+    }
+
+    .modal-content > button {
+        width: 100%;
+    }
+}
+
+#openModal {
+    position: flex;
+    flex-direction: column;
+    /* bottom: 0; Stick to the bottom of the container */
+    align-self: center; /* center horizontally */
+    margin-top: auto; /* Helps push it down in flex layouts */
+
+    width: 100%;
+    /* max-width: 300px; */
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: white;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border: none;
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    overflow-x: hidden; /* Hide content when collapsed */
+    white-space: nowrap;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    /* z-index: 1000; */
+
+    left: 0%;
+    transform: translateX(0%); /*Center horizontally*/
+}
+
+
+#openModal:hover {
+    transform: translateX(0%) scale(1.05); /* Maintain centering */
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.3);
+}
+
+#openModal:active {
+    transform: translateX(0%) scale(0.97); /* Maintain centering */
+}
+
+
+
+
 
 
 /* Responsive adjustments */
@@ -861,13 +1026,17 @@ strong {
     }
 
     #chathishead {
-        margin-bottom: 15px; /* Restore bottom margin */
-        margin-right: auto; /* Remove right margin */
-        margin-left: auto;
-        width:fit-content; /* Full width */
-        flex-shrink: 0;
-        padding: 10px 15px; /* Restore padding */
-    }
+    margin-bottom: 15px;
+    margin-right: auto;
+    margin-left: auto;
+    width: fit-content;
+    flex-shrink: 0;
+    padding: 10px 15px;
+    overflow: hidden;
+    white-space: nowrap;       /* Prevent text from wrapping to a new line */
+    text-overflow: ellipsis;   /* Optionally adds "..." if text is clipped */
+}
+
 
     #newChatButton {
         width: 100%; /* Full width */

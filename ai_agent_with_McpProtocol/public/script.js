@@ -17,6 +17,147 @@ socket.on('StreamText', (text) => {
     displayMarkdownMessageStream(text,window.messageElementStream)
 });
 
+socket.on('CallTool', async (toolName, toolParameters, callback) => {
+  console.log(`Call Tool \nTool Name: ${toolName}`);
+
+  const baseURL = 'http://localhost:3333/files';
+
+  try {
+    switch (toolName) {
+      case 'ListFiles': {
+        const response = await fetch(`${baseURL}/list`);
+        const data = await response.json();
+        console.log(data);
+        callback(data);
+        break;
+      }
+
+      case 'ChangeDirectory': {
+        console.log(toolParameters);
+        const response = await fetch(`${baseURL}/change_dir`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            new_path: toolParameters.new_path,
+          }),
+          mode: "cors",
+          credentials: "include"
+        });
+        const data = await response.json();
+        console.log(data);
+        callback(data);
+        break;
+      }
+
+      case 'ReadFile': {
+        const response = await fetch(`${baseURL}/read`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file_name: toolParameters.file_name,
+            start_line: toolParameters.start_line,
+            end_line: toolParameters.end_line
+          },),
+          mode: "cors",
+          credentials: "include"
+        });
+        const data = await response.json();
+        console.log(data);
+        callback(data);
+        break;
+      }
+
+      case 'EditFile': {
+        const response = await fetch(`${baseURL}/edit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file_name: toolParameters.file_name,
+            text: toolParameters.text,
+            start_line: toolParameters.start_line,
+            end_line: toolParameters.end_line
+          }),
+          mode: "cors",
+          credentials: "include"
+        });
+        const data = await response.json();
+        console.log(data);
+        callback(data);
+        break;
+      }
+
+      case 'CreateFile': {
+        console.log(toolParameters);
+        const response = await fetch(`${baseURL}/create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file_name: toolParameters.file_name,
+            text: toolParameters.text
+          }),
+          mode: "cors",
+          credentials: "include"
+        });
+        const data = await response.json();
+        console.log(data);
+        callback(data);
+        break;
+      }
+
+      case 'DeleteFile': {
+        const response = await fetch(`${baseURL}/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_name: toolParameters.file_name }),
+          mode: "cors",
+          credentials: "include"
+        });
+        const data = await response.json();
+        console.log(data);
+        callback(data);
+        break;
+      }
+
+      case 'DownloadFile': {
+        const response = await fetch(`${baseURL}/download`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_name: toolParameters.file_name }),
+          mode: "cors",
+          credentials: "include"
+        });
+
+        // NOTE: You can't directly download via socket server; this is for logging/debug
+        const blob = await response.blob();
+        console.log(`Downloaded file: ${toolParameters.file_name} - size: ${blob.size}`);
+        callback(data);
+        break;
+      }
+
+      case 'CreateFolder': {
+        console.log("create_folder");
+        const response = await fetch(`${baseURL}/create_folder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folder_name: toolParameters.folder_name }),
+          mode: "cors",
+          credentials: "include"
+        });
+        const data = await response.json();
+        console.log(data);
+        callback(data);
+        break;
+      }
+
+      default:
+        throw new Error(`Tool function '${toolName}' not found.`);
+    }
+  } catch (err) {
+    console.error(`Error handling tool '${toolName}':`, err);
+    callback(`Tool function '${toolName}' not found.`);
+  }
+});
+
 const messagesDiv = document.getElementById('messages');
 const userInput = document.getElementById('userInput');
 const sendButton = document.getElementById('sendButton');
@@ -480,8 +621,8 @@ async function sendMessage() {
     if (currentMessage === '') return;
 
     displayMessage(currentMessage, 'user-message'); // Display initial user message
-    userInput.value = ''; // Clear input field
-    userFiles.value = '';
+    // userInput.value = ''; // Clear input field
+    // userFiles.value = '';
     userInput.style.height = 'auto'; // Reset height after sending
 
     let agentResponse = ''; // Variable to hold the latest agent response
@@ -496,6 +637,11 @@ async function sendMessage() {
 
     const formData = new FormData();
     formData.append("text", currentMessage);
+    console.log(currentFiles);
+    console.log(currentFiles.length);
+    if (currentFiles.length === 0){
+        console.log("No file")
+    }
     if (currentFiles) {
         for (let i = 0; i < currentFiles.length; i++) {
             formData.append("files", currentFiles[i]); // Use same name: "files"
@@ -521,6 +667,8 @@ async function sendMessage() {
                 })
             });
         console.log(create_record_res);
+        userInput.value = ''; // Clear input field
+        userFiles.value = '';
         console.log("show dataaaaaaaaaaaaaaaa33")
 
         const res = await fetch("/api/upload", {
@@ -548,6 +696,16 @@ async function sendMessage() {
                 console.error("Loop limit reached. Breaking.");
                 displayMarkdownMessage("Loop limit reached. Please check the agent's response or try again.", 'agent-message');
                 break;
+            }
+
+            if (selectedMode === "code") {
+              try {
+                await checkLocalAgent();
+              } catch (err) {
+                console.error("Agent unreachable", err);
+                openModal();
+                return;
+              }
             }
 
             console.log(`Loop iteration ${loopCount}, Mode: ${selectedMode}, sending message:`, currentMessage.substring(0, 100) + "..."); // Log message start and mode
@@ -617,7 +775,7 @@ async function sendMessage() {
                 if (followup_question) {
                     displayMarkdownMessage(agentResponse, 'agent-message');
                     console.log("Loop finished: 'ask_followup_question' received.");
-                    currentMessage = ""; // Update message for the next loop iteration (only relevant if looping)
+                    // currentMessage = ""; // Update message for the next loop iteration (only relevant if looping)
                 
                 } else if (!attempt_completion) {
                     console.log(window.messageElementStream.innerHTML)
@@ -625,7 +783,7 @@ async function sendMessage() {
                         console.log("display double")
                         displayMarkdownMessage(agentResponse, 'agent-message');
                     }
-                    currentMessage = ""; // Update message for the next loop iteration (only relevant if looping)
+                    // currentMessage = ""; // Update message for the next loop iteration (only relevant if looping)
                 }
                 else {
                     console.log("Loop finished: 'attempt_completion' received.");
@@ -1091,4 +1249,41 @@ async function handleModeChange() {
         console.error('Error sending mode change request:', error);
         // Optional: Show error message
     }
+}
+
+
+async function checkLocalAgent() {
+  const res = await fetch("http://localhost:3333/ping");
+  if (!res.ok) throw new Error("Agent not reachable");
+}
+
+function openModal() {
+      document.getElementById("setupModal").style.display = "flex";
+    }
+
+function closeModal() {
+  document.getElementById("setupModal").style.display = "none";
+}
+
+function downloadScript() {
+  fetch('/api/detect-platform', {
+    method: 'POST'
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log(data);
+    if (data && data.script) {
+      // Trigger browser download
+      window.location.href = `/api/download-script/${data.script}`;
+    }
+  })
+  .catch(err => console.error('Download error:', err));
+}
+
+// Optional: Close modal when clicking outside of it
+window.onclick = function(event) {
+  const modal = document.getElementById("setupModal");
+  if (event.target === modal) {
+    modal.style.display = "none";
+  }
 }

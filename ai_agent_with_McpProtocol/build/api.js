@@ -1,16 +1,24 @@
+import path from 'path';
 import dotenv from "dotenv";
 import FormData from 'form-data';
 import * as fs from 'fs';
 dotenv.config();
 import fetch from 'node-fetch'; // Import the node-fetch library
-async function generateModel(prompt, imgUrl) {
+// Download does not have a JSON response, it returns the file directly.
+let io;
+export async function GetSocketIO(ios) {
+    io = ios;
+    return true;
+}
+// Existing functions (IMG_Generate, getPage, etc.) remain the same...
+async function IMG_Generate(prompt, img_url) {
     try {
-        const response = await fetch('http://localhost:5000/Generate', {
+        const response = await fetch(`${process.env.API_SERVER_URL}/Generate`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ prompt, img_url: imgUrl }),
+            body: JSON.stringify({ prompt, img_url }),
         });
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -34,11 +42,9 @@ async function generateModel(prompt, imgUrl) {
         throw error;
     }
 }
-// Example usage:
-// generateModel("1,2,3", "http://example.com/image.jpg");
 async function getPage(url) {
     try {
-        const response = await fetch('http://localhost:5000/GetPage', {
+        const response = await fetch(`${process.env.API_SERVER_URL}/GetPage`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -63,16 +69,14 @@ async function getPage(url) {
         throw error;
     }
 }
-// Example usage:
-// getPage("https://www.google.com");
-async function clickElement(id, className, tagName) {
+async function clickElement(Id, Class, TagName) {
     try {
-        const response = await fetch('http://localhost:5000/Click', {
+        const response = await fetch(`${process.env.API_SERVER_URL}/Click`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ Id: id, Class: className, TagName: tagName }),
+            body: JSON.stringify({ Id, Class, TagName }),
         });
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -92,12 +96,9 @@ async function clickElement(id, className, tagName) {
         throw error;
     }
 }
-// Example usage:
-// clickElement("", "some-class", "button");
-// clickElement("myButtonId", "", "");
 async function getSourcePage() {
     try {
-        const response = await fetch('http://localhost:5000/GetSourcePage', {
+        const response = await fetch(`${process.env.API_SERVER_URL}/GetSourcePage`, {
             method: 'GET', // Or 'POST' if you strictly want to use POST, but GET is more idiomatic here
         });
         if (!response.ok) {
@@ -118,11 +119,9 @@ async function getSourcePage() {
         throw error;
     }
 }
-// Example usage:
-// getSourcePage();
 async function getTextPage() {
     try {
-        const response = await fetch('http://localhost:5000/GetTextPage', {
+        const response = await fetch(`${process.env.API_SERVER_URL}/GetTextPage`, {
             method: 'GET',
         });
         if (!response.ok) {
@@ -143,11 +142,9 @@ async function getTextPage() {
         throw error;
     }
 }
-// Example usage:
-// getTextPage();
 async function getData(prompt, k) {
     try {
-        const response = await fetch('http://localhost:5000/GetData', {
+        const response = await fetch(`${process.env.API_SERVER_URL}/GetData`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -172,11 +169,9 @@ async function getData(prompt, k) {
         throw error;
     }
 }
-// Example usage:
-// getData("What is the main topic?", 3);
 async function searchById(id, className, tagName, text) {
     try {
-        const response = await fetch('http://localhost:5000/Search_By_ID', {
+        const response = await fetch(`${process.env.API_SERVER_URL}/Search_By_ID`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -201,11 +196,9 @@ async function searchById(id, className, tagName, text) {
         throw error;
     }
 }
-// Example usage:
-// searchById("searchBox", "", "input", "my query");
 async function searchByDuckDuckGo(query, maxResults) {
     try {
-        const response = await fetch('http://localhost:5000/Search_By_DuckDuckGo', {
+        const response = await fetch(`${process.env.API_SERVER_URL}/Search_By_DuckDuckGo`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -230,8 +223,6 @@ async function searchByDuckDuckGo(query, maxResults) {
         throw error;
     }
 }
-// Example usage:
-// searchByDuckDuckGo("TypeScript tutorial", 5);
 async function processFiles(text, filePaths, userId, chatHistoryId) {
     try {
         const formData = new FormData();
@@ -239,27 +230,18 @@ async function processFiles(text, filePaths, userId, chatHistoryId) {
         formData.append('user_id', userId);
         formData.append('chat_history_id', chatHistoryId);
         for (const filePath of filePaths) {
-            // For local files, create a readable stream
             const fileStream = fs.createReadStream(filePath);
-            formData.append('files', fileStream, { filename: filePath.split('/').pop() });
+            formData.append('files', fileStream, { filename: path.basename(filePath) });
         }
-        // When using FormData with node-fetch, you often don't set 'Content-Type' manually.
-        // formData.getHeaders() will return the correct 'Content-Type' header with boundary.
-        const response = await fetch('http://localhost:5000/process', {
+        const response = await fetch(`${process.env.API_SERVER_URL}/process`, {
             method: 'POST',
             body: formData,
-            // headers: formData.getHeaders(), // node-fetch often handles this automatically for FormData
         });
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        const output = { "content": [
-                {
-                    "type": "string",
-                    "text": data.reply
-                }
-            ] };
+        const output = { "content": [{ "type": "string", "text": data.reply }] };
         console.log('Process Response:', data);
         return output;
     }
@@ -268,28 +250,18 @@ async function processFiles(text, filePaths, userId, chatHistoryId) {
         throw error;
     }
 }
-// Example usage:
-// Assuming you have files named 'document.pdf' and 'image.png' in the same directory as your script
-// processFiles("This is some text input.", ["./document.pdf", "./image.png"], "user123", "chat456");
 async function searchSimilar(query, userId, chatHistoryId, topK = 5) {
     try {
-        const response = await fetch('http://localhost:5000/search_similar', {
+        const response = await fetch(`${process.env.API_SERVER_URL}/search_similar`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query, user_id: userId, chat_history_id: chatHistoryId, top_k: topK }),
         });
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        const output = { "content": [
-                {
-                    "type": "string",
-                    "text": data.results
-                }
-            ] };
+        const output = { "content": [{ "type": "string", "text": data.results }] };
         console.log('Search Similar Response:', data);
         return output;
     }
@@ -298,226 +270,309 @@ async function searchSimilar(query, userId, chatHistoryId, topK = 5) {
         throw error;
     }
 }
-// Example usage:
-// searchSimilar("What is the main idea of the document?", "user123", "chat456", 2);
-async function AttemptCompletion(result, command) {
+// --- NEW FILE API FUNCTIONS ---
+function emitWithAck(socket, toolName, toolParameters) {
+    console.log(`CallTool from server to local : ${toolName}`);
+    return new Promise((resolve, reject) => {
+        socket.timeout(10000).emit("CallTool", toolName, toolParameters, (err, response) => {
+            if (err) {
+                return reject(err);
+            }
+            resolve(response);
+        });
+    });
+}
+async function ListFiles() {
     try {
-        // const response = await fetch('http://localhost:5000/Generate', {
-        //   method: 'POST',
-        //   headers: {
-        //     'Content-Type': 'application/json',
-        //   },
-        //   body: JSON.stringify({ prompt, img_url: imgUrl }),
-        // });
-        // if (!response.ok) {
-        //   throw new Error(`HTTP error! status: ${response.status}`);
-        // }
-        // const data = await response.json() as ResultGenerateModel;
-        // const output : resultsT = {"content": [
-        //                             {
-        //                                 "type": "string",
-        //                                 "text": data.result
-        //                             },
-        //                             {
-        //                                 "type": "string",
-        //                                 "text": data.data_path!
-        //                             }]}
-        const output = { "content": [
-                {
-                    "type": "string",
-                    "text": result
-                }
-            ] };
-        console.log('Generate Response:', result);
+        const response = await fetch(`${process.env.API_SERVER_URL}/files/list`, {
+            method: 'GET',
+        });
+        if (!response.ok)
+            throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        const output = { "content": [{ "type": "string", "text": `Message: ${data.message}\nFiles: ${data.data.files.join(', ')}` }] };
+        console.log('ListFiles Response:', data);
         return output;
     }
     catch (error) {
-        console.error('Error generating model:', error);
+        console.error('Error listing files:', error);
         throw error;
     }
 }
-async function AskFollowupQuestion(question, follow_up) {
+async function ReadFile(fileName, startLine, endLine) {
     try {
-        // const response = await fetch('http://localhost:5000/Generate', {
-        //   method: 'POST',
-        //   headers: {
-        //     'Content-Type': 'application/json',
-        //   },
-        //   body: JSON.stringify({ prompt, img_url: imgUrl }),
-        // });
-        // if (!response.ok) {
-        //   throw new Error(`HTTP error! status: ${response.status}`);
-        // }
-        // const data = await response.json() as ResultGenerateModel;
-        // const output : resultsT = {"content": [
-        //                             {
-        //                                 "type": "string",
-        //                                 "text": data.result
-        //                             },
-        //                             {
-        //                                 "type": "string",
-        //                                 "text": data.data_path!
-        //                             }]}
-        const output = { "content": [
-                {
-                    "type": "string",
-                    "text": question
-                }
-            ] };
-        console.log('Generate Response:', question);
+        const body = { file_name: fileName };
+        if (startLine !== undefined)
+            body.start_line = startLine;
+        if (endLine !== undefined)
+            body.end_line = endLine;
+        const response = await fetch(`${process.env.API_SERVER_URL}/files/read`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!response.ok)
+            throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        const content = data.data.content || (data.data.lines || []).join('\n');
+        const output = { "content": [{ "type": "string", "text": `Message: ${data.message}\nContent:\n${content}` }] };
+        console.log('ReadFile Response:', data);
         return output;
     }
     catch (error) {
-        console.error('Error generating model:', error);
+        console.error('Error reading file:', error);
+        throw error;
+    }
+}
+async function EditFile(fileName, text, startLine, endLine) {
+    try {
+        const body = { file_name: fileName, text };
+        if (startLine !== undefined)
+            body.start_line = startLine;
+        if (endLine !== undefined)
+            body.end_line = endLine;
+        const response = await fetch(`${process.env.API_SERVER_URL}/files/edit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!response.ok)
+            throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        const output = { "content": [{ "type": "string", "text": data.message }] };
+        console.log('EditFile Response:', data);
+        return output;
+    }
+    catch (error) {
+        console.error('Error editing file:', error);
+        throw error;
+    }
+}
+async function CreateFile(fileName, text) {
+    try {
+        const body = { file_name: fileName };
+        if (text !== undefined)
+            body.text = text;
+        const response = await fetch(`${process.env.API_SERVER_URL}/files/create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!response.ok)
+            throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        const output = { "content": [{ "type": "string", "text": data.message }] };
+        console.log('CreateFile Response:', data);
+        return output;
+    }
+    catch (error) {
+        console.error('Error creating file:', error);
+        throw error;
+    }
+}
+async function DeleteFile(fileName) {
+    try {
+        const response = await fetch(`${process.env.API_SERVER_URL}/files/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_name: fileName }),
+        });
+        if (!response.ok)
+            throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        const output = { "content": [{ "type": "string", "text": data.message }] };
+        console.log('DeleteFile Response:', data);
+        return output;
+    }
+    catch (error) {
+        console.error('Error deleting file:', error);
+        throw error;
+    }
+}
+async function DownloadFile(fileName, destinationPath) {
+    try {
+        const response = await fetch(`${process.env.API_SERVER_URL}/files/download`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_name: fileName }),
+        });
+        if (!response.ok)
+            throw new Error(`HTTP error! status: ${response.status}`);
+        const fileStream = fs.createWriteStream(destinationPath);
+        await new Promise((resolve, reject) => {
+            response.body.pipe(fileStream);
+            response.body.on('error', reject);
+            fileStream.on('finish', () => resolve());
+        });
+        const successMessage = `File '${fileName}' downloaded successfully to '${destinationPath}'.`;
+        const output = { "content": [{ "type": "string", "text": successMessage }] };
+        console.log(successMessage);
+        return output;
+    }
+    catch (error) {
+        console.error('Error downloading file:', error);
+        throw error;
+    }
+}
+// --- END NEW FILE API FUNCTIONS ---
+async function AttemptCompletion(result, command) {
+    const output = { "content": [{ "type": "string", "text": result }] };
+    console.log('AttemptCompletion Response:', result);
+    return output;
+}
+async function AskFollowupQuestion(question, follow_up) {
+    // Assuming follow_up is an object/array that can be stringified
+    const followUpText = typeof follow_up === 'object' ? JSON.stringify(follow_up, null, 2) : follow_up;
+    const output = { "content": [
+            { "type": "string", "text": `Question: ${question}` },
+            { "type": "string", "text": `Suggestions: ${followUpText}` }
+        ] };
+    console.log('AskFollowupQuestion Response:', question);
+    return output;
+}
+async function CreateFolder(folderName) {
+    try {
+        const response = await fetch(`${process.env.API_SERVER_URL}/files/create_folder`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder_name: folderName }),
+        });
+        if (!response.ok)
+            throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json(); // Assuming you'll define ResultCreateFolder
+        const output = { "content": [{ "type": "string", "text": data.message }] };
+        console.log('CreateFolder Response:', data);
+        return output;
+    }
+    catch (error) {
+        console.error('Error creating folder:', error);
         throw error;
     }
 }
 /**
  * Dynamically calls a tool function based on its name and parameters.
- * @param toolName The name of the tool function to call.
- * @param toolParameters An object containing the parameters for the tool function.
- * @returns The result of the called tool function.
- * @throws Error if the tool function is not found or if there's an error during execution.
  */
-export async function callToolFunction(toolName, toolParameters) {
+export async function callToolFunction(toolName, toolParameters, socketId) {
     console.log(`Attempting to call tool: ${toolName} with parameters:`, toolParameters);
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket == undefined) {
+        return console.error(`can not find socket`);
+    }
     switch (toolName) {
-        case 'GenerateModel':
-            // Ensure required parameters are present
-            if (typeof toolParameters.prompt !== 'string' || typeof toolParameters.imgUrl !== 'string') {
-                throw new Error('Missing or invalid parameters for generateModel: prompt (string), imgUrl (string) are required.');
-            }
-            return await generateModel(toolParameters.prompt, toolParameters.imgUrl);
+        // ... existing cases
+        case 'IMG_Generate':
+            return await IMG_Generate(toolParameters.prompt.toString(), toolParameters.img_url);
         case 'GetPage':
-            if (typeof toolParameters.url !== 'string') {
-                throw new Error('Missing or invalid parameter for getPage: url (string) is required.');
-            }
             return await getPage(toolParameters.url);
         case 'ClickElement':
-            // All parameters are optional strings, but we should handle their presence
-            return await clickElement(toolParameters.id || '', toolParameters.className || '', toolParameters.tagName || '');
+            return await clickElement(toolParameters.Id || '', toolParameters.Class || '', toolParameters.TagName || '');
         case 'GetSourcePage':
             return await getSourcePage();
         case 'GetTextPage':
             return await getTextPage();
         case 'GetData':
-            if (typeof toolParameters.prompt !== 'string' || typeof toolParameters.k !== 'number') {
-                throw new Error('Missing or invalid parameters for getData: prompt (string), k (number) are required.');
-            }
             return await getData(toolParameters.prompt, toolParameters.k);
         case 'SearchByID':
-            // All parameters are optional strings
-            return await searchById(toolParameters.id || '', toolParameters.className || '', toolParameters.tagName || '', toolParameters.text || '');
+            return await searchById(toolParameters.Id || '', toolParameters.Class || '', toolParameters.TagName || '', toolParameters.text || '');
         case 'SearchByDuckDuckGo':
-            console.log(typeof toolParameters.query);
-            console.log(typeof toolParameters.max_results);
-            if (typeof toolParameters.query !== 'string' || typeof toolParameters.max_results !== 'number') {
-                throw new Error('Missing or invalid parameters for searchByDuckDuckGo: query (string), maxResults (number) are required.');
-            }
             return await searchByDuckDuckGo(toolParameters.query, toolParameters.max_results);
         case 'ProcessFiles':
-            if (typeof toolParameters.text !== 'string' || !Array.isArray(toolParameters.filePaths) || typeof toolParameters.userId !== 'string' || typeof toolParameters.chatHistoryId !== 'string') {
-                throw new Error('Missing or invalid parameters for processFiles: text (string), filePaths (string[]), userId (string), chatHistoryId (string) are required.');
-            }
             return await processFiles(toolParameters.text, toolParameters.filePaths, toolParameters.userId, toolParameters.chatHistoryId);
         case 'SearchSimilar':
-            if (typeof toolParameters.query !== 'string' || typeof toolParameters.userId !== 'string' || typeof toolParameters.chatHistoryId !== 'string') {
-                throw new Error('Missing or invalid parameters for searchSimilar: query (string), userId (string), chatHistoryId (string) are required.');
-            }
-            // topK is optional, provide a default if not present
             const topK = typeof toolParameters.topK === 'number' ? toolParameters.topK : 5;
             return await searchSimilar(toolParameters.query, toolParameters.userId, toolParameters.chatHistoryId, topK);
+        // --- NEW FILE TOOL CASES ---
+        case 'ListFiles':
+            //socket?.emit('StreamText', out_res);
+            {
+                const response = await emitWithAck(socket, toolName, toolParameters);
+                console.log("Response from server:", response);
+                return response;
+            }
+        // return await ListFiles();
+        case 'ReadFile': {
+            if (typeof toolParameters.file_name !== 'string')
+                throw new Error('ReadFile requires a file_name.');
+            const response = await emitWithAck(socket, toolName, toolParameters);
+            console.log("Response from server:", response);
+            return response;
+        }
+        // return await ReadFile(toolParameters.file_name, toolParameters.start_line, toolParameters.end_line);
+        case 'EditFile': {
+            if (typeof toolParameters.file_name !== 'string' || typeof toolParameters.text !== 'string')
+                throw new Error('EditFile requires file_name and text.');
+            const response = await emitWithAck(socket, toolName, toolParameters);
+            console.log("Response from server:", response);
+            return response;
+        }
+        // return await EditFile(toolParameters.file_name, toolParameters.text, toolParameters.start_line, toolParameters.end_line);
+        case 'CreateFile':
+            if (typeof toolParameters.file_name !== 'string')
+                throw new Error('CreateFile requires a file_name.');
+            let fileContent = '';
+            if (toolParameters.text !== undefined) {
+                // Check if text is already a string
+                if (typeof toolParameters.text === 'string') {
+                    fileContent = toolParameters.text;
+                }
+                else if (typeof toolParameters.text === 'object' && toolParameters.text !== null) {
+                    // If it's an object, stringify it.
+                    // You might need more specific logic here if the object format is complex.
+                    // For example, if it's { html: "<div>..." }, you'd use toolParameters.text.html
+                    // For a generic object, JSON.stringify is a fallback.
+                    fileContent = JSON.stringify(toolParameters.text, null, 2); // Pretty print for readability
+                    // If the object structure is specifically { html: "your_html_string_here" }
+                    // then use:
+                    // if (typeof toolParameters.text.html === 'string') {
+                    //     fileContent = toolParameters.text.html;
+                    // } else {
+                    //     fileContent = JSON.stringify(toolParameters.text, null, 2);
+                    // }
+                }
+                // If it's some other type, you might want to throw an error or handle it differently.
+                let New_toolParameters = { file_name: toolParameters.file_name, text: fileContent };
+                const response = await emitWithAck(socket, toolName, New_toolParameters);
+                console.log("Response from server:", response);
+                return response;
+            }
+        // return await CreateFile(toolParameters.file_name, fileContent);
+        case 'DeleteFile': {
+            if (typeof toolParameters.file_name !== 'string')
+                throw new Error('DeleteFile requires a file_name.');
+            const response = await emitWithAck(socket, toolName, toolParameters);
+            console.log("Response from server:", response);
+            return response;
+        }
+        // return await DeleteFile(toolParameters.file_name);
+        case 'DownloadFile': {
+            if (typeof toolParameters.file_name !== 'string' || typeof toolParameters.destination_path !== 'string')
+                throw new Error('DownloadFile requires file_name and a destination_path.');
+            const response = await emitWithAck(socket, toolName, toolParameters);
+            console.log("Response from server:", response);
+            return response;
+        }
+        // return await DownloadFile(toolParameters.file_name, toolParameters.destination_path);
+        case 'CreateFolder': { // Add this new case!
+            if (typeof toolParameters.folder_name !== 'string')
+                throw new Error('CreateFolder requires a folder_name.');
+            const response = await emitWithAck(socket, toolName, toolParameters);
+            console.log("Response from server:", response);
+            return response;
+        }
+        // return await CreateFolder(toolParameters.folder_name);
+        case 'ChangeDirectory': {
+            if (typeof toolParameters.new_path !== 'string')
+                throw new Error('ChangeDirectory requires a new_path.');
+            const response = await emitWithAck(socket, toolName, toolParameters);
+            console.log("Response from server:", response);
+            return response;
+        }
+        // --- END NEW FILE TOOL CASES ---
         case 'attempt_completion':
-            if (typeof toolParameters.result !== 'string' || (toolParameters.command !== undefined && typeof toolParameters.command !== 'string')) {
-                throw new Error('Missing or invalid parameters for searchSimilar: query (string), userId (string), chatHistoryId (string) are required.');
-            }
-            return await AttemptCompletion(toolParameters.result, toolParameters.command);
+            return await AttemptCompletion(toolParameters.result, toolParameters.command || '');
         case 'ask_followup_question':
-            if (typeof toolParameters.question !== 'string' || typeof toolParameters.follow_up !== 'object') {
-                throw new Error('Missing or invalid parameters for searchSimilar: query (string), userId (string), chatHistoryId (string) are required.');
-            }
             return await AskFollowupQuestion(toolParameters.question, toolParameters.follow_up);
         default:
             throw new Error(`Tool function '${toolName}' not found.`);
     }
 }
-// Example usage of callToolFunction:
-// async function main() {
-//   try {
-//     // Example 1: Calling generateModel
-//     console.log('\n--- Calling generateModel ---');
-//     const modelResponse = await callToolFunction('generateModel', {
-//       prompt: 'Describe a futuristic city.',
-//       imgUrl: 'http://example.com/city.jpg'
-//     });
-//     console.log('Result of generateModel:', modelResponse);
-//     // Example 2: Calling getPage
-//     console.log('\n--- Calling getPage ---');
-//     const pageContent = await callToolFunction('getPage', {
-//       url: 'https://www.example.com'
-//     });
-//     console.log('Result of getPage (first 200 chars):', pageContent.substring(0, 200) + '...');
-//     // Example 3: Calling searchByDuckDuckGo
-//     console.log('\n--- Calling searchByDuckDuckGo ---');
-//     const searchResults = await callToolFunction('searchByDuckDuckGo', {
-//       query: 'latest AI advancements',
-//       maxResults: 3
-//     });
-//     console.log('Result of searchByDuckDuckGo:', searchResults);
-//     // Example 4: Calling processFiles (mocking file paths)
-//     console.log('\n--- Calling processFiles ---');
-//     // For a real scenario, make sure these file paths exist or handle accordingly
-//     const processResult = await callToolFunction('processFiles', {
-//       text: 'This document contains information about the project budget.',
-//       filePaths: [], // No actual files are being uploaded in this example, but the array is expected.
-//       userId: 'userABC',
-//       chatHistoryId: 'chatXYZ'
-//     });
-//     console.log('Result of processFiles:', processResult);
-//     // Example 5: Calling searchSimilar
-//     console.log('\n--- Calling searchSimilar ---');
-//     const similarDocs = await callToolFunction('searchSimilar', {
-//       query: 'project timeline details',
-//       userId: 'userABC',
-//       chatHistoryId: 'chatXYZ',
-//       topK: 1
-//     });
-//     console.log('Result of searchSimilar:', similarDocs);
-//     // Example 6: Calling clickElement
-//     console.log('\n--- Calling clickElement ---');
-//     const clickResult = await callToolFunction('clickElement', {
-//       id: 'submitButton',
-//       className: '',
-//       tagName: 'button'
-//     });
-//     console.log('Result of clickElement:', clickResult);
-//     // Example 7: Calling getSourcePage
-//     console.log('\n--- Calling getSourcePage ---');
-//     const sourcePage = await callToolFunction('getSourcePage', {});
-//     console.log('Result of getSourcePage (first 100 chars):', sourcePage.substring(0, 100) + '...');
-//     // Example 8: Calling getTextPage
-//     console.log('\n--- Calling getTextPage ---');
-//     const textPage = await callToolFunction('getTextPage', {});
-//     console.log('Result of getTextPage (first 100 chars):', textPage.substring(0, 100) + '...');
-//     // Example 9: Calling getData
-//     console.log('\n--- Calling getData ---');
-//     const retrievedData = await callToolFunction('getData', {
-//       prompt: 'Summarize the article',
-//       k: 2
-//     });
-//     console.log('Result of getData:', retrievedData);
-//     // Example 10: Calling searchById
-//     console.log('\n--- Calling searchById ---');
-//     const searchByIdResult = await callToolFunction('searchById', {
-//       id: 'mainContent',
-//       className: '',
-//       tagName: '',
-//       text: 'important information'
-//     });
-//     console.log('Result of searchById:', searchByIdResult);
-//   } catch (error: any) {
-//     console.error('Error in main function:', error.message);
-//   }
-// }
-// // Call the main function to demonstrate
-// // main();

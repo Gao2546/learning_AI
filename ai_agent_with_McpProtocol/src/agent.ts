@@ -25,7 +25,7 @@ import { parseStringPromise } from 'xml2js';
 // import bcrypt from 'bcrypt';
 import { setChatMode, setChatModel, getChatMode, getChatModel } from './db.js'; // Import necessary DB functions
 import pool, { createUser, getUserByUsername, newChatHistory, storeChatHistory, readChatHistory, deleteChatHistory, setCurrentChatId, listChatHistory, getUserActiveStatus, setUserActiveStatus, createUserFolder, createChatFolder, deleteChatFolder } from './db.js';
-import { callToolFunction } from "./api.js"
+import { callToolFunction, GetSocketIO } from "./api.js"
 
 // const controller = new AbortController();
 // const timeoutMs = 100000; // 5 seconds timeout
@@ -157,7 +157,7 @@ interface SearchSimilarResponse {
   results: SimilarDocument[];
 }
 const xmlToJson = async (xml: string): Promise<Record<string , any>> => {
-  const parser = new XMLParser();
+  const parser = new XMLParser({stopNodes: ["*.text"],});
   const jsonObj = parser.parse(xml);
 
   const toolName = Object.keys(jsonObj)[0];  // สมมุติว่า root element มีแค่หนึ่ง
@@ -230,7 +230,7 @@ const xmlToJson = async (xml: string): Promise<Record<string , any>> => {
 
 let io: SocketIOServer;
 const router = express.Router();
-export default function agentRouters(ios: SocketIOServer) {
+export default async function agentRouters(ios: SocketIOServer) {
   io = ios
   // const router = Router();
 
@@ -350,7 +350,7 @@ const __dirname = path.dirname(__filename);
 // API endpoint to handle messages from the UI
 router.post('/message', async (req : Request, res : Response) => {
   try {
-    const { message: userMessage, model: selectedModel, mode: selectedMode, role: selectedRole, socket: socketId } = req.body; // Get mode and model from body
+    const { message: userMessage, model: selectedModel, mode: selectedMode, role: selectedRole, socket: socketId ,work_dir: work_dir} = req.body; // Get mode and model from body
     const socket = io.sockets.sockets.get(socketId);
     // if (!userMessage) {
     //   return res.status(400).json({ error: 'Message is required' });
@@ -394,7 +394,7 @@ router.post('/message', async (req : Request, res : Response) => {
 
     let serch_doc = ""
 
-    if (currentChatMode != 'code'){
+    if (currentChatMode){
       const API_SERVER_URL = process.env.API_SERVER_URL || 'http://localhost:5000';
       const response_similar_TopK = await fetch(`${API_SERVER_URL}/search_similar`, {
         method: 'POST',
@@ -455,7 +455,7 @@ router.post('/message', async (req : Request, res : Response) => {
 
     // Prepare prompt
     let question : string = "";
-    if ((currentChatMode != 'code') && (serch_doc != '')){
+    if ((currentChatMode) && (serch_doc != '')){
       question = "document" + ": " + serch_doc + "\n\n" + chatContent.replace(/\n<DATA_SECTION>\n/g, "\n");
     }
     else{
@@ -472,7 +472,7 @@ router.post('/message', async (req : Request, res : Response) => {
 
     try{
       if (modeToUse === 'code') {
-        question = setting_prompt + "\n\n" + question;
+        question = setting_prompt + "\n\n" + question; //+ "\n\n" + "If you complete the task you must use **attempt_completion** Tool";
       }
     }
     catch(err) {
@@ -498,14 +498,14 @@ router.post('/message', async (req : Request, res : Response) => {
         // res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         // res.setHeader('Transfer-Encoding', 'chunked');
 
-        // console.log(`Streaming response for prompt: "${question}"`);
+        console.log(`Streaming response for prompt: "${question}"`);
 
         // Call the Gemini API and get the stream
         const result = await ai.models.generateContentStream({
             model: modelToUse, // Use the determined model
             contents: question,
             config: {
-                      maxOutputTokens: 1000,
+                      maxOutputTokens: 1_000_000,
                     }
             });
 
@@ -747,10 +747,12 @@ router.post('/message', async (req : Request, res : Response) => {
                                                   // Fix double backslashes
       // console.log(prepraseXML);
       // const xmloutput = await parseXML(prepraseXML);
+      if (modeToUse == 'code'){
       const xmloutput = await xmlToJson(rrs)
       console.log("/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*");
       console.log(xmloutput);
       tool_u = xmloutput;
+      }
 
       // const stringoutput = "\n<thinking>\n" + xmloutput.thinking + "\n</thinking>\n" + "\n<use_mcp_tool>\n" + "<server_name>\n" + xmloutput.serverName + "\n</server_name>\n" + "<tool_name>\n" + xmloutput.toolName + "\n</tool_name>\n" + "<arguments>\n" + JSON.stringify(xmloutput.arguments) + "\n</arguments>\n" + "</use_mcp_tool>\n";
       }
@@ -827,7 +829,7 @@ router.post('/message', async (req : Request, res : Response) => {
 
 
 
-    let resultText = "";
+    let resultText = null;
     // if (tool_u?.results) {
     //   // console.log("Tool Name is attempt_completion.\n=============================================");
     //   // return res.json({ response: `attempt_completion : ${tool_u.results}`, attempt_completion : true, followup_question : false }); // Return "attempt_completion";
@@ -838,7 +840,7 @@ router.post('/message', async (req : Request, res : Response) => {
     //   responsetext += `\n\n**ask_followup_question :**  ${tool_u.followupQuestion} \n\n ${tool_u.followupSuggestions.map((item:string) => `* **suggest** ${tool_u.followupSuggestions.indexOf(item) + 1}: ${item}`).join('\n')} \n\nselect suggestion and send it back to me.`
     // }
     // else if (tool_u?.serverName?.trim() === "mcp_BrowserBase") {
-    const list_toolname = ['GenerateModel', 'GetPage', 'ClickElement', 'GetSourcePage', 'GetTextPage', 'GetData', 'SearchByID', 'SearchByDuckDuckGo', 'ProcessFiles', 'SearchSimilar', 'attempt_completion', 'ask_followup_question']
+    const list_toolname = ['IMG_Generate', 'GetPage', 'ClickElement', 'GetSourcePage', 'GetTextPage', 'GetData', 'SearchByID', 'SearchByDuckDuckGo', 'ProcessFiles', 'SearchSimilar', 'attempt_completion', 'ask_followup_question', 'ListFiles', 'ReadFile', 'EditFile', 'CreateFile', 'DeleteFile', 'DownloadFile', 'CreateFolder', 'ChangeDirectory']
     if (tool_u?.toolName != null && list_toolname.includes(tool_u.toolName)){
       try {
         // if (!client.transport) { // Check if transport is not set (i.e., not connected)
@@ -854,9 +856,11 @@ router.post('/message', async (req : Request, res : Response) => {
         // }) as resultsT;
         // clearTimeout(timeoutId); // Clear timeout on success
 
-        const response = await callToolFunction(tool_u.toolName,tool_u.arguments) as resultsT;
+        const response = await callToolFunction(tool_u.toolName,tool_u.arguments, socketId) as resultsT;
         if (tool_u.toolName == "attempt_completion"){
+          if (tool_u.arguments.results){
           responsetext += `\n\nattempt_completion : ${tool_u.arguments.results}`
+        }
         }
         else if (tool_u.toolName == "ask_followup_question"){
           responsetext += `\n\n**ask_followup_question :**  ${tool_u.arguments.question} \n\n ${tool_u.arguments.follow_up.suggest.map((item:string) => `* **suggest** ${tool_u.arguments.follow_up.suggest.indexOf(item) + 1}: ${item}`).join('\n')} \n\nselect suggestion and send it back to me.`
@@ -870,13 +874,15 @@ router.post('/message', async (req : Request, res : Response) => {
 
         if (response.content.length > 1){
           // img_url = path.join("../../",response.content[1].text);
+          if (response.content[1].type == "resource_link"){
           img_url = response.content[1].text.replace("ai_agent_with_McpProtocol/user_files","");
+        }
           // img_url = path.resolve(__dirname, img_url);
         }
     
         console.log(img_url);
         // resultText = response.content[0].text;
-        resultText = `[Result:\n${response.content[0].text}\n current step using ${tool_u.toolName} \n user: is complete move to next step if task complete use tool <attempt_completion>`
+        resultText = `Result:\n${response.content[0].text}\n current step using ${tool_u.toolName} \n user: is complete move to next step if task complete use tool <attempt_completion>`//--------------------------------------------------------------------------
         // res.json({ response: `[use_mcp_tool for '${tool_u.serverName}'] Result:\n${result.content[0].text}\n current step using ${tool_u.toolName} is complete move to next step if task complete use tool <attempt_completion>` }); // Return the result of the tool call
       } catch (toolError) {
           // clearTimeout(timeoutId); // Clear timeout on success
@@ -898,7 +904,7 @@ router.post('/message', async (req : Request, res : Response) => {
       // }
     }
     else {
-      console.log("Server Name is not mcp_BrowserBase.");
+      console.log("No that Tool");
       // return res.status(500).json({ error: "Server Name is not mcp_BrowserBase." }); // Return "Server Name is not mcp_BrowserBase."; // Return the error for further handling
       // Handle the error appropriately, maybe return or throw
     }
@@ -910,11 +916,11 @@ router.post('/message', async (req : Request, res : Response) => {
 
     // Append AI response
     if (resultText) {
-      chatContent += "\n<DATA_SECTION>\n" + "assistance: " + responsetext + "\n" + "mcp_tool_response: \n" + resultText + "\n";
+      chatContent += "\n<DATA_SECTION>\n" + "assistance: " + responsetext + "\n" + "tool_response: \n" + resultText + "\n";
       all_response = responsetext + "\n\n" + resultText;
     }
     else{
-      console.log("no data from mcp_tool_response");
+      console.log("no data from tool_response");
       chatContent += "\n<DATA_SECTION>\n" + "assistance: " + responsetext + "\n";
       all_response = responsetext;
     }
@@ -940,6 +946,7 @@ router.post('/message', async (req : Request, res : Response) => {
       return res.json({ response: all_response, attempt_completion : true, followup_question : false, img_url : img_url }); // Return "attempt_completion";
     }
     if (tool_u?.toolName == "ask_followup_question") {
+      all_response = responsetext;
       return res.json({ response: all_response,attempt_completion : false ,followup_question : true, img_url : img_url }); // Return "attempt_completion";
     }
     res.json({ response: all_response, attempt_completion : false, followup_question : false, img_url : img_url });
@@ -1225,4 +1232,28 @@ router.post('/set-mode', async (req, res) => {
     console.error('Error setting chat mode:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
+});
+
+// POST /api/detect-platform
+router.post('/detect-platform', (req, res) => {
+  const ua = req.headers['user-agent'] || '';
+  let file = 'entrypoint.sh';
+
+  if (/windows/i.test(ua)) {
+    file = 'entrypoint.bat';
+  }
+
+  res.json({ script: file });
+});
+
+// GET /api/download-script/:filename
+router.get('/download-script/:filename', (req, res) => {
+  const file = req.params.filename;
+  const filePath = path.join(__dirname, '..', 'scripts', file);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send('Script not found');
+  }
+
+  res.download(filePath, file);
 });

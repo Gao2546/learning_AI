@@ -43,6 +43,7 @@ services:
       - PGPASSWORD=123456
       - PGHOST=db
       - PGPORT=5432
+      - IS_DOCKER=true
       # Pass the OpenAI API key from the host environment or a .env file
       # Ensure OPENAI_API_KEY is set in your environment before running docker-compose up
       # - OPENAI_API_KEY=${OPENAI_API_KEY}

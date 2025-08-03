@@ -8,6 +8,7 @@ import agentRouters from './agent.js';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { fileURLToPath } from 'url';
+import { GetSocketIO } from "./api.js";
 // Import DB functions for session timeout cleanup
 import { setCurrentChatId, setUserActiveStatus, deleteUserAndHistory, getUserByUsername, deleteInactiveGuestUsersAndChats, deleteUserFolder, deleteOrphanedUserFolders, deleteAllGuestUsersAndChats } from './db.js';
 deleteAllGuestUsersAndChats();
@@ -52,16 +53,20 @@ setInterval(async () => {
         console.error('Error during periodic cleanup:', error);
     }
 }, CLEANUP_INTERVAL_MS);
-const BypassSession = ["/auth/login", "/auth/register", "/auth/logout", "/auth/styleRL.css", "/api/message", "/api/create_record", "/auth/login.js", "/auth/register.js", "/auth/admin", "/auth/login?error=invalide_username_or_password", "/auth/login?success=registered", "/auth/login?error=server_error", "/auth/register?error=server_error", "/auth/register?error=username_exists", "/auth/register?error=email_exists"];
+const BypassSession = ["/auth/login", "/auth/register", "/auth/logout", "/auth/styleRL.css", "/api/message", "/api/create_record", "/auth/login.js", "/auth/register.js", "/auth/admin", "/auth/login?error=invalide_username_or_password", "/auth/login?success=registered", "/auth/login?error=server_error", "/auth/register?error=server_error", "/auth/register?error=username_exists", "/auth/register?error=email_exists", "/api/download-script", "/api/download-script/entrypoint.sh", "/api/download-script/entrypoint.bat", "/api/detect-platform", "/.well-known/appspecific/com.chrome.devtools.json"];
+const BypassSessionNRe = ["/api/download-script", "/api/download-script/entrypoint.sh", "/api/download-script/entrypoint.bat", "/.well-known/appspecific/com.chrome.devtools.json"];
 // Session timeout cleanup middleware
 app.use(async (req, res, next) => {
     try {
         const user = req.session.user;
         // If no user in session, treat as expired
         if (!user) {
+            console.log(req.path);
             if (BypassSession.includes(req.path)) {
                 next();
-                return;
+                if (!BypassSessionNRe.includes(req.path)) {
+                    return;
+                }
             }
             else {
                 return res.json({ exp: true });
@@ -130,7 +135,8 @@ const io = new SocketIOServer(httpServer, {
 });
 // Use authentication routes
 app.use('/auth', authRouters);
-app.use('/api', agentRouters(io));
+app.use('/api', await agentRouters(io));
+await GetSocketIO(io);
 // Share session middleware with Socket.IO
 // io.use((socket, next) => {
 //   sessionMiddleware(socket.request as any, {} as any, next as any);

@@ -16,6 +16,7 @@ import { GoogleGenAI } from "@google/genai";
 import fetch from 'node-fetch'; // Import the node-fetch library
 import * as cheerio from 'cheerio';   // Import cheerio
 import { parseStringPromise } from 'xml2js';
+import { callToolFunction, GetSocketIO } from "./api.js"
 
 // Import DB functions for session timeout cleanup
 import { setCurrentChatId, setUserActiveStatus, deleteUserAndHistory, getUserByUsername, getUserActiveStatus, deleteInactiveGuestUsersAndChats, getUserByUserId, deleteUserFolder, deleteOrphanedUserFolders, deleteAllGuestUsersAndChats } from './db.js';
@@ -84,7 +85,8 @@ setInterval(async () => {
   }
 }, CLEANUP_INTERVAL_MS);
 
-const BypassSession = ["/auth/login", "/auth/register", "/auth/logout", "/auth/styleRL.css", "/api/message", "/api/create_record", "/auth/login.js", "/auth/register.js","/auth/admin", "/auth/login?error=invalide_username_or_password", "/auth/login?success=registered", "/auth/login?error=server_error", "/auth/register?error=server_error", "/auth/register?error=username_exists", "/auth/register?error=email_exists"];
+const BypassSession = ["/auth/login", "/auth/register", "/auth/logout", "/auth/styleRL.css", "/api/message", "/api/create_record", "/auth/login.js", "/auth/register.js","/auth/admin", "/auth/login?error=invalide_username_or_password", "/auth/login?success=registered", "/auth/login?error=server_error", "/auth/register?error=server_error", "/auth/register?error=username_exists", "/auth/register?error=email_exists", "/api/download-script", "/api/download-script/entrypoint.sh", "/api/download-script/entrypoint.bat", "/api/detect-platform", "/.well-known/appspecific/com.chrome.devtools.json"];
+const BypassSessionNRe = ["/api/download-script", "/api/download-script/entrypoint.sh", "/api/download-script/entrypoint.bat", "/.well-known/appspecific/com.chrome.devtools.json"]
 
 // Session timeout cleanup middleware
 app.use(async (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -93,9 +95,12 @@ app.use(async (req: express.Request, res: express.Response, next: express.NextFu
 
     // If no user in session, treat as expired
     if (!user) {
+      console.log(req.path);
       if (BypassSession.includes(req.path)) {
         next();
+        if (!BypassSessionNRe.includes(req.path)){
         return;
+      }
       }
       else{
         return res.json({ exp: true });
@@ -165,7 +170,6 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-
 // Create HTTP + WebSocket server
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
@@ -174,7 +178,8 @@ const io = new SocketIOServer(httpServer, {
 
 // Use authentication routes
 app.use('/auth', authRouters);
-app.use('/api', agentRouters(io));
+app.use('/api', await agentRouters(io));
+await GetSocketIO(io);
 
 // Share session middleware with Socket.IO
 // io.use((socket, next) => {

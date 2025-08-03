@@ -44,6 +44,7 @@ COPY --from=builder_app /app/node_modules ./node_modules
 COPY --from=builder_app /app/build ./build
 COPY ai_agent_with_McpProtocol/.env ./.env
 COPY ai_agent_with_McpProtocol/build/setting.txt ./build/setting.txt
+COPY ai_agent_with_McpProtocol/scripts ./scripts
 COPY --from=builder_app /app/public ./public
 
 # Setup mcp_BrowserBase build output (e.g., dist or build folder)
