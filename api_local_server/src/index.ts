@@ -4,13 +4,18 @@ import fs from 'fs';
 import path from 'path';
 import bodyParser from 'body-parser';
 import cors from 'cors';
+import dotenv from "dotenv";
+
+dotenv.config()
+
+const APP_SERVER_URL = process.env.APP_SERVER || 'http://localhost:3000'
 
 const app = express();
 app.use(express.json());
 const PORT = 3333;
 
 app.use(cors({
-  origin: `http://localhost:3000`,
+  origin: APP_SERVER_URL,
   credentials: true
 }));
 

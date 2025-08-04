@@ -948,7 +948,7 @@ function displayMarkdownMessageStream(text, messageElement) {
     messageElement.innerHTML = html;
 
     // Only auto-scroll if user is already at (or near) the bottom
-    const threshold = 30; // px, how close to bottom counts as "at the bottom"
+    const threshold = 100; // px, how close to bottom counts as "at the bottom"
     const isAtBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < threshold;
 
     if (isAtBottom) {
