@@ -23,7 +23,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 from utils.utils import *
 
-device = torch.device("cuda")
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 step_sampling = 1000
 
 class Attention(nn.Module):
@@ -488,7 +489,7 @@ class CLIPModel(nn.Module):
 
         return similarity
     def load(self, path):
-        state_dict = torch.load(path)
+        state_dict = torch.load(path, map_location=device)
         self.text_encoding.load_state_dict(state_dict["text_encoding"])
         self.image_encoding.load_state_dict(state_dict["image_encoding"])
         # self.optim.load_state_dict(state_dict["optim"])
@@ -591,7 +592,7 @@ class VQVAETrainer(nn.Module):
         torch.save(state_dict, path)
 
     def load(self, path):
-        state_dict = torch.load(path)
+        state_dict = torch.load(path, map_location=device)
         self.vqvae.load_state_dict(state_dict["vqvae"])
         self.vqvae.embedding.load_state_dict(state_dict["embedding"])
         self.optim.load_state_dict(state_dict["optim"])
@@ -742,7 +743,7 @@ class diffusion_model(nn.Module):
 
     def load(self,path,path_vqvae):
         if path:
-            state_dict = torch.load(path)
+            state_dict = torch.load(path, map_location=device)
             self.model.load_state_dict(state_dict["model"])
             # self.vqvae.load_state_dict(state_dict["vqvae"])
             self.optim.load_state_dict(state_dict["optim"])
@@ -753,7 +754,7 @@ class diffusion_model(nn.Module):
             for param_group in self.optim.param_groups:
                 param_group["lr"] = state_dict["lr_rate"]
         if path_vqvae:
-            state_dict_vqvae = torch.load(path_vqvae)
+            state_dict_vqvae = torch.load(path_vqvae, map_location=device)
             self.vqvae.load_state_dict(state_dict_vqvae["vqvae"])
             # self.vqvae.embedding.load_state_dict(state_dict_vqvae["embedding"])
             
@@ -847,7 +848,7 @@ class diffusion_model_No_VQVAE(nn.Module):
         torch.save(state_dict, path)
 
     def load(self, path):
-        state_dict = torch.load(path)
+        state_dict = torch.load(path, map_location=device)
         self.model.load_state_dict(state_dict["model"])
         self.optim.load_state_dict(state_dict["optim"])
         self.scaler.load_state_dict(state_dict["scaler"])
