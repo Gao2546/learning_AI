@@ -3,9 +3,10 @@ version: '3.8'
 services:
 
   api_server:
-    build:
-      context: .
-      dockerfile: api_server/Dockerfile
+    # build:
+    #   context: .
+    #   dockerfile: api_server/Dockerfile
+    image: ai_agent_api
     ports:
       - "5000:5000"
     environment:
@@ -18,6 +19,7 @@ services:
       # Pass the OpenAI API key from the host environment or a .env file
       # Ensure OPENAI_API_KEY is set in your environment before running docker-compose up
       # - OPENAI_API_KEY=${OPENAI_API_KEY}
+    #---------------------------------------------------------------
     # deploy:
     #   resources:
     #     reservations:
@@ -25,6 +27,7 @@ services:
     #         - driver: nvidia
     #           count: all # Or specify a specific number of GPUs
     #           capabilities: [gpu]
+    #---------------------------------------------------------------
     runtime: nvidia
     networks:
       - app-network
@@ -34,12 +37,12 @@ services:
     #   placement:
     #     constraints:
     #       - node.hostname == host_b_hostname # Replace with Host B's actual hostname
-    #     resources: # If you need GPU resource reservation
-    #       reservations:
-    #         devices:
-    #           - driver: nvidia
-    #             count: all # Or specify a specific number of GPUs
-    #             capabilities: [gpu]
+    #    resources: # If you need GPU resource reservation
+    #      reservations:
+    #        devices:
+    #          - driver: nvidia
+    #            count: all # Or specify a specific number of GPUs
+    #            capabilities: [gpu]
 
 
   ollama:
@@ -50,6 +53,7 @@ services:
       - /usr/share/ollama/.ollama:/root/.ollama
     networks:
       - app-network
+    #-------------------------------------------------------------------
     # Uncomment below if you want GPU access with NVIDIA
     # deploy:
     #   resources:
@@ -58,6 +62,7 @@ services:
     #         - driver: nvidia
     #           count: all
     #           capabilities: [gpu]
+    #-------------------------------------------------------------------
     runtime: nvidia
 
     # Deploy constraints to ensure 'ollama' runs on Host B
@@ -65,16 +70,143 @@ services:
     #   placement:
     #     constraints:
     #       - node.hostname == host_b_hostname # Replace with Host B's actual hostname
-    #     resources: # If you need GPU resource reservation
-    #       reservations:
-    #         devices:
-    #           - driver: nvidia
-    #             count: all
-    #             capabilities: [gpu]
+    #    resources: # If you need GPU resource reservation
+    #      reservations:
+    #        devices:
+    #          - driver: nvidia
+    #            count: all
+    #            capabilities: [gpu]
+
+# networks:
+#   app-network:
+#     # driver: bridge
+#     external:
+#       # name: my_shared_overlay_network # <--- Reference the external network
+#       name: my_simulation_network
 
 networks:
   app-network:
-    # driver: bridge
-    external:
-      # name: my_shared_overlay_network # <--- Reference the external network
-      name: my_simulation_network
+    external: true
+    name: my_simulation_network
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# version: '3.8'
+
+# services:
+
+#   api_server:
+#     #build:
+#     #  context: .
+#     #  dockerfile: api_server/Dockerfile
+#     image: ai_agent_api
+#     ports:
+#       - "5000:5000"
+#     environment:
+#       - PGDATABASE=ai_agent #<=========================================
+#       - PGUSER=athip
+#       - PGPASSWORD=123456
+#       - PGHOST=100.24.67.51
+#       - PGPORT=5432
+#       - IS_DOCKER=true
+#       # Pass the OpenAI API key from the host environment or a .env file
+#       # Ensure OPENAI_API_KEY is set in your environment before running docker-compose up
+#       # - OPENAI_API_KEY=${OPENAI_API_KEY}
+#     # deploy:
+#     #   resources:
+#     #     reservations:
+#     #       devices:
+#     #         - driver: nvidia
+#     #           count: all # Or specify a specific number of GPUs
+#     #           capabilities: [gpu]
+#     #runtime: nvidia
+#     networks:
+#       app-network:
+#         aliases:
+#           - api_server
+
+#     # Deploy constraints to ensure 'api_server' runs on Host B
+#     deploy:
+#       placement:
+#         constraints:
+#           - node.hostname == ip-172-31-45-90 # Replace with Host B's actual hostname
+#     #  resources: # If you need GPU resource reservation
+#     #    reservations:
+#     #      devices:
+#     #        - driver: nvidia
+#     #          count: all # Or specify a specific number of GPUs
+#     #          capabilities: [gpu]
+
+
+#   ollama:
+#     image: ollama/ollama
+#     # ports:
+#       # - "11434:11434"
+#     volumes:
+#       - /usr/share/ollama/.ollama:/root/.ollama
+#     networks:
+#       app-network:
+#         aliases:
+#           - api_server
+
+#     # Uncomment below if you want GPU access with NVIDIA
+#     # deploy:
+#     #   resources:
+#     #     reservations:
+#     #       devices:
+#     #         - driver: nvidia
+#     #           count: all
+#     #           capabilities: [gpu]
+#     #runtime: nvidia
+
+#     # Deploy constraints to ensure 'ollama' runs on Host B
+#     deploy:
+#       placement:
+#         constraints:
+#           - node.hostname == ip-172-31-45-90 # Replace with Host B's actual hostname
+#      # resources: # If you need GPU resource reservation
+#      #   reservations:
+#      #     devices:
+#      #       - driver: nvidia
+#      #         count: all
+#      #         capabilities: [gpu]
+
+# #networks:
+# #  app-network:
+#     # driver: bridge
+# #    external:
+# #       name: my_shared_overlay_network # <--- Reference the external network
+#       # name: my_simulation_network
+
+
+# networks:
+#   app-network:
+#     external: true
+#     name: my_shared_overlay_network

@@ -35,6 +35,8 @@ RUN npm install
 # Compile TypeScript
 RUN npm run build
 
+RUN echo "APP_SERVER=http://100.24.67.51:3000" > .env
+
 # Expose port
 EXPOSE 3333
 
