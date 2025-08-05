@@ -15,7 +15,7 @@ from torch.cuda import amp
 from mpl_toolkits.axes_grid1 import ImageGrid
 import tqdm
 import time
-device = torch.device("cuda")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 import torch.nn.functional as F
 step_sampling = 1000
