@@ -3,10 +3,10 @@ version: '3.8'
 services:
 
   api_server:
-    # build:
-    #   context: .
-    #   dockerfile: api_server/Dockerfile
-    image: ai_agent_api
+    build:
+      context: .
+      dockerfile: api_server/Dockerfile
+    # image: ai_agent_api
     ports:
       - "5000:5000"
     environment:
@@ -16,6 +16,7 @@ services:
       - PGHOST=db
       - PGPORT=5432
       - IS_DOCKER=true
+      - API_APP=http://app:3000
       # Pass the OpenAI API key from the host environment or a .env file
       # Ensure OPENAI_API_KEY is set in your environment before running docker-compose up
       # - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -123,10 +124,10 @@ networks:
 # services:
 
 #   api_server:
-#     #build:
-#     #  context: .
-#     #  dockerfile: api_server/Dockerfile
-#     image: ai_agent_api
+#     build:
+#       context: .
+#       dockerfile: api_server/Dockerfile
+#     $image: ai_agent_api
 #     ports:
 #       - "5000:5000"
 #     environment:
@@ -136,6 +137,7 @@ networks:
 #       - PGHOST=100.24.67.51
 #       - PGPORT=5432
 #       - IS_DOCKER=true
+#       - API_APP=http://100.24.67.51:3000
 #       # Pass the OpenAI API key from the host environment or a .env file
 #       # Ensure OPENAI_API_KEY is set in your environment before running docker-compose up
 #       # - OPENAI_API_KEY=${OPENAI_API_KEY}

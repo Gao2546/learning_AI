@@ -862,5 +862,5 @@ class diffusion_model_No_VQVAE(nn.Module):
 
     def generate(self, prompt, size, img_url):
         self.model.eval()
-        img, data_path = generate_image_no_VQVAE(self.model, self.clip, size, self.in_c, prompt, img_url)
-        return img, data_path
+        img, data_path, img_path = generate_image_no_VQVAE(self.model, self.clip, size, self.in_c, prompt, img_url)
+        return img, data_path, img_path

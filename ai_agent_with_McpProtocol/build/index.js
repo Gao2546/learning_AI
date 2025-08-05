@@ -22,7 +22,9 @@ app.use(express.urlencoded({ extended: true })); // Middleware to parse URL-enco
 const port = process.env.PORT || 3000;
 // const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 app.use(express.static(path.join(__dirname, '..', 'public')));
-app.use(express.static(path.join(__dirname, "..", 'user_files')));
+// app.use(express.static(path.join(__dirname, "..",'user_files')));
+// Serve static files
+app.use("/user_files", express.static(path.join(__dirname, "..", "user_files")));
 // สร้างโฟลเดอร์ uploads ถ้ายังไม่มี
 const uploadFolder = path.join(__dirname, '..', 'user_files');
 if (!fs.existsSync(uploadFolder)) {
@@ -53,7 +55,7 @@ setInterval(async () => {
         console.error('Error during periodic cleanup:', error);
     }
 }, CLEANUP_INTERVAL_MS);
-const BypassSession = ["/auth/login", "/auth/register", "/auth/logout", "/auth/styleRL.css", "/api/message", "/api/create_record", "/auth/login.js", "/auth/register.js", "/auth/admin", "/auth/login?error=invalide_username_or_password", "/auth/login?success=registered", "/auth/login?error=server_error", "/auth/register?error=server_error", "/auth/register?error=username_exists", "/auth/register?error=email_exists", "/api/download-script", "/api/download-script/entrypoint.sh", "/api/download-script/entrypoint.bat", "/api/detect-platform", "/.well-known/appspecific/com.chrome.devtools.json"];
+const BypassSession = ["/auth/login", "/auth/register", "/auth/logout", "/auth/styleRL.css", "/api/message", "/api/create_record", "/auth/login.js", "/auth/register.js", "/auth/admin", "/auth/login?error=invalide_username_or_password", "/auth/login?success=registered", "/auth/login?error=server_error", "/auth/register?error=server_error", "/auth/register?error=username_exists", "/auth/register?error=email_exists", "/api/download-script", "/api/download-script/entrypoint.sh", "/api/download-script/entrypoint.bat", "/api/detect-platform", "/.well-known/appspecific/com.chrome.devtools.json", "/api/set-model", "/api/save_img"];
 const BypassSessionNRe = ["/api/download-script", "/api/download-script/entrypoint.sh", "/api/download-script/entrypoint.bat", "/.well-known/appspecific/com.chrome.devtools.json"];
 // Session timeout cleanup middleware
 app.use(async (req, res, next) => {

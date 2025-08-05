@@ -29,6 +29,7 @@ import re
 import dotenv
 from googlesearch import search
 from utils.util import extract_pdf_text, extract_image_text, encode_text_for_embedding, save_vector_to_db, search_similar_documents_by_chat, EditedFileSystem
+import requests
 
 # Load environment variables from .env file
 dotenv.load_dotenv()
@@ -86,6 +87,17 @@ def init_driver():
     # driver = webdriver.Firefox(options=options)
     return driver
 
+
+def send_image_to_server(image_path, save_path_on_server):
+    url = os.path.join(APP_URL,"api" ,"save_img")  # Replace with real IP
+    print(f"Sending image to server at {url}")
+    with open(image_path, "rb") as f:
+        files = {"file": f}
+        data = {"save_path": save_path_on_server}
+        response = requests.post(url, files=files, data=data)
+    response.raise_for_status()
+    return response.json()
+
 def get_page(driver, url):
     # Get the page
     try :
@@ -107,9 +119,11 @@ def generate():
     s_prompt = []
     for i in prompts:
         s_prompt.append(int(i))
-    _, data_path = model.generate(prompt=s_prompt, size=28, img_url=img_url)
+    _, data_path, img_path = model.generate(prompt=s_prompt, size=28, img_url=img_url)
+    res = send_image_to_server(data_path, img_path)
+    print(f"Image sent to server: {res}")
     # Generate the model
-    return jsonify({'result': f'The model has been generated {prompt}', 'data_path': data_path})
+    return jsonify({'result': f'The model has been generated {prompt}', 'data_path': img_path})
 
 @app.route('/GetPage' , methods=['GET','POST'])
 def get_page_route():
@@ -676,6 +690,7 @@ if __name__ == '__main__':
     # path_keys = os.popen("find ../ -name '.key'").read().split("\n")[0]
     # with open(path_keys, "r") as f:
     #     key = f.read().strip()
+    APP_URL = os.getenv("API_APP", "http://localhost:5000")
     api_key = os.getenv("OPENAI_API_KEY")
     if not os.environ.get("OPENAI_API_KEY"):
         os.environ["OPENAI_API_KEY"] = api_key

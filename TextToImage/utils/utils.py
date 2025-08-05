@@ -1,3 +1,4 @@
+import os
 import torch
 import datetime
 from torch.utils.data import DataLoader
@@ -263,6 +264,7 @@ def sample_plot_image_no_VQVAE(Denoise_model, names, size, CLIP_model,img_c,num_
 @torch.no_grad()
 def generate_image_no_VQVAE(Denoise_model, CLIP_model, image_size, image_c, prompt, img_url):
     data_path = []
+    img_path = []
     prompt = torch.tensor([int(prompts) for prompts in prompt],device=device, dtype=torch.long)
     num_prompt = prompt.size(0)
     encode_text = CLIP_model.text_encoding(prompt)
@@ -272,12 +274,15 @@ def generate_image_no_VQVAE(Denoise_model, CLIP_model, image_size, image_c, prom
         img = sample_timestep(img, t, time_step, Denoise_model, encode_text)
     img = torch.clamp(img, -1.0, 1.0)
     time_U = datetime.datetime.now().strftime('%d_%m_%Y')
+    local_dir = "./user_files/"
+    os.makedirs(local_dir, exist_ok=True)
     for p,i in zip(prompt.cpu().tolist(),img):
         # plt.imsave(f"./TextToImage/output/{p}_{datetime.datetime.now().strftime('%d_%m_%Y')}.png",show_tensor_image(i.cpu()))
 
-        plt.imsave(f"{img_url}_{time_U}_{p}.png", show_tensor_image(i.cpu()))
-        data_path.append(f"{img_url}_{time_U}_{p}.png")
-    return img, data_path[0] if len(data_path) == 1 else data_path
+        plt.imsave(f"{local_dir}_{time_U}_{p}.png", show_tensor_image(i.cpu()))
+        data_path.append(f"{local_dir}_{time_U}_{p}.png")
+        img_path.append(f"{img_url}_{time_U}_{p}.png")
+    return img, data_path[0] if len(data_path) == 1 else data_path, img_path[0] if len(img_path) == 1 else img_path
 
 def show_img_VAE(batch,recon,names):
     fig = plt.figure(1,clear=True)

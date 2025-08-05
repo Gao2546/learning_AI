@@ -790,7 +790,7 @@ router.post('/message', async (req : Request, res : Response) => {
 
       if (tool_u?.toolName == "IMG_Generate"){
         // const uniqueId = Date.now();
-        tool_u.arguments.img_url = `ai_agent_with_McpProtocol/user_files/user_${userId}/chat_${currentChatId}/`;
+        tool_u.arguments.img_url = `user_files/user_${userId}/chat_${currentChatId}/`;
         img_url = tool_u.arguments.img_url
       }
     }
@@ -1256,4 +1256,30 @@ router.get('/download-script/:filename', (req, res) => {
   }
 
   res.download(filePath, file);
+});
+
+
+router.post("/save_img", upload.single("file"), async (req: Request, res: Response) => {
+  try {
+    const file = req.file;
+    const savePath = req.body.save_path;
+
+    if (!file || !savePath) {
+      return res.status(400).json({ error: "Missing file or save_path" });
+    }
+
+    // Create target directory
+    const targetDir = path.dirname(savePath);
+    fs.mkdirSync(targetDir, { recursive: true });
+
+    // Move file from temp to desired location
+    const finalPath = savePath;
+    fs.renameSync(file.path, finalPath);
+
+    console.log("✅ Image saved:", finalPath);
+    res.status(200).json({ status: "success", path: finalPath });
+  } catch (err) {
+    console.error("❌ Error saving file:", err);
+    res.status(500).json({ error: "Failed to save file" });
+  }
 });

@@ -9,11 +9,15 @@ const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const body_parser_1 = __importDefault(require("body-parser"));
 const cors_1 = __importDefault(require("cors"));
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
+const APP_SERVER_URL = process.env.APP_SERVER || 'http://localhost:3000';
+console.log(APP_SERVER_URL);
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
 const PORT = 3333;
 app.use((0, cors_1.default)({
-    origin: `http://localhost:3000`,
+    origin: APP_SERVER_URL,
     credentials: true
 }));
 // let BASE_DIR = path.join(__dirname, 'managed_files');
