@@ -127,7 +127,7 @@ services:
     build:
       context: .
       dockerfile: api_server/Dockerfile
-    $image: ai_agent_api
+    # image: ai_agent_api
     ports:
       - "5000:5000"
     environment:
@@ -155,10 +155,10 @@ services:
           - api_server
 
     # Deploy constraints to ensure 'api_server' runs on Host B
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == ip-172-31-45-90 # Replace with Host B's actual hostname
+    # deploy:
+    #   placement:
+    #     constraints:
+    #       - node.hostname == ip-172-31-45-90 # Replace with Host B's actual hostname
     #  resources: # If you need GPU resource reservation
     #    reservations:
     #      devices:
