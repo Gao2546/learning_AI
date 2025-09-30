@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS document_embeddings (
     chat_history_id INTEGER NOT NULL,
     file_name TEXT,
     extracted_text TEXT,
-    embedding VECTOR(384),
+    embedding VECTOR(768),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_doc_user
         FOREIGN KEY (user_id)
