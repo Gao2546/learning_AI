@@ -500,7 +500,7 @@ export async function callToolFunction(toolName, toolParameters, socketId) {
         }
         // return await ReadFile(toolParameters.file_name, toolParameters.start_line, toolParameters.end_line);
         case 'EditFile': {
-            if (typeof toolParameters.file_name !== 'string' || typeof toolParameters.text !== 'string')
+            if (typeof toolParameters.file_name !== 'string')
                 throw new Error('EditFile requires file_name and text.');
             const response = await emitWithAck(socket, toolName, toolParameters);
             console.log("Response from server:", response);

@@ -1,6 +1,6 @@
 {
   "name": "api_local_server",
-  "version": "1.0.13",
+  "version": "1.0.15",
   "main": "index.js",
   "scripts": {
     "start": "node build/index.js",

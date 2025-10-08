@@ -260,6 +260,7 @@ app.post('/files/read', (req: Request, res: Response) => {
 });
 
 
+
 // Edit file
 app.post('/files/edit', (req: Request, res: Response) => {
   const { file_name, text, start_line, end_line } = req.body;
@@ -273,12 +274,21 @@ app.post('/files/edit', (req: Request, res: Response) => {
   if (start_line != null && end_line != null) {
     lines.splice(start_line - 1, end_line - start_line + 1, text);
     fs.writeFileSync(fullPath, lines.join('\n'));
-    return _apiResponse(res, null, `Edited lines ${start_line}-${end_line}`);
   } else {
     fs.writeFileSync(fullPath, text);
-    return _apiResponse(res, null, `Overwritten file '${file_name}'`);
   }
+
+  // Read the updated file and format with line numbers
+  const updatedLines = fs.readFileSync(fullPath, 'utf-8').split('\n');
+  const numberedLines = updatedLines.map((line, idx) => `line ${idx + 1}: ${line}`);
+
+  const message = start_line != null && end_line != null
+    ? `Edited lines ${start_line}-${end_line}`
+    : `Overwritten file '${file_name}'`;
+
+  return _apiResponse(res, { content: numberedLines.join('\n') }, message);
 });
+
 
 // Create file
 app.post('/files/create', (req: Request, res: Response) => {
@@ -290,11 +300,19 @@ app.post('/files/create', (req: Request, res: Response) => {
   if (text != null) {
     fs.writeFileSync(fullPath, text);
     console.log(fullPath);
-    return _apiResponse(res, null, `Created file '${file_name}' with text`, 201);
+    // Read the updated file and format with line numbers
+    const updatedLines = fs.readFileSync(fullPath, 'utf-8').split('\n');
+    const numberedLines = updatedLines.map((line, idx) => `line ${idx + 1}: ${line}`);
+
+    return _apiResponse(res, { content: numberedLines.join('\n') }, `Created file '${file_name}' with text`, 201);
   } else {
     if (fs.existsSync(fullPath)) return _apiResponse(res, null, 'File already exists', 409);
     fs.writeFileSync(fullPath, '');
-    return _apiResponse(res, null, `Created empty file '${file_name}'`, 201);
+    // Read the updated file and format with line numbers
+    const updatedLines = fs.readFileSync(fullPath, 'utf-8').split('\n');
+    const numberedLines = updatedLines.map((line, idx) => `line ${idx + 1}: ${line}`);
+
+    return _apiResponse(res, { content: numberedLines.join('\n') }, `Created empty file '${file_name}'`, 201);
   }
 });
 

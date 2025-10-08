@@ -60,7 +60,7 @@ const _apiResponse = (res, data, message = '', status = 200) => {
     else {
         content = [{ type: 'string', text: message }];
     }
-    return res.status(status).json({ content });
+    res.status(status).json({ content });
 };
 const _getFullPath = (fileName) => {
     const targetPath = path_1.default.isAbsolute(fileName)
@@ -241,12 +241,17 @@ app.post('/files/edit', (req, res) => {
     if (start_line != null && end_line != null) {
         lines.splice(start_line - 1, end_line - start_line + 1, text);
         fs_1.default.writeFileSync(fullPath, lines.join('\n'));
-        return _apiResponse(res, null, `Edited lines ${start_line}-${end_line}`);
     }
     else {
         fs_1.default.writeFileSync(fullPath, text);
-        return _apiResponse(res, null, `Overwritten file '${file_name}'`);
     }
+    // Read the updated file and format with line numbers
+    const updatedLines = fs_1.default.readFileSync(fullPath, 'utf-8').split('\n');
+    const numberedLines = updatedLines.map((line, idx) => `line ${idx + 1}: ${line}`);
+    const message = start_line != null && end_line != null
+        ? `Edited lines ${start_line}-${end_line}`
+        : `Overwritten file '${file_name}'`;
+    return _apiResponse(res, { content: numberedLines.join('\n') }, message);
 });
 // Create file
 app.post('/files/create', (req, res) => {
@@ -258,13 +263,19 @@ app.post('/files/create', (req, res) => {
     if (text != null) {
         fs_1.default.writeFileSync(fullPath, text);
         console.log(fullPath);
-        return _apiResponse(res, null, `Created file '${file_name}' with text`, 201);
+        // Read the updated file and format with line numbers
+        const updatedLines = fs_1.default.readFileSync(fullPath, 'utf-8').split('\n');
+        const numberedLines = updatedLines.map((line, idx) => `line ${idx + 1}: ${line}`);
+        return _apiResponse(res, { content: numberedLines.join('\n') }, `Created file '${file_name}' with text`, 201);
     }
     else {
         if (fs_1.default.existsSync(fullPath))
             return _apiResponse(res, null, 'File already exists', 409);
         fs_1.default.writeFileSync(fullPath, '');
-        return _apiResponse(res, null, `Created empty file '${file_name}'`, 201);
+        // Read the updated file and format with line numbers
+        const updatedLines = fs_1.default.readFileSync(fullPath, 'utf-8').split('\n');
+        const numberedLines = updatedLines.map((line, idx) => `line ${idx + 1}: ${line}`);
+        return _apiResponse(res, { content: numberedLines.join('\n') }, `Created empty file '${file_name}'`, 201);
     }
 });
 // Delete file
