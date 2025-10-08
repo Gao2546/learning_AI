@@ -1,28 +1,31 @@
-@echo off
-echo Checking for Docker...
-where docker >nul 2>nul
-if %errorlevel% neq 0 (
-    echo.
-    echo Docker not found. Please install Docker first:
-    echo https://www.docker.com/products/docker-desktop
-    echo.
-    pause
-    exit /b 1
-)
+# Check if npm exists
+Write-Host "=== Checking for npm... ==="
+if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+    Write-Host "npm not found. Installing Node.js..."
+    Invoke-WebRequest -Uri "https://nodejs.org/dist/latest-v18.x/node-v18.20.3-x64.msi" -OutFile "$env:TEMP\node_installer.msi"
+    Start-Process msiexec.exe -Wait -ArgumentList "/i $env:TEMP\node_installer.msi /quiet"
+} else {
+    Write-Host "npm found: $(npm -v)"
+}
 
-echo.
-echo Running Local Agent container...
-echo.
+# Create folder in user's home
+$installDir = Join-Path $HOME "api_local_server"
+if (-not (Test-Path $installDir)) {
+    New-Item -ItemType Directory -Path $installDir | Out-Null
+}
 
-docker run --rm ^
-    --name local_api_agent ^
-    --user %UID%:%GID% ^
-    -v "%USERPROFILE%":/app/files ^
-    -p 3333:3333 ^
-    gao2546/local_api_agent:latest
+# Install npm package
+Write-Host "=== Installing api_local_server in $installDir ==="
+Set-Location $installDir
+if (-not (Test-Path "package.json")) {
+    npm init -y | Out-Null
+}
+npm install api_local_server
 
-echo.
-echo Agent is running at:
-echo http://localhost:3333
+# Run the package
+Write-Host "=== Running api_local_server ==="
+#npx api_local_server
+node ./node_modules/api_local_server/build/index.js
+
 echo.
 pause

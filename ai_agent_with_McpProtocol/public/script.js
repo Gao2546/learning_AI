@@ -21,9 +21,19 @@ socket.on('CallTool', async (toolName, toolParameters, callback) => {
   console.log(`Call Tool \nTool Name: ${toolName}`);
 
   const baseURL = 'http://localhost:3333/files';
+  const baseSysURL = 'http://localhost:3333/system'
 
   try {
     switch (toolName) {
+
+      case 'GetSystemInformation': {
+        const response = await fetch(`${baseSysURL}/info`);
+        const data = await response.json();
+        console.log(data);
+        callback(data);
+        break;
+      }
+
       case 'ListFiles': {
         const response = await fetch(`${baseURL}/list`);
         const data = await response.json();
@@ -149,6 +159,35 @@ socket.on('CallTool', async (toolName, toolParameters, callback) => {
         break;
       }
 
+      case 'ExecuteCommand': {
+        console.log("command...");
+        const response = await fetch(`${baseURL}/CMD`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              command: toolParameters.command,
+              directory: toolParameters.directory, // optional
+              wait: toolParameters.wait ? toolParameters.wait : 'False'
+            }),
+            mode: "cors",
+            credentials: "include"
+          });
+          const data = await response.json();
+          console.log(data);
+          callback(data);
+          break;
+        }
+
+       case 'CurrentDirectory': {
+        const response = await fetch(`${baseURL}/CurrentDirectory`);
+        const data = await response.json();
+        console.log(data);
+        callback(data);
+        break;
+      }
+
+
+
       default:
         throw new Error(`Tool function '${toolName}' not found.`);
     }
@@ -171,6 +210,7 @@ const authContainer = document.querySelector('.auth-container');
 const chatboxHeader = document.querySelector('#chatbox h1');
 const chatbox = document.getElementById('chatbox');
 const btnsidebarcontainer = document.querySelector('.btn-sidebar-container');
+const stopButton = document.getElementById('stopButton');
 
 window.addEventListener('beforeunload', async (event) => {
     // event.preventDefault(); // Some browsers require this
@@ -709,8 +749,11 @@ async function sendMessage() {
             }
 
             console.log(`Loop iteration ${loopCount}, Mode: ${selectedMode}, sending message:`, currentMessage.substring(0, 100) + "..."); // Log message start and mode
-
+            
             window.messageElementStream = createMarkdownMessageStreamElement('agent-message')
+            const sessionResponse = await fetch('/auth/session');
+            const sessionData = await sessionResponse.json();
+            console.log(socket.id + sessionData.currChatId)
             // Send message to the backend
             const response = await fetch('/api/message', {
                 method: 'POST',
@@ -723,7 +766,8 @@ async function sendMessage() {
                     mode: selectedMode,
                     model: selectedModel,
                     role: role,
-                    socket: socket.id //****************************************************************************************************************** */
+                    socket: socket.id, //****************************************************************************************************************** */
+                    requestId: socket.id + sessionData.currChatId
                 })
             });
 
@@ -796,7 +840,11 @@ async function sendMessage() {
                 if (img_url){
                     displayImageMessage(img_url, "img-message");
                 }
-            } else if (data.error) {
+            } else if (stopCon) {
+                stopCon = false
+                break
+
+            }else if (data.error) {
                 // Display the error message received from the backend
                 const errorMessage = 'Error from agent: ' + data.error;
                 displayMarkdownMessage(errorMessage, 'agent-message error-message'); // Add an error class
@@ -858,6 +906,26 @@ function displayMessage(text, className) {
     messagesDiv.appendChild(messageElement);
     messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to bottom
 }
+
+let stopCon = false;
+
+stopButton.addEventListener('click', async () => {
+    const sessionResponse = await fetch('/auth/session');
+    const sessionData = await sessionResponse.json();
+    console.log(socket.id + sessionData.currChatId);
+    await fetch("/api/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId: socket.id + sessionData.currChatId })
+    })
+    .then(res => res.json())
+    .then((res) => {
+    console.log(res);
+    if (res.success){
+        stopCon = true;
+        }
+    });
+})
 
 async function displayChatList(chatIds) {
     const chatListDiv = document.getElementById('chatListEle');
@@ -948,7 +1016,7 @@ function displayMarkdownMessageStream(text, messageElement) {
     messageElement.innerHTML = html;
 
     // Only auto-scroll if user is already at (or near) the bottom
-    const threshold = 100; // px, how close to bottom counts as "at the bottom"
+    const threshold = 300; // px, how close to bottom counts as "at the bottom"
     const isAtBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < threshold;
 
     if (isAtBottom) {
@@ -1118,48 +1186,69 @@ function populateModes(returnDefault = false) {
 function populateModels(returnDefault = false) {
     const models = [
         { id: '01:18m', name: '01:18m' },
-        { id: 'deepcoder:1.5b', name: 'deepcoder:1.5b' },
-        { id: 'deepcoder:14b', name: 'deepcoder:14b' },
-        { id: 'deepseek-coder:1.3b', name: 'deepseek-coder:1.3b' },
-        { id: 'deepseek-coder:6.7b', name: 'deepseek-coder:6.7b' },
-        { id: 'deepseek-r1:1.5b', name: 'deepseek-r1:1.5b' },
-        { id: 'deepseek-r1:8b', name: 'deepseek-r1:8b'},
-        { id: 'deepseek-r1:14b', name: 'deepseek-r1:14b' },
-        { id: 'deepseek-r1:32b', name: 'deepseek-r1:32b' },
-        { id: 'deepseek-r1:latest', name: 'deepseek-r1:latest' },
-        { id: 'gemma3:1b', name: 'gemma3:1b' },
-        { id: 'gemma3:4b', name: 'gemma3:4b' },
-        { id: 'gemma3:12b', name: 'gemma3:12b' },
-        { id: 'gemma3:27b', name: 'gemma3:27b' },
-        { id: 'gemma3n:e4b', name: 'gemma3n:e4b'},
-        { id: 'gemini-1.5-flash-002', name: 'gemini-1.5-flash-002' },
-        { id: 'gemini-1.5-flash-8b-exp-0827', name: 'gemini-1.5-flash-8b-exp-0827' },
-        { id: 'gemini-1.5-flash-exp-0827', name: 'gemini-1.5-flash-exp-0827' },
-        { id: 'gemini-1.5-pro-002', name: 'gemini-1.5-pro-002' },
-        { id: 'gemini-1.5-pro-exp-0827', name: 'gemini-1.5-pro-exp-0827' },
-        { id: 'gemini-2.0-flash-001', name: 'gemini-2.0-flash-001' },
-        { id: 'gemini-2.0-flash-exp', name: 'gemini-2.0-flash-exp' },
-        { id: 'gemini-2.0-flash-lite-preview-02-05', name: 'gemini-2.0-flash-lite-preview-02-05' },
-        { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'gemini-2.0-flash-thinking-exp-01-21' },
-        { id: 'gemini-2.0-flash-thinking-exp-1219', name: 'gemini-2.0-flash-thinking-exp-1219' },
-        { id: 'gemini-2.0-pro-exp-02-05', name: 'gemini-2.0-pro-exp-02-05' },
-        { id: 'gemini-2.5-pro', name: 'gemini-2.5-pro' },
-        { id: 'gemini-exp-1206', name: 'gemini-exp-1206' },
-        { id: 'gemini-2.5-flash-lite-preview-06-17', name: 'gemini-2.5-flash-lite'},
-        { id: 'gemini-2.5-flash', name: 'gemini-2.5-flash'},
-        { id: 'hhao/qwen2.5-coder-tools:7b', name: 'hhao/qwen2.5-coder-tools:7b' },
-        { id: 'hhao/qwen2.5-coder-tools:14b', name: 'hhao/qwen2.5-coder-tools:14b' },
-        { id: 'llama3.2:latest', name: 'llama3.2:latest' },
-        { id: 'phi4:14b', name: 'phi4:14b' },
-        { id: 'qwq:latest', name: 'qwq:latest' },
-        { id: 'qwen2.5-coder:0.5b', name: 'qwen2.5-coder:0.5b' },
-        { id: 'qwen2.5-coder:1.5b', name: 'qwen2.5-coder:1.5b' },
-        { id: 'qwen2.5-coder:3b', name: 'qwen2.5-coder:3b' },
-        { id: 'qwen2.5-coder:7b', name: 'qwen2.5-coder:7b' },
-        { id: 'qwen2.5-coder:14b', name: 'qwen2.5-coder:14b' },
-        { id: 'qwen2.5-coder:32b', name: 'qwen2.5-coder:32b' },
-        { id: 'qwen3:4b', name: 'qwen3:4b'},
-        { id: 'wizardlm2:7b', name: 'wizardlm2:7b' },
+        // { id: '{_Ollama_API_}deepcoder:1.5b', name: 'deepcoder:1.5b' },
+        // { id: '{_Ollama_API_}deepcoder:14b', name: 'deepcoder:14b' },
+        // { id: '{_Ollama_API_}deepseek-coder:1.3b', name: 'deepseek-coder:1.3b' },
+        // { id: '{_Ollama_API_}deepseek-coder:6.7b', name: 'deepseek-coder:6.7b' },
+        { id: '{_Ollama_API_}deepseek-r1:1.5b', name: 'deepseek-r1:1.5b' },
+        { id: '{_Ollama_API_}deepseek-r1:8b', name: 'deepseek-r1:8b'},
+        // { id: '{_Ollama_API_}deepseek-r1:14b', name: 'deepseek-r1:14b' },
+        // { id: '{_Ollama_API_}deepseek-r1:32b', name: 'deepseek-r1:32b' },
+        // { id: '{_Ollama_API_}deepseek-r1:latest', name: 'deepseek-r1:latest' },
+        { id: '{_Ollama_API_}gemma3:270m', name: 'gemma3:270m' },
+        { id: '{_Ollama_API_}gemma3:1b', name: 'gemma3:1b' },
+        { id: '{_Ollama_API_}gemma3:4b', name: 'gemma3:4b' },
+        // { id: '{_Ollama_API_}gemma3:12b', name: 'gemma3:12b' },
+        // { id: '{_Ollama_API_}gemma3:27b', name: 'gemma3:27b' },
+        { id: '{_Google_API_}gemma-3-1b-it', name: 'gemma-3-1b-it'},
+        { id: '{_Google_API_}gemma-3-4b-it', name: 'gemma-3-4b-it'},
+        { id: '{_Google_API_}gemma-3-12b-it', name: 'gemma-3-12b-it'},
+        { id: '{_Google_API_}gemma-3-27b-it', name: 'gemma-3-27b-it'},
+        { id: '{_Ollama_API_}gemma3n:e4b', name: 'gemma3n:e4b'},
+        // { id: 'gemini-1.5-flash-002', name: 'gemini-1.5-flash-002' },
+        // { id: 'gemini-1.5-flash-8b-exp-0827', name: 'gemini-1.5-flash-8b-exp-0827' },
+        // { id: 'gemini-1.5-flash-exp-0827', name: 'gemini-1.5-flash-exp-0827' },
+        // { id: 'gemini-1.5-pro-002', name: 'gemini-1.5-pro-002' },
+        // { id: 'gemini-1.5-pro-exp-0827', name: 'gemini-1.5-pro-exp-0827' },
+        // { id: 'gemini-2.0-flash-001', name: 'gemini-2.0-flash-001' },
+        // { id: 'gemini-2.0-flash-exp', name: 'gemini-2.0-flash-exp' },
+        // { id: 'gemini-2.0-flash-lite-preview-02-05', name: 'gemini-2.0-flash-lite-preview-02-05' },
+        // { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'gemini-2.0-flash-thinking-exp-01-21' },
+        // { id: 'gemini-2.0-flash-thinking-exp-1219', name: 'gemini-2.0-flash-thinking-exp-1219' },
+        // { id: 'gemini-2.0-pro-exp-02-05', name: 'gemini-2.0-pro-exp-02-05' },
+        { id: '{_Google_API_}gemini-2.5-pro', name: 'gemini-2.5-pro' },
+        // { id: 'gemini-exp-1206', name: 'gemini-exp-1206' },
+        { id: '{_Google_API_}gemini-2.5-flash-lite', name: 'gemini-2.5-flash-lite'},
+        { id: '{_Google_API_}gemini-2.5-flash', name: 'gemini-2.5-flash'},
+        { id: '{_Google_API_}gemini-2.0-flash', name: 'gemini-2.0-flash'},
+        { id: '{_Ollama_API_}gpt-oss:20b', name: 'gpt-oss:20b'},
+        { id: '{_OpenRouter_API_}deepseek/deepseek-chat-v3-0324:free', name: 'deepseek-chat-v3-0324:free'},
+        { id: '{_OpenRouter_API_}deepseek/deepseek-r1-0528:free', name: 'deepseek-r1-0528:free'},
+        { id: '{_OpenRouter_API_}qwen/qwen3-coder:free', name: 'qwen3-coder:free'},
+        { id: '{_OpenRouter_API_}google/gemma-3-27b-it:free', name: 'gemma-3-27b-it:free'},
+        { id: '{_OpenRouter_API_}openai/gpt-oss-20b', name: 'gpt-oss-20b'},
+        { id: '{_OpenRouter_API_}openai/gpt-oss-120b', name: 'gpt-oss-120b'},
+        { id: '{_OpenRouter_API_}google/gemma-3-27b-it', name: 'gemma-3-27b-it'},
+        { id: '{_OpenRouter_API_}google/gemini-2.0-flash-001', name: 'gemini-2.0-flash-001'},
+        { id: '{_OpenRouter_API_}google/gemini-2.5-flash', name: 'gemini-2.5-flash'},
+        { id: '{_OpenRouter_API_}deepseek/deepseek-chat-v3-0324', name: 'deepseek-chat-v3-0324'},
+        { id: '{_OpenRouter_API_}qwen/qwen3-coder', name: 'qwen3-coder'},
+        { id: '{_OpenRouter_API_}z-ai/glm-4.6', name: 'glm-4.6'},
+        { id: '{_OpenRouter_API_}x-ai/grok-code-fast-1', name: 'grok-code-fast-1'},
+        { id: '{_OpenRouter_API_}x-ai/grok-4-fast', name: 'grok-4-fast'},
+        // { id: '{_Ollama_API_}hhao/qwen2.5-coder-tools:7b', name: 'hhao/qwen2.5-coder-tools:7b' },
+        // { id: '{_Ollama_API_}hhao/qwen2.5-coder-tools:14b', name: 'hhao/qwen2.5-coder-tools:14b' },
+        // { id: '{_Ollama_API_}llama3.2:latest', name: 'llama3.2:latest' },
+        // { id: '{_Ollama_API_}phi4:14b', name: 'phi4:14b' },
+        // { id: '{_Ollama_API_}qwq:latest', name: 'qwq:latest' },
+        // { id: '{_Ollama_API_}qwen2.5-coder:0.5b', name: 'qwen2.5-coder:0.5b' },
+        // { id: '{_Ollama_API_}qwen2.5-coder:1.5b', name: 'qwen2.5-coder:1.5b' },
+        // { id: '{_Ollama_API_}qwen2.5-coder:3b', name: 'qwen2.5-coder:3b' },
+        // { id: '{_Ollama_API_}qwen2.5-coder:7b', name: 'qwen2.5-coder:7b' },
+        // { id: '{_Ollama_API_}qwen2.5-coder:14b', name: 'qwen2.5-coder:14b' },
+        // { id: '{_Ollama_API_}qwen2.5-coder:32b', name: 'qwen2.5-coder:32b' },
+        // { id: '{_Ollama_API_}qwen3:4b', name: 'qwen3:4b'},
+        // { id: '{_Ollama_API_}wizardlm2:7b', name: 'wizardlm2:7b' },
     ];
     const defaultValue = models.length > 0 ? models[10].id : null;
 

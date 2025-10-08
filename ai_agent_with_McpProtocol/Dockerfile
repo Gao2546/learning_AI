@@ -10,7 +10,7 @@ COPY ai_agent_with_McpProtocol/tsconfig.json ./
 COPY ai_agent_with_McpProtocol/src ./src
 COPY ai_agent_with_McpProtocol/public ./public
 
-RUN npm update @modelcontextprotocol/sdk
+# RUN npm update @modelcontextprotocol/sdk
 RUN npm run build
 
 

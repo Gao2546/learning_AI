@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, response, Response } from 'express';
 import multer from 'multer';
 import axios from 'axios';
 import { Server as SocketIOServer, Socket } from 'socket.io';
@@ -346,140 +346,151 @@ async function searchSimilar(query: string, userId: string, chatHistoryId: strin
 function emitWithAck<T = any>(socket: Socket, toolName: string, toolParameters: {[text:string]:any}): Promise<T> {
   console.log(`CallTool from server to local : ${toolName}`);
   return new Promise((resolve, reject) => {
-    socket.timeout(10000).emit("CallTool" ,toolName, toolParameters, (err: Error, response: T) => {
-      if (err) {
-        return reject(err);
-      }
-      resolve(response);
-    });
+    if (toolName == "ExecuteCommand" && toolParameters.wait == "True"){
+      socket.timeout(1000000).emit("CallTool" ,toolName, toolParameters, (err: Error, response: T) => {
+        if (err) {
+          return reject(err);
+        }
+        resolve(response);
+      });
+    }
+    else
+    {
+      socket.timeout(10000).emit("CallTool" ,toolName, toolParameters, (err: Error, response: T) => {
+        if (err) {
+          return reject(err);
+        }
+        resolve(response);
+      });
+    };
   });
 }
 
-async function ListFiles() {
-    try {
-        const response = await fetch(`${process.env.API_SERVER_URL}/files/list`, {
-            method: 'GET',
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json() as ResultListFiles;
-        const output: resultsT = { "content": [{ "type": "string", "text": `Message: ${data.message}\nFiles: ${data.data.files.join(', ')}` }] };
-        console.log('ListFiles Response:', data);
-        return output;
-    } catch (error) {
-        console.error('Error listing files:', error);
-        throw error;
-    }
-}
+// async function ListFiles() {
+//     try {
+//         const response = await fetch(`${process.env.API_SERVER_URL}/files/list`, {
+//             method: 'GET',
+//         });
+//         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+//         const data = await response.json() as ResultListFiles;
+//         const output: resultsT = { "content": [{ "type": "string", "text": `Message: ${data.message}\nFiles: ${data.data.files.join(', ')}` }] };
+//         console.log('ListFiles Response:', data);
+//         return output;
+//     } catch (error) {
+//         console.error('Error listing files:', error);
+//         throw error;
+//     }
+// }
 
-async function ReadFile(fileName: string, startLine?: number, endLine?: number) {
-    try {
-        const body: { file_name: string; start_line?: number; end_line?: number } = { file_name: fileName };
-        if (startLine !== undefined) body.start_line = startLine;
-        if (endLine !== undefined) body.end_line = endLine;
+// async function ReadFile(fileName: string, startLine?: number, endLine?: number) {
+//     try {
+//         const body: { file_name: string; start_line?: number; end_line?: number } = { file_name: fileName };
+//         if (startLine !== undefined) body.start_line = startLine;
+//         if (endLine !== undefined) body.end_line = endLine;
 
-        const response = await fetch(`${process.env.API_SERVER_URL}/files/read`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json() as ResultReadFile;
-        const content = data.data.content || (data.data.lines || []).join('\n');
-        const output: resultsT = { "content": [{ "type": "string", "text": `Message: ${data.message}\nContent:\n${content}` }] };
-        console.log('ReadFile Response:', data);
-        return output;
-    } catch (error) {
-        console.error('Error reading file:', error);
-        throw error;
-    }
-}
+//         const response = await fetch(`${process.env.API_SERVER_URL}/files/read`, {
+//             method: 'POST',
+//             headers: { 'Content-Type': 'application/json' },
+//             body: JSON.stringify(body),
+//         });
+//         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+//         const data = await response.json() as ResultReadFile;
+//         const content = data.data.content || (data.data.lines || []).join('\n');
+//         const output: resultsT = { "content": [{ "type": "string", "text": `Message: ${data.message}\nContent:\n${content}` }] };
+//         console.log('ReadFile Response:', data);
+//         return output;
+//     } catch (error) {
+//         console.error('Error reading file:', error);
+//         throw error;
+//     }
+// }
 
-async function EditFile(fileName: string, text: string, startLine?: number, endLine?: number) {
-    try {
-        const body: { file_name: string; text: string; start_line?: number; end_line?: number } = { file_name: fileName, text };
-        if (startLine !== undefined) body.start_line = startLine;
-        if (endLine !== undefined) body.end_line = endLine;
+// async function EditFile(fileName: string, text: string, startLine?: number, endLine?: number) {
+//     try {
+//         const body: { file_name: string; text: string; start_line?: number; end_line?: number } = { file_name: fileName, text };
+//         if (startLine !== undefined) body.start_line = startLine;
+//         if (endLine !== undefined) body.end_line = endLine;
         
-        const response = await fetch(`${process.env.API_SERVER_URL}/files/edit`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json() as ResultEditFile;
-        const output: resultsT = { "content": [{ "type": "string", "text": data.message }] };
-        console.log('EditFile Response:', data);
-        return output;
-    } catch (error) {
-        console.error('Error editing file:', error);
-        throw error;
-    }
-}
+//         const response = await fetch(`${process.env.API_SERVER_URL}/files/edit`, {
+//             method: 'POST',
+//             headers: { 'Content-Type': 'application/json' },
+//             body: JSON.stringify(body),
+//         });
+//         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+//         const data = await response.json() as ResultEditFile;
+//         const output: resultsT = { "content": [{ "type": "string", "text": data.message }] };
+//         console.log('EditFile Response:', data);
+//         return output;
+//     } catch (error) {
+//         console.error('Error editing file:', error);
+//         throw error;
+//     }
+// }
 
-async function CreateFile(fileName: string, text?: string) {
-    try {
-        const body: { file_name: string; text?: string } = { file_name: fileName };
-        if (text !== undefined) body.text = text;
+// async function CreateFile(fileName: string, text?: string) {
+//     try {
+//         const body: { file_name: string; text?: string } = { file_name: fileName };
+//         if (text !== undefined) body.text = text;
 
-        const response = await fetch(`${process.env.API_SERVER_URL}/files/create`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json() as ResultCreateFile;
-        const output: resultsT = { "content": [{ "type": "string", "text": data.message }] };
-        console.log('CreateFile Response:', data);
-        return output;
-    } catch (error) {
-        console.error('Error creating file:', error);
-        throw error;
-    }
-}
+//         const response = await fetch(`${process.env.API_SERVER_URL}/files/create`, {
+//             method: 'POST',
+//             headers: { 'Content-Type': 'application/json' },
+//             body: JSON.stringify(body),
+//         });
+//         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+//         const data = await response.json() as ResultCreateFile;
+//         const output: resultsT = { "content": [{ "type": "string", "text": data.message }] };
+//         console.log('CreateFile Response:', data);
+//         return output;
+//     } catch (error) {
+//         console.error('Error creating file:', error);
+//         throw error;
+//     }
+// }
 
-async function DeleteFile(fileName: string) {
-    try {
-        const response = await fetch(`${process.env.API_SERVER_URL}/files/delete`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file_name: fileName }),
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json() as ResultDeleteFile;
-        const output: resultsT = { "content": [{ "type": "string", "text": data.message }] };
-        console.log('DeleteFile Response:', data);
-        return output;
-    } catch (error) {
-        console.error('Error deleting file:', error);
-        throw error;
-    }
-}
+// async function DeleteFile(fileName: string) {
+//     try {
+//         const response = await fetch(`${process.env.API_SERVER_URL}/files/delete`, {
+//             method: 'POST',
+//             headers: { 'Content-Type': 'application/json' },
+//             body: JSON.stringify({ file_name: fileName }),
+//         });
+//         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+//         const data = await response.json() as ResultDeleteFile;
+//         const output: resultsT = { "content": [{ "type": "string", "text": data.message }] };
+//         console.log('DeleteFile Response:', data);
+//         return output;
+//     } catch (error) {
+//         console.error('Error deleting file:', error);
+//         throw error;
+//     }
+// }
 
-async function DownloadFile(fileName: string, destinationPath: string) {
-    try {
-        const response = await fetch(`${process.env.API_SERVER_URL}/files/download`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file_name: fileName }),
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+// async function DownloadFile(fileName: string, destinationPath: string) {
+//     try {
+//         const response = await fetch(`${process.env.API_SERVER_URL}/files/download`, {
+//             method: 'POST',
+//             headers: { 'Content-Type': 'application/json' },
+//             body: JSON.stringify({ file_name: fileName }),
+//         });
+//         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
-        const fileStream = fs.createWriteStream(destinationPath);
-        await new Promise<void>((resolve, reject) => {
-            response.body!.pipe(fileStream);
-            response.body!.on('error', reject);
-            fileStream.on('finish', () => resolve());
-        });
+//         const fileStream = fs.createWriteStream(destinationPath);
+//         await new Promise<void>((resolve, reject) => {
+//             response.body!.pipe(fileStream);
+//             response.body!.on('error', reject);
+//             fileStream.on('finish', () => resolve());
+//         });
         
-        const successMessage = `File '${fileName}' downloaded successfully to '${destinationPath}'.`;
-        const output: resultsT = { "content": [{ "type": "string", "text": successMessage }] };
-        console.log(successMessage);
-        return output;
-    } catch (error) {
-        console.error('Error downloading file:', error);
-        throw error;
-    }
-}
+//         const successMessage = `File '${fileName}' downloaded successfully to '${destinationPath}'.`;
+//         const output: resultsT = { "content": [{ "type": "string", "text": successMessage }] };
+//         console.log(successMessage);
+//         return output;
+//     } catch (error) {
+//         console.error('Error downloading file:', error);
+//         throw error;
+//     }
+// }
 // --- END NEW FILE API FUNCTIONS ---
 
 
@@ -552,6 +563,14 @@ export async function callToolFunction(toolName: string, toolParameters: { [key:
     case 'SearchSimilar':
         const topK = typeof toolParameters.topK === 'number' ? toolParameters.topK : 5;
         return await searchSimilar(toolParameters.query, toolParameters.userId, toolParameters.chatHistoryId, topK);
+
+    // --- SYSTEM INFORMATION ---
+    case 'GetSystemInformation':
+      {
+        const response = await emitWithAck(socket, toolName, toolParameters);
+        console.log("\n\n\n\n------------------- System Information -------------------\n:",response,"\n-------------------------- End ---------------------------\n\n\n\n")
+        return response
+      }
 
     // --- NEW FILE TOOL CASES ---
     case 'ListFiles' :
@@ -640,10 +659,30 @@ export async function callToolFunction(toolName: string, toolParameters: { [key:
       return response
     }
 
+    case 'ExecuteCommand': {
+      if (typeof toolParameters.command !== 'string' || typeof toolParameters.wait !== 'string') throw new Error('CMD requires a command.');
+      const response = await emitWithAck(socket, toolName, toolParameters);
+      console.log("Response from server:", response);
+      return response
+    }
+
+    case 'CurrentDirectory': {
+      const response = await emitWithAck(socket, toolName, toolParameters);
+      console.log("Response from server:", response);
+      return response
+    }
+
     // --- END NEW FILE TOOL CASES ---
 
     case 'attempt_completion':
+      if (typeof toolParameters.command == 'string'){
+        const response = await emitWithAck(socket, 'ExecuteCommand', toolParameters);
+        console.log("Response from server:", response);
+        return response
+      }
+      else{
         return await AttemptCompletion(toolParameters.result, toolParameters.command || '');
+      }
 
     case 'ask_followup_question':
         return await AskFollowupQuestion(toolParameters.question, toolParameters.follow_up);

@@ -63,13 +63,19 @@
             <div class="input-container">
                 <textarea id="userInput" placeholder="Ask any question..." rows="1"></textarea>
                         
-                <input type="file" id="fileInput" accept=".pdf,image/*" multiple/>
-                        
+                <input  type="file" 
+                        id="fileInput" 
+                        accept=".pdf,.txt,.doc,.docx,.ppt,.pptx,.odt,.rtf,.md,
+                                .py,.c,.cpp,.h,.hpp,.java,.js,.ts,.cs,.go,.rs,.php,.rb,.swift,.kt,.m,.sh,.xls,.xlsx,.xlsm,.csv,.yml,.bat,.xml,.html,.css,.ts,
+                                image/*" 
+                        multiple />
+   
                 <label for="fileInput" class="file-input-label">
                     <i class="fas fa-paperclip"></i>
                 </label>
                 
                 <button id="sendButton">Send</button>
+                <button id="stopButton">Stop</button>
             </div>
             <div class="warning">warning: is Alpha version</div>
             <!-- Trigger Button -->
