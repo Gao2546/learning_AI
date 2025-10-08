@@ -28,8 +28,14 @@ import sys
 import re
 import dotenv
 from googlesearch import search
-from utils.util import extract_pdf_text, extract_image_text, encode_text_for_embedding, save_vector_to_db, search_similar_documents_by_chat, EditedFileSystem
+from utils.util import extract_excel_text, extract_pdf_text, extract_image_text, extract_docx_text, extract_pptx_text, extract_txt_file, encode_text_for_embedding, extract_xls_text, save_vector_to_db, search_similar_documents_by_chat, EditedFileSystem
 import requests
+
+from langchain_core.embeddings import Embeddings
+from transformers import AutoModel, AutoTokenizer, BitsAndBytesConfig
+import torch
+
+TEXT_FILE_EXTENSIONS = ['.txt', '.pdf', '.docx', '.pptx', '.odt', '.rtf']
 
 # Load environment variables from .env file
 dotenv.load_dotenv()
@@ -446,27 +452,39 @@ def process():
     print(f"Received files: {[file.filename for file in files]}")
 
     extracted_texts = []
+
     for file in files:
-        if file.filename.endswith('.pdf'):
-            text = extract_pdf_text(file)
-            extracted_texts.append(text)
-            data_vector = encode_text_for_embedding(text)
-            save_vector_to_db(user_id, chat_history_id, file.filename, text, data_vector)
+        filename = file.filename.lower()
+        file_text = ""
+
+        if filename.endswith('.pdf'):
+            file_text = extract_pdf_text(file)
+        elif filename.endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif')):
+            file_text = extract_image_text(file)
+        elif filename.endswith(('.docx','.doc','.odt','.rtf')):
+            file_text = extract_docx_text(file)
+        elif filename.endswith(('.pptx','.ppt')):
+            file_text = extract_pptx_text(file)
+        elif filename.endswith(('.xlsx','.xlsm')):
+            file_text = extract_excel_text(file)
+        elif filename.endswith('.xls'):
+            file_text = extract_xls_text(file)
+
         else:
-            text = extract_image_text(file)
-            extracted_texts.append(text)
-            data_vector = encode_text_for_embedding(text)
-            save_vector_to_db(user_id, chat_history_id, file.filename, text, data_vector)
+            # Everything else, attempt to read as text/code
+            file_text = extract_txt_file(file)
+
+        if not file_text.strip():
+            print(f"Skipped file (empty or unsupported): {filename}")
+            continue
+
+        extracted_texts.append(file_text)
+        data_vector = encode_text_for_embedding(file_text)
+        save_vector_to_db(user_id, chat_history_id, filename, file_text, data_vector)
 
     combined_text = text + "\n" + "\n".join(extracted_texts)
-    # data_vector = encode_text_for_embedding(combined_text)
-    # save_vector_to_db(user_id, chat_history_id, ','.join(file.filename for file in files), combined_text, data_vector)
-    
-    # embedding = model.encode(combined_text).tolist()
-    # print(f"Combined text length: {len(combined_text)} characters")
-    # print(combined_text)
-    # Simulated response
-    return jsonify({'reply': f'Processed input with {len(files)} file(s). Preview: ' + combined_text[:100]})
+
+    return jsonify({'reply': f'Processed input with {len(files)} file(s). Preview: ' + combined_text[:300]})
 
 
 @app.route('/search_similar', methods=['POST'])
@@ -684,6 +702,38 @@ def api_create_folder():
         return _api_response(None, error, 409) # 409 Conflict if folder exists, or 500 for other errors
     return _api_response(None, f"Successfully created folder '{folder_name}'.", 201)
 
+class GemmaEmbeddings(Embeddings):
+    def __init__(self, model_name: str = "google/embeddinggemma-300m", quantized: bool = True):
+        self.model_name = model_name
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+        if quantized:
+            bnb_config = BitsAndBytesConfig(load_in_8bit=True)
+            self.model = AutoModel.from_pretrained(
+                model_name,
+                device_map="auto",
+                quantization_config=bnb_config,
+            )
+        else:
+            self.model = AutoModel.from_pretrained(model_name).to("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.device = next(self.model.parameters()).device
+
+    def _embed(self, texts):
+        inputs = self.tokenizer(
+            texts, padding=True, truncation=True, return_tensors="pt"
+        ).to(self.device)
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            # Mean pooling
+            embeddings = outputs.last_hidden_state.mean(dim=1)
+        return embeddings.cpu().numpy()
+
+    def embed_documents(self, texts):
+        return self._embed(texts).tolist()
+
+    def embed_query(self, text):
+        return self._embed([text])[0].tolist()
 
 
 if __name__ == '__main__':
@@ -694,10 +744,28 @@ if __name__ == '__main__':
     api_key = os.getenv("OPENAI_API_KEY")
     if not os.environ.get("OPENAI_API_KEY"):
         os.environ["OPENAI_API_KEY"] = api_key
+
+    model_name = "google/embeddinggemma-300m"
+
+    
+    # Configure quantization (new method)
+    bnb_config = BitsAndBytesConfig(
+        # load_in_8bit=True,              # or 
+        load_in_4bit=True,
+        llm_int8_threshold=6.0,
+    )
+
+
+
     # embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L12-v2") # *** ***
     # embeddings = OpenAIEmbeddings(model="text-embedding-3-small") *** *** ***
     # embeddings = HuggingFaceEmbeddings(model_name="nomic-ai/nomic-embed-text-v2-moe")
-    embeddings = HuggingFaceEmbeddings(model_name="all-mpnet-base-v2") ## slowest and but efficient *** *** ***
+    # embeddings = HuggingFaceEmbeddings(model_name="all-mpnet-base-v2") ## slowest and but efficient *** *** ***
+    # embeddings = HuggingFaceEmbeddings(model_name="google/embeddinggemma-300m")
+
+    embeddings = GemmaEmbeddings(model_name="google/embeddinggemma-300m", quantized=True)
+    
+    # embeddings = HuggingFaceEmbeddings(model_name="voyageai/voyage-3.5-lite")
     # embeddings = HuggingFaceEmbeddings(model_name="multi-qa-MiniLM-L6-cos-v1") ##fastest but less efficient
     # embeddings = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2") ## fastest and efficient *** ***
     # embeddings = HuggingFaceEmbeddings(model_name="paraphrase-MiniLM-L12-v2") ## faster and more efficient *** *** *

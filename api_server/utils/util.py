@@ -6,6 +6,11 @@ from sentence_transformers import SentenceTransformer
 import psycopg2
 import dotenv
 import os
+import docx
+from pptx import Presentation
+import openpyxl
+import xlrd
+import re
 
 dotenv.load_dotenv()
 
@@ -42,6 +47,49 @@ def extract_image_text(file_storage) -> str:
 
     return text.strip()
 
+def extract_txt_file(file):
+    """Try to read file as UTF-8 text"""
+    try:
+        return file.read().decode('utf-8', errors='ignore')
+    except Exception as e:
+        return ""
+
+def extract_docx_text(file):
+    doc = docx.Document(file)
+    return '\n'.join([para.text for para in doc.paragraphs])
+
+def extract_pptx_text(file):
+    prs = Presentation(file)
+    texts = []
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if hasattr(shape, "text"):
+                texts.append(shape.text)
+    return '\n'.join(texts)
+
+def extract_excel_text(file):
+    """Extract text from .xlsx Excel file"""
+    wb = openpyxl.load_workbook(file, data_only=True)
+    texts = []
+    for sheet in wb.worksheets:
+        for row in sheet.iter_rows(values_only=True):
+            row_text = [str(cell) for cell in row if cell is not None]
+            if row_text:
+                texts.append(" ".join(row_text))
+    return "\n".join(texts)
+
+def extract_xls_text(file):
+    """Extract text from .xls Excel file"""
+    book = xlrd.open_workbook(file_contents=file.read())
+    texts = []
+    for sheet in book.sheets():
+        for row_idx in range(sheet.nrows):
+            row = sheet.row(row_idx)
+            row_text = [str(cell.value) for cell in row if cell.value != ""]
+            if row_text:
+                texts.append(" ".join(row_text))
+    return "\n".join(texts)
+
 
 def encode_text_for_embedding(text: str) -> list[float]:
     """
@@ -51,6 +99,18 @@ def encode_text_for_embedding(text: str) -> list[float]:
     return embedding.tolist()
 
 
+def clean_text(input_text: str) -> str:
+    """
+    Remove NUL (0x00) and other control characters from text.
+    """
+    if input_text is None:
+        return ""
+    # Remove NUL characters
+    cleaned = input_text.replace("\x00", "")
+    # Optionally, remove all non-printable control chars except common whitespace (\n, \r, \t)
+    cleaned = re.sub(r"[^\x20-\x7E\n\r\t]", "", cleaned)
+    return cleaned
+
 def save_vector_to_db(user_id, chat_history_id, file_name, text, embedding):
     """
     Save embedding to the document_embeddings table in PostgreSQL using pgvector.
@@ -59,6 +119,9 @@ def save_vector_to_db(user_id, chat_history_id, file_name, text, embedding):
     vector_literal = f"[{', '.join(map(str, embedding))}]"
 
     try:
+        # Clean text before inserting
+        text = clean_text(text)
+
         conn = psycopg2.connect(
             dbname=os.getenv("PGDATABASE", "ai_agent"),
             user=os.getenv("PGUSER", "athip"),

@@ -196,9 +196,11 @@ import time
 from googlesearch import search
 
 def search_duckduckgo(query, max_results=5):
-    o = search(term=query,num_results=max_results, lang="th", region="th", ssl_verify=True)
+    o = search(term=query,num_results=max_results, lang="th", region="th")
     print("Search results from Google:")
-    print(list(o)[0])
+    for d in list(o):
+        print(d)
+    # print(list(o)[0])
     # with DDGS() as ddgs:
     #     results = ddgs.text(query, max_results=max_results, region="th-th")
     #     for i, result in enumerate(results, 1):
@@ -232,6 +234,6 @@ if __name__ == "__main__":
     # aa.replace("\n", "")
     # print(aa)
 
-    query = input("Enter your search query: ")
-    query = "google cloud storage"
+    # query = input("Enter your search query: ")
+    query = "ข้อมูลการปลูกทุเรียนแยกตามจังหวัด ประเทศไทย"
     search_duckduckgo(query)

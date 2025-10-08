@@ -5,6 +5,9 @@ import path from 'path';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import dotenv from "dotenv";
+import { exec } from 'child_process';
+import os from "os";
+import si from "systeminformation"; // npm install systeminformation
 
 dotenv.config()
 
@@ -23,7 +26,8 @@ app.use(cors({
 
 // let BASE_DIR = path.join(__dirname, 'managed_files');
 // if (!fs.existsSync(BASE_DIR)) fs.mkdirSync(BASE_DIR);
-let BASE_DIR = "/app/files";
+// let BASE_DIR = "/app/files";
+let BASE_DIR = process.cwd();
 
 app.use(bodyParser.json());
 
@@ -31,12 +35,13 @@ type ApiResponseData = Record<string, any> | null;
 
 const _apiResponse = (res: Response, data: ApiResponseData, message = '', status = 200): void => {
   // const content = [{ type: 'string', text: message }];
+  console.log(data);
   let content : { 
     type: string;
     text: string;
   }[] = [];
   if (data && typeof data === 'object') {
-    if (data.files || data.content || data.lines || data.new_path) {
+    if (data.files || data.content || data.lines || data.new_path || (data.os && data.system_hardware && data.current_directory && data.time)) {
       let defind_data;
 
     if (data.files !== undefined) {
@@ -47,6 +52,8 @@ const _apiResponse = (res: Response, data: ApiResponseData, message = '', status
       defind_data = data.lines;
     } else if (data.new_path !== undefined) {
       defind_data = data.new_path;
+    } else if ((data.os !== undefined) && (data.system_hardware !== undefined) && (data.current_directory !== undefined) && (data.time !== undefined)) {
+      defind_data = data
     }
 
       content = [{ type: 'string', text: JSON.stringify(defind_data, null, 2) }];
@@ -63,7 +70,132 @@ const _apiResponse = (res: Response, data: ApiResponseData, message = '', status
 };
 
 
-const _getFullPath = (fileName: string): string => path.join(BASE_DIR, fileName);
+const _getFullPath = (fileName: string): string => {
+  const targetPath = path.isAbsolute(fileName)
+    ? fileName
+    : path.join(BASE_DIR, fileName);
+    
+  return path.normalize(targetPath);
+};
+
+
+// Get system info API
+// app.get("/system/info", async (_req: Request, res: Response) => {
+//   try {
+//     // OS info
+//     const osInfo = {
+//       type: os.type(),
+//       platform: os.platform(),
+//       release: os.release(),
+//       arch: os.arch(),
+//       hostname: os.hostname(),
+//       uptime: os.uptime(),
+//       userInfo: os.userInfo(),
+//       homedir: os.homedir(),
+//     };
+
+//     // System hardware info
+//     const cpu = await si.cpu();
+//     const mem = await si.mem();
+//     const gpu = await si.graphics();
+//     const disk = await si.diskLayout();
+//     const net = await si.networkInterfaces();
+//     const battery = await si.battery();
+//     const system = await si.system();
+//     const osExtra = await si.osInfo();
+
+//     const systemInfo = {
+//       cpu,
+//       memory: {
+//         total: mem.total,
+//         free: mem.free,
+//         used: mem.used,
+//         active: mem.active,
+//         available: mem.available,
+//       },
+//       gpu,
+//       disks: disk,
+//       network: net,
+//       battery,
+//       system,
+//       osExtra,
+//     };
+
+//     // Current directory
+//     const currentDir = {
+//       baseDir: BASE_DIR,
+//       cwd: process.cwd(),
+//     };
+
+//     // Local time and region
+//     const now = new Date();
+//     const localTime = now.toLocaleString();
+//     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+//     const locale = Intl.DateTimeFormat().resolvedOptions().locale;
+
+//     const timeInfo = {
+//       local_time: localTime,
+//       time_zone: timeZone,
+//       region: locale,
+//     };
+
+//     // Final response
+//     return _apiResponse(
+//       res,
+//       {
+//         os: osInfo,
+//         system_hardware: systemInfo,
+//         current_directory: currentDir,
+//         time: timeInfo,
+//       },
+//       "System information retrieved successfully"
+//     );
+//   } catch (err: any) {
+//     return _apiResponse(res, null, err.message, 500);
+//   }
+// });
+
+
+app.get("/system/info", async (_req: Request, res: Response) => {
+  try {
+    // OS info (summary)
+    const osExtra = await si.osInfo();
+
+    // Hardware summary
+    const cpu = await si.cpu();
+    const mem = await si.mem();
+    const gpu = await si.graphics();
+
+    // Time info
+    const now = new Date();
+    const localTime = now.toLocaleString();
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const locale = Intl.DateTimeFormat().resolvedOptions().locale;
+
+    // Build summary
+    const systemSummary = {
+      os: `${osExtra.distro} ${osExtra.release} (${os.arch()})`,
+      system_hardware: {
+        cpu: `${cpu.manufacturer} ${cpu.brand} (${cpu.cores} cores)`,
+        memory: `${(mem.total / (1024 ** 3)).toFixed(1)} GB RAM`,
+        gpus: gpu.controllers.length > 0 
+          ? gpu.controllers.map(g => `${g.vendor} ${g.model}`).join(", ")
+          : "N/A"
+      },
+      current_directory: process.cwd(),
+      time: {
+        local_time: localTime,
+        time_zone: timeZone,
+        region: locale
+      }
+    };
+
+    return _apiResponse(res, systemSummary, "System summary retrieved successfully");
+  } catch (err: any) {
+    return _apiResponse(res, null, err.message, 500);
+  }
+});
+
 
 // Change working directory
 app.post('/files/change_dir', (req: Request, res: Response) => {
@@ -100,14 +232,33 @@ app.post('/files/read', (req: Request, res: Response) => {
   if (!fs.existsSync(fullPath)) return _apiResponse(res, null, 'File not found', 404);
 
   const lines = fs.readFileSync(fullPath, 'utf-8').split('\n');
+
+  // Prepare the subset of lines
+  let selectedLines: string[];
   if (start_line != null && end_line != null) {
-    return _apiResponse(res, { content: lines.slice(start_line - 1, end_line) }, `Read lines ${start_line}-${end_line}`);
+    selectedLines = lines.slice(start_line - 1, end_line);
   } else if (end_line != null) {
-    return _apiResponse(res, { content: lines.slice(0, end_line) }, `Read up to line ${end_line}`);
+    selectedLines = lines.slice(0, end_line);
   } else {
-    return _apiResponse(res, { content: lines.join('\n') }, `Read all content from '${file_name}'`);
+    selectedLines = lines;
   }
+
+  // Prefix each line with line number
+  const numberedLines = selectedLines.map((line, idx) => {
+    // Adjust line number according to start_line if provided
+    const lineNumber = start_line != null ? start_line + idx : idx + 1;
+    return `line ${lineNumber}: ${line}`;
+  });
+
+  return _apiResponse(res, { content: numberedLines.join('\n') }, 
+    start_line != null && end_line != null 
+      ? `Read lines ${start_line}-${end_line}`
+      : end_line != null
+        ? `Read up to line ${end_line}`
+        : `Read all content from '${file_name}'`
+  );
 });
+
 
 // Edit file
 app.post('/files/edit', (req: Request, res: Response) => {
@@ -175,7 +326,7 @@ app.post('/files/create_folder', (req: Request, res: Response) => {
   const { folder_name } = req.body;
   if (!folder_name) return _apiResponse(res, null, 'Missing folder_name', 400);
 
-  const folderPath = path.join(BASE_DIR, folder_name);
+  const folderPath = path.resolve(BASE_DIR, folder_name);
   if (fs.existsSync(folderPath)) return _apiResponse(res, null, 'Folder already exists', 409);
 
   fs.mkdirSync(folderPath);
@@ -187,6 +338,75 @@ app.get('/ping' , (req: Request, res: Response) => {
   res.status(200).send('pong');
 })
 
+// Execute shell command
+app.post('/files/CMD', (req: Request, res: Response) => {
+  const { command, directory, wait} = req.body;
+  let responded = false;
+  if (wait == 'False'){
+    setTimeout(() => {
+      if (!responded) {
+        responded = true;
+        return _apiResponse(
+          res,
+          { content: "" },
+          `Executed command in '${directory}': '${command}' complete`
+        );
+      }
+    }, 3000);
+  }
+  else{
+    
+  }
+
+  if (!command) {
+    return _apiResponse(res, null, 'Missing command', 400);
+  }
+
+  // Resolve directory: if provided, use it; else fallback to BASE_DIR
+  const targetDir = directory 
+    ? path.resolve(BASE_DIR, directory) 
+    : BASE_DIR;
+
+  if (!fs.existsSync(targetDir) || !fs.statSync(targetDir).isDirectory()) {
+    return _apiResponse(res, null, 'Target directory does not exist', 404);
+  }
+
+  exec(command, { cwd: targetDir }, (error, stdout, stderr) => {
+  if (responded) return; // กันไม่ให้ส่งซ้ำ
+
+  if (error) {
+    responded = true;
+    return _apiResponse(res, null, `Error: ${stderr || error.message}`, 500);
+  }
+
+  responded = true;
+  if (stdout.length >= 0) {
+    return _apiResponse(
+      res,
+      { content: stdout },
+      `Executed command in '${targetDir}': '${command}' complete`
+    );
+  } else {
+    return _apiResponse(
+      res,
+      null,
+      `Executed command in '${targetDir}': '${command}' complete`
+    );
+  }
+});
+
+});
+
+
+// CurrentDirectory
+app.get('/files/CurrentDirectory', (_req: Request, res: Response) => {
+  try {
+    const CurrentDirectory = process.cwd()
+    return _apiResponse(res, { content:`current directory is : ${CurrentDirectory}` }, 'Successfully listed files.');
+  } catch (err: any) {
+    return _apiResponse(res, null, err.message, 500);
+  }
+});
 
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
 

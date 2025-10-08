@@ -1,6 +1,13 @@
 # Base image
 FROM node:18
 
+# Install python3 and venv package
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-venv \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
 # Set working directory
 WORKDIR /app
 

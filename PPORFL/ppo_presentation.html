@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPO Presentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+        }
+
+        .presentation {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .slide {
+            width: 90vw;
+            height: 85vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 60px;
+            display: none;
+            flex-direction: column;
+            position: relative;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        .slide.active {
+            display: flex;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .slide-number {
+            position: absolute;
+            bottom: 20px;
+            right: 30px;
+            color: #667eea;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        h1 {
+            color: #667eea;
+            font-size: 3em;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        h2 {
+            color: #764ba2;
+            font-size: 2em;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+
+        h3 {
+            color: #667eea;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.3em;
+            margin-bottom: 40px;
+        }
+
+        .content {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        li {
+            margin: 15px 0;
+            padding-left: 30px;
+            position: relative;
+            line-height: 1.6;
+            font-size: 1.1em;
+            color: #333;
+        }
+
+        li:before {
+            content: "▸";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 1000;
+        }
+
+        button {
+            background: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            color: #667eea;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+            background: #667eea;
+            color: white;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .formula {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+            border-left: 4px solid #667eea;
+        }
+
+        .highlight {
+            background: linear-gradient(120deg, #ffeaa7 0%, #fdcb6e 100%);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .emoji {
+            font-size: 1.3em;
+            margin-right: 10px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        .box {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            border: 2px solid #e9ecef;
+        }
+
+        .box h4 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .center {
+            text-align: center;
+        }
+
+        .info-box {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border-left: 4px solid #667eea;
+        }
+
+        code {
+            background: #2d3436;
+            color: #00b894;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="presentation">
+        <!-- Slide 1: Title -->
+        <div class="slide active">
+            <div class="content center" style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%;">
+                <h1>🎯 เจาะลึก PPO</h1>
+                <h1 style="font-size: 2.5em; margin-top: 0;">(Proximal Policy Optimization)</h1>
+                <p class="subtitle">ทำความเข้าใจเบื้องหลังโค้ด <code>modelPPORF.py</code></p>
+                <div style="margin-top: 60px; color: #666;">
+                    <p style="font-size: 1.2em;">ชื่อผู้นำเสนอ: นายอธิป ยุทธวรวิทย์</p>
+                    <p style="font-size: 1.2em; margin-top: 15px;">วันที่: _________________</p>
+                </div>
+            </div>
+            <div class="slide-number">1 / 13</div>
+        </div>
+
+        <!-- Slide 2: Agenda -->
+        <div class="slide">
+            <h2>📋 วันนี้เราจะเรียนรู้อะไรบ้าง?</h2>
+            <div class="content">
+                <ul>
+                    <li>พื้นฐานของ Reinforcement Learning: Agent และ Environment</li>
+                    <li>สัญญาณตอบรับ: Reward, Return, และ Value Function</li>
+                    <li>หัวใจของการตัดสินใจ: Advantage คืออะไร?</li>
+                    <li>กลไกการเรียนรู้ของ PPO: Policy, Ratio, และ การ Clipping</li>
+                    <li>สรุปสมการ Loss Function ทั้งหมด</li>
+                </ul>
+            </div>
+            <div class="slide-number">2 / 13</div>
+        </div>
+
+        <!-- Slide 3: RL Basics -->
+        <div class="slide">
+            <h2>🤖 พื้นฐานของ Reinforcement Learning</h2>
+            <div class="content">
+                <h3>การทำงานพื้นฐานของ RL</h3>
+                <ul>
+                    <li>ความสัมพันธ์ระหว่าง <span class="highlight">Agent</span> (ตัวละคร/ผู้เล่น) และ <span class="highlight">Environment</span> (สิ่งแวดล้อม/เกม)</li>
+                    <li>Agent เลือกทำ <span class="highlight">Action</span></li>
+                    <li>Environment ตอบสนองด้วย <span class="highlight">State</span> ใหม่ และ <span class="highlight">Reward</span></li>
+                    <li>เป้าหมายของ Agent: <strong>สะสม Reward ในระยะยาวให้ได้มากที่สุด</strong></li>
+                </ul>
+                <div class="info-box" style="margin-top: 40px;">
+                    <p style="text-align: center; font-size: 1.2em; color: #666;">
+                        💡 <strong>รูปภาพ:</strong> ใส่แผนภาพ Agent-Environment Loop ที่คลาสสิก
+                    </p>
+                </div>
+            </div>
+            <div class="slide-number">3 / 13</div>
+        </div>
+
+        <!-- Slide 4: Reward -->
+        <div class="slide">
+            <h2>⭐ 1. Reward: สัญญาณตอบรับ "ทันที"</h2>
+            <div class="content">
+                <ul>
+                    <li>คือรางวัลที่ได้ <span class="highlight">ณ วินาทีนั้น</span> หลังจากทำ Action</li>
+                    <li>บอกแค่ว่า Action ที่เพิ่งทำไป "ดี" หรือ "ไม่ดี"</li>
+                </ul>
+                
+                <div class="box" style="margin-top: 30px;">
+                    <h4>🎯 เปรียบเหมือน:</h4>
+                    <p style="font-size: 1.1em; color: #333;">"เงินเดือน" ที่ได้ทันที แต่ไม่ได้บอกภาพรวมความสำเร็จในชีวิต</p>
+                </div>
+
+                <div class="box" style="margin-top: 20px;">
+                    <h4>📝 ตัวอย่าง:</h4>
+                    <p style="font-size: 1.1em; color: #333;">CartPole ได้ <code>+1 Reward</code> ทุก Step ที่ไม้ยังไม่ล้ม</p>
+                </div>
+            </div>
+            <div class="slide-number">4 / 13</div>
+        </div>
+
+        <!-- Slide 5: Return -->
+        <div class="slide">
+            <h2>📊 2. Return: "ผลลัพธ์ที่เกิดขึ้นจริง" ในระยะยาว</h2>
+            <div class="content">
+                <ul>
+                    <li>คือ <span class="highlight">ผลรวมของ Reward ทั้งหมด</span> ที่เกิดขึ้นจริงนับจากจุดนั้นไปจนจบเกม</li>
+                    <li>เป็น "เป้าหมาย" หรือ "ความจริง" ที่เกิดขึ้น</li>
+                    <li>นี่คือสิ่งที่ <strong>Value Function พยายามจะทายให้ถูก</strong></li>
+                </ul>
+
+                <div class="box" style="margin-top: 30px;">
+                    <h4>🎯 เปรียบเหมือน:</h4>
+                    <p style="font-size: 1.1em; color: #333;">"ความมั่งคั่งสุทธิ" ที่เกิดขึ้นจริงเมื่อสิ้นปี</p>
+                </div>
+            </div>
+            <div class="slide-number">5 / 13</div>
+        </div>
+
+        <!-- Slide 6: Value Function -->
+        <div class="slide">
+            <h2>🔮 3. Value Function (V(s)): การ "คาดการณ์" อนาคต</h2>
+            <div class="content">
+                <ul>
+                    <li>ตอบคำถาม: <span class="highlight">"การอยู่ใน State นี้ มันดีแค่ไหนในระยะยาว?"</span></li>
+                    <li>เป็นค่าที่ Agent <strong>คาดว่า</strong> จะได้ Return เท่าไหร่จาก State ปัจจุบัน</li>
+                    <li>โมเดลส่วน <code>Critic (Value Head)</code> มีหน้าที่เรียนรู้ที่จะทายค่านี้ให้แม่นขึ้น</li>
+                </ul>
+
+                <div class="box" style="margin-top: 30px;">
+                    <h4>🎯 เปรียบเหมือน:</h4>
+                    <p style="font-size: 1.1em; color: #333;">การประเมิน "ศักยภาพในการสร้างรายได้ในอนาคต"</p>
+                </div>
+            </div>
+            <div class="slide-number">6 / 13</div>
+        </div>
+
+        <!-- Slide 7: Advantage -->
+        <div class="slide">
+            <h2>⚡ 4. Advantage (A(s,a)): Action นี้ "ดีกว่าค่าเฉลี่ย" หรือไม่?</h2>
+            <div class="content">
+                <p style="font-size: 1.2em; margin-bottom: 25px; color: #333;">
+                    บอกว่า Action ที่เลือกนั้นให้ผลลัพธ์ดีหรือแย่กว่า <span class="highlight">"ที่คาดไว้"</span>
+                </p>
+
+                <div class="grid-2">
+                    <div class="box" style="border-color: #00b894; background: #00b89410;">
+                        <h4 style="color: #00b894;">✅ Advantage > 0 (บวก)</h4>
+                        <p style="color: #333;">เป็น "Surprise ที่ดี"<br>Action นี้ดีกว่าที่คิด<br><strong>→ ควรทำบ่อยขึ้น</strong></p>
+                    </div>
+
+                    <div class="box" style="border-color: #d63031; background: #d6303110;">
+                        <h4 style="color: #d63031;">❌ Advantage < 0 (ลบ)</h4>
+                        <p style="color: #333;">เป็น "เรื่องน่าผิดหวัง"<br>Action นี้แย่กว่าที่คิด<br><strong>→ ควรทำน้อยลง</strong></p>
+                    </div>
+                </div>
+
+                <div class="info-box" style="margin-top: 25px;">
+                    <p style="font-size: 1.1em; text-align: center;">
+                        💡 เป็นตัวบอก <span class="highlight">"คุณภาพ"</span> ของ Action ที่เจาะจงลงไป
+                    </p>
+                </div>
+            </div>
+            <div class="slide-number">7 / 13</div>
+        </div>
+
+        <!-- Slide 8: PPO Learning -->
+        <div class="slide">
+            <h2>🧠 กลไกการเรียนรู้ของ PPO</h2>
+            <div class="content">
+                <h3>PPO เรียนรู้ได้อย่างไร?</h3>
+                <ul>
+                    <li>PPO ใช้วิธี <span class="highlight">Policy Gradient</span> ซึ่งคือการปรับปรุง Policy (สมองของ Agent) โดยตรง</li>
+                    <li>ใช้ <span class="highlight">Advantage</span> เป็นตัวนำทางว่าควรปรับ Policy ไปในทิศทางไหน</li>
+                    <li>กุญแจสำคัญคือ: <strong>ปรับอย่างระมัดระวัง</strong> ไม่ให้ก้าวกระโดดจนการเรียนรู้พัง</li>
+                </ul>
+
+                <div class="info-box" style="margin-top: 30px;">
+                    <p style="font-size: 1.2em; text-align: center;">
+                        🔧 มาดูเครื่องมือที่ PPO ใช้กัน: <br>
+                        <strong>Logprobs, Ratio, และ Clipping</strong>
+                    </p>
+                </div>
+            </div>
+            <div class="slide-number">8 / 13</div>
+        </div>
+
+        <!-- Slide 9: Policy, Logprobs, Ratio -->
+        <div class="slide">
+            <h2>🛠️ 5. เครื่องมือของ PPO: Policy, Logprobs, Ratio</h2>
+            <div class="content">
+                <div class="box" style="margin-bottom: 15px;">
+                    <h4>🧠 Policy (π)</h4>
+                    <p>"สมอง" ของ Agent ที่ตัดสินใจเลือก Action (ในโค้ดคือ Neural Network)</p>
+                </div>
+
+                <div class="box" style="margin-bottom: 15px;">
+                    <h4>📊 Logprobs</h4>
+                    <p>ค่า Log ของความน่าจะเป็น (ความมั่นใจ) ที่จะเลือก Action นั้นๆ</p>
+                </div>
+
+                <div class="box">
+                    <h4>⚖️ Ratio</h4>
+                    <div class="formula">
+                        ratio = π_new(a|s) / π_old(a|s)
+                    </div>
+                    <ul style="margin-top: 15px;">
+                        <li>ใช้วัดว่า Policy ใหม่ <span class="highlight">เปลี่ยนแปลงไปจากเดิมมากแค่ไหน</span></li>
+                        <li><strong>Ratio > 1:</strong> มั่นใจใน Action นี้มากขึ้น</li>
+                        <li><strong>Ratio < 1:</strong> มั่นใจใน Action นี้น้อยลง</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="slide-number">9 / 13</div>
+        </div>
+
+        <!-- Slide 10: Clipped Objective -->
+        <div class="slide">
+            <h2>🎯 6. หัวใจของ PPO: การจำกัดขอบเขตการอัปเดต (Clipping)</h2>
+            <div class="content">
+                <div class="box" style="border-color: #d63031; background: #d6303110; margin-bottom: 20px;">
+                    <h4 style="color: #d63031;">⚠️ ปัญหา:</h4>
+                    <p>ถ้า Advantage สูงมาก อาจทำให้ Ratio พุ่งสูงเกินไป<br>
+                    เกิดการอัปเดตที่รุนแรงจน Policy พัง</p>
+                </div>
+
+                <div class="box" style="border-color: #00b894; background: #00b89410;">
+                    <h4 style="color: #00b894;">✅ วิธีแก้ของ PPO:</h4>
+                    <p><strong>"Clip"</strong> หรือจำกัดค่า Ratio ไม่ให้หนีไปจาก 1.0 มากเกินไป</p>
+                    <div class="formula" style="margin-top: 15px; background: white;">
+                        clipped_ratio = clip(ratio, 1.0 - ε, 1.0 + ε)
+                    </div>
+                    <p style="margin-top: 15px;">PPO จะเลือกค่าที่ <span class="highlight">ระมัดระวังที่สุด</span> (ค่าที่น้อยที่สุด) ระหว่างการอัปเดตแบบปกติ กับแบบที่ถูก Clip แล้ว</p>
+                </div>
+
+                <div class="info-box" style="margin-top: 20px;">
+                    <p style="text-align: center;">💡 <strong>รูปภาพ:</strong> ใส่กราฟของ PPO Clipped Surrogate Objective</p>
+                </div>
+            </div>
+            <div class="slide-number">10 / 13</div>
+        </div>
+
+        <!-- Slide 11: Loss Function -->
+        <div class="slide">
+            <h2>📐 7. Total Loss: รวม 3 เป้าหมายไว้ในที่เดียว</h2>
+            <div class="content">
+                <div class="formula" style="font-size: 1.2em; text-align: center;">
+                    loss = policy_loss + VALUE_COEF × value_loss - ENTROPY_COEF × entropy
+                </div>
+
+                <div class="box" style="margin-top: 25px;">
+                    <h4>1️⃣ Policy Loss</h4>
+                    <p>ปรับปรุง "สมอง" ของ Agent ให้ฉลาดขึ้น (ทำตาม Advantage)</p>
+                </div>
+
+                <div class="box" style="margin-top: 15px;">
+                    <h4>2️⃣ Value Loss</h4>
+                    <p>ปรับปรุง "นักวิจารณ์" ให้ทำนายอนาคตแม่นขึ้น</p>
+                </div>
+
+                <div class="box" style="margin-top: 15px;">
+                    <h4>3️⃣ Entropy Bonus</h4>
+                    <p>ส่งเสริม "การสำรวจ" ไม่ให้ Agent ยึดติดกับทางเลือกเดิมๆ เร็วเกินไป</p>
+                </div>
+            </div>
+            <div class="slide-number">11 / 13</div>
+        </div>
+
+        <!-- Slide 12: Summary -->
+        <div class="slide">
+            <h2>✨ สรุปหัวใจสำคัญของ PPO</h2>
+            <div class="content">
+                <ul style="font-size: 1.15em;">
+                    <li>PPO เรียนรู้โดยดูว่า Action ที่ทำ <span class="highlight">ดีกว่าค่าเฉลี่ย (Advantage)</span> หรือไม่</li>
+                    <li>มีการอัปเดต Policy อย่างค่อยเป็นค่อยไปและเสถียร โดยใช้เทคนิค <span class="highlight">Clipping</span> เพื่อป้องกันการเปลี่ยนแปลงที่รุนแรง</li>
+                    <li>การเรียนรู้ที่สมบูรณ์ต้องสร้างสมดุลระหว่าง 3 สิ่ง:
+                        <ul style="margin-top: 15px; margin-left: 30px;">
+                            <li><strong>การพัฒนา Policy</strong></li>
+                            <li><strong>การทำนายที่แม่นยำ</strong></li>
+                            <li><strong>การสำรวจอย่างต่อเนื่อง</strong></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+            <div class="slide-number">12 / 13</div>
+        </div>
+
+        <!-- Slide 13: Q&A -->
+        <div class="slide">
+            <div class="content center" style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%;">
+                <h1 style="font-size: 4em;">❓</h1>
+                <h2 style="margin-top: 30px;">ถาม-ตอบ (Q&A)</h2>
+                <div class="info-box" style="margin-top: 40px; max-width: 600px;">
+                    <p style="text-align: center; font-size: 1.1em; color: #666;">
+                        💡 อาจจะใส่รูป CartPole หรือ Diagram ของ PPO ทิ้งไว้
+                    </p>
+                </div>
+            </div>
+            <div class="slide-number">13 / 13</div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="prevBtn" onclick="changeSlide(-1)">◀ ก่อนหน้า</button>
+        <button id="nextBtn" onclick="changeSlide(1)">ถัดไป ▶</button>
+    </div>
+
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide');
+        const totalSlides = slides.length;
+
+        function showSlide(n) {
+            slides[currentSlide].classList.remove('active');
+            currentSlide = (n + totalSlides) % totalSlides;
+            slides[currentSlide].classList.add('active');
+            
+            document.getElementById('prevBtn').disabled = currentSlide === 0;
+            document.getElementById('nextBtn').disabled = currentSlide === totalSlides - 1;
+        }
+
+        function changeSlide(direction) {
+            showSlide(currentSlide + direction);
+        }
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'ArrowLeft') {
+                changeSlide(-1);
+            } else if (event.key === 'ArrowRight') {
+                changeSlide(1);
+            }
+        });
+
+        showSlide(0);
+    </script>
+</body>
+</html>
