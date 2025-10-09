@@ -624,22 +624,36 @@ router.post('/message', async (req, res) => {
                         //     // ]
                         //   },
                         // ],
-                        stream: true,
-                        // temperature: 0.05, // ไม่สุ่มเลย
+                        stream: false,
+                        "reasoning": {
+                            // One of the following (not both):
+                            // "effort": "high", // Can be "high", "medium", or "low" (OpenAI-style)
+                            // "max_tokens": 2000, // Specific token limit (Anthropic-style)
+                            // Optional: Default is false. All models support this.
+                            "exclude": false, // Set to true to exclude reasoning tokens from response
+                            // Or enable reasoning with the default parameters:
+                            "enabled": true // Default: inferred from `effort` or `max_tokens`
+                        },
+                        temperature: 0.0, // ไม่สุ่มเลย
                         // max_tokens: 1_000_000,
-                        // top_p: 1.0,
-                        // frequency_penalty: 0.0,
-                        // presence_penalty: 0.0,
+                        top_p: 1.0,
+                        frequency_penalty: 0.0,
+                        presence_penalty: 0.0,
                     }),
                     signal: controller.signal, // 👈 important
                 });
                 const stream = openRouterFetchResponse.body;
+                // const openRouterData = await openRouterFetchResponse.json() as OpenRouterChatResponse;
+                // let result = "";
+                // if (openRouterData.choices && openRouterData.choices[0]?.message?.content) {
+                //   result = openRouterData.choices[0].message.content;
+                //   socket?.emit("StreamText", result);
+                // }
                 const result = await new Promise((resolve, reject) => {
                     let out_res = "";
                     let assistancePrefixRemoved = false;
                     stream.on("data", (chunk) => {
                         const text = chunk.toString("utf8");
-                        console.log(text);
                         // Check for context length error
                         if (text.includes('{"error":{"message":"')) {
                             try {

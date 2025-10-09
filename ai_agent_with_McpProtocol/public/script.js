@@ -212,6 +212,56 @@ const chatbox = document.getElementById('chatbox');
 const btnsidebarcontainer = document.querySelector('.btn-sidebar-container');
 const stopButton = document.getElementById('stopButton');
 
+const fileInput = document.getElementById('fileInput');
+const selectedFilesDiv = document.getElementById('selectedFiles');
+
+fileInput.addEventListener('change', function() {
+    selectedFilesDiv.innerHTML = '';
+    if (this.files.length > 0) {
+        selectedFilesDiv.style.display = 'flex';
+        for (let file of this.files) {
+            const fileItem = document.createElement('div');
+            fileItem.textContent = file.name;
+            fileItem.setAttribute('data-file-name', file.name);
+            
+            // Add click event to remove file
+            fileItem.addEventListener('click', function() {
+                removeFile(file.name);
+            });
+            
+            selectedFilesDiv.appendChild(fileItem);
+        }
+    } else {
+        selectedFilesDiv.style.display = 'none';
+    }
+});
+
+// Function to remove a file from the selection
+function removeFile(fileName) {
+    const fileItems = selectedFilesDiv.querySelectorAll('div');
+    fileItems.forEach(item => {
+        if (item.getAttribute('data-file-name') === fileName) {
+            item.remove();
+        }
+    });
+    
+    // Update the file input to reflect the removal
+    const dt = new DataTransfer();
+    const files = fileInput.files;
+    
+    for (let i = 0; i < files.length; i++) {
+        if (files[i].name !== fileName) {
+            dt.items.add(files[i]);
+        }
+    }
+    
+    fileInput.files = dt.files;
+    
+    // Hide the container if no files left
+    if (fileInput.files.length === 0) {
+        selectedFilesDiv.style.display = 'none';
+    }
+}
 window.addEventListener('beforeunload', async (event) => {
     // event.preventDefault(); // Some browsers require this
     // alert('Are you sure you want to leave?');
@@ -718,8 +768,8 @@ async function sendMessage() {
         console.log(create_record_res);
         userInput.value = ''; // Clear input field
         userFiles.value = '';
-        console.log("show dataaaaaaaaaaaaaaaa33")
-
+        selectedFilesDiv.style.display = 'none';
+        selectedFilesDiv.innerHTML = '';
         const res = await fetch("/api/upload", {
             method: "POST",
             body: formData

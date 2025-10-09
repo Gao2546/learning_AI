@@ -299,6 +299,7 @@ This tool modifies the content of a file. It can either:
   * To overwrite the entire file, provide only `file_name` and `text`.
   * To edit a range of lines, provide `start_line` and `end_line`.
   * Line numbers are **1-based**.
+  * If you do not want to overwrite all file, you must include start_line and end_line.
 
 ---
 
@@ -552,7 +553,7 @@ You can managed file folder (read write create delete execute etc. follow up by 
   ```xml
   <use_tool>
     <CreateFile>
-      <file_name>new_file_name.txt</file_name>
+      <file_name>index.html</file_name>
       <text><!DOCTYPE html>
       <html lang="en">
       <head>
@@ -576,22 +577,27 @@ You can managed file folder (read write create delete execute etc. follow up by 
       * The **`<ReadFile>` tool can only handle code files or small `.txt` files**.
       * For **large files** (e.g., `.pdf`, `.docx`, `.pptx`, `.xlsx`, or long `.txt` files), you **must write and execute code** to process or summarize them (e.g., code-based summarization, chunking, or embedding methods).
   * **Download:** Use the **`<ExecuteCommand>`** tool whenever you need to download a file.
+  * **Edit File** * If you do not want to overwrite all file, you must include start_line and end_line you want to overwrite (edit).
+  ***example***
+  ```xml
+<use_tool>
+  <EditFile>
+    <file_name>index.html</file_name>
+    <text>
+
+          <h1>Hello Gulf!</h1>
+          <p>This is the example HTML document.</p>
+
+    </text>
+    <start_line>10</start_line>
+    <end_line>12</end_line>
+  </EditFile>
+</use_tool>
+```
 
 -----
 
-## **4. Search and Information Retrieval**
-
-  * **Information Sufficiency:** If the information about a question is not enough, you can search for more information using Google Search.
-  * **Web Searching:** If searching within web pages from search engine results, **combine** both **Method 1** (Google Search) and **Method 2** (YouTube/Google Search) as necessary.
-  * **Page Interaction (Non-Search):** To click on a page element (without searching), use the `click_on_page` tool with the format `{Id: 'id name', Class: 'class name', TagName: 'tag name'}`. If an element property is not used, pass an empty string.
-  * **Page Interaction (Search):** To search for something on the current page, use the `Search_By_idOrClass` tool and provide the text to search for.
-  * **Text Retrieval:** You must use the **`get_text`** tool if you want to find information on a page.
-  * **Search Refinement:** If you cannot find an element or information, try to **increase the top k value** and try to **change to another key word** (remove specific keywords).
-  * **Page Resource:** If the element has not changed on the page, **do not repeat the get resource of page** action.
-
------
-
-## **5. Task Completion and Verification**
+## **4. Task Completion and Verification**
 
   * **Process Flow:**
       * If the tool result is **complete**, move to the next step.
