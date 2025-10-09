@@ -33,7 +33,7 @@ const _apiResponse = (res, data, message = '', status = 200) => {
     console.log(data);
     let content = [];
     if (data && typeof data === 'object') {
-        if (data.files || data.content || data.lines || data.new_path || (data.os && data.system_hardware && data.current_directory && data.time)) {
+        if (data.files || data.content || data.lines || data.new_path || data.full_path || data.items || (data.os && data.system_hardware && data.current_directory && data.time)) {
             let defind_data;
             if (data.files !== undefined) {
                 defind_data = data.files;
@@ -46,6 +46,12 @@ const _apiResponse = (res, data, message = '', status = 200) => {
             }
             else if (data.new_path !== undefined) {
                 defind_data = data.new_path;
+            }
+            else if (data.full_path !== undefined) {
+                defind_data = data.full_path;
+            }
+            else if (data.items !== undefined) {
+                defind_data = data;
             }
             else if ((data.os !== undefined) && (data.system_hardware !== undefined) && (data.current_directory !== undefined) && (data.time !== undefined)) {
                 defind_data = data;
@@ -359,6 +365,54 @@ app.get('/files/CurrentDirectory', (_req, res) => {
     try {
         const CurrentDirectory = process.cwd();
         return _apiResponse(res, { content: `current directory is : ${CurrentDirectory}` }, 'Successfully listed files.');
+    }
+    catch (err) {
+        return _apiResponse(res, null, err.message, 500);
+    }
+});
+// Get full file path
+app.post('/files/get_full_path', (req, res) => {
+    const { file_name } = req.body;
+    if (!file_name)
+        return _apiResponse(res, null, 'Missing file_name', 400);
+    const fullPath = _getFullPath(file_name);
+    if (!fs_1.default.existsSync(fullPath))
+        return _apiResponse(res, null, 'File not found', 404);
+    return _apiResponse(res, { full_path: fullPath }, `Full path for '${file_name}' retrieved successfully`);
+});
+// Browse directory
+app.post('/files/browse', (req, res) => {
+    const { directory } = req.body;
+    const targetDir = directory ? path_1.default.resolve(BASE_DIR, directory) : BASE_DIR;
+    if (!fs_1.default.existsSync(targetDir) || !fs_1.default.statSync(targetDir).isDirectory()) {
+        return _apiResponse(res, null, 'Directory does not exist', 404);
+    }
+    try {
+        const items = fs_1.default.readdirSync(targetDir);
+        const itemsWithDetails = items.map(item => {
+            const itemPath = path_1.default.join(targetDir, item);
+            const stats = fs_1.default.statSync(itemPath);
+            return {
+                name: item,
+                path: itemPath,
+                isDirectory: stats.isDirectory(),
+                size: stats.size,
+                modified: stats.mtime
+            };
+        });
+        // Sort directories first, then files
+        itemsWithDetails.sort((a, b) => {
+            if (a.isDirectory && !b.isDirectory)
+                return -1;
+            if (!a.isDirectory && b.isDirectory)
+                return 1;
+            return a.name.localeCompare(b.name);
+        });
+        return _apiResponse(res, {
+            current_directory: targetDir,
+            parent_directory: path_1.default.dirname(targetDir),
+            items: itemsWithDetails
+        }, `Directory contents for '${targetDir}' retrieved successfully`);
     }
     catch (err) {
         return _apiResponse(res, null, err.message, 500);

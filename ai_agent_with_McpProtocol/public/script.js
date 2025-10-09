@@ -214,7 +214,7 @@ const stopButton = document.getElementById('stopButton');
 
 const fileInput = document.getElementById('fileInput');
 const selectedFilesDiv = document.getElementById('selectedFiles');
-
+const fileDialogButton = document.getElementById('fileDialogButton');
 fileInput.addEventListener('change', function() {
     selectedFilesDiv.innerHTML = '';
     if (this.files.length > 0) {
@@ -668,7 +668,29 @@ userInput.addEventListener('keydown',async (event) => {
     }
 });
 
-userInput.addEventListener('input', function () {
+// Add event listener for file dialog button
+fileDialogButton.addEventListener('click', function() {
+    // Open our custom file browser instead of the native file input
+    openFileBrowser();
+});
+
+// Add event listener to detect @ symbol in input
+userInput.addEventListener('input', function() {
+    const cursorPos = userInput.selectionStart;
+    const textBeforeCursor = userInput.value.substring(0, cursorPos);
+    
+    // Check if the last character before cursor is @
+    const lastChar = textBeforeCursor.charAt(textBeforeCursor.length - 1);
+    
+    if (lastChar === '@') {
+        // Show the file dialog button
+        fileDialogButton.style.display = 'inline-flex';
+    } else {
+        // Hide the file dialog button
+        fileDialogButton.style.display = 'none';
+    }
+    
+    // Also adjust textarea height
     this.style.height = 'auto';
     this.style.height = (this.scrollHeight) + 'px';
 });

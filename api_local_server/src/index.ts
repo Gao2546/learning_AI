@@ -41,7 +41,7 @@ const _apiResponse = (res: Response, data: ApiResponseData, message = '', status
     text: string;
   }[] = [];
   if (data && typeof data === 'object') {
-    if (data.files || data.content || data.lines || data.new_path || (data.os && data.system_hardware && data.current_directory && data.time)) {
+    if (data.files || data.content || data.lines || data.new_path || data.full_path || data.items || (data.os && data.system_hardware && data.current_directory && data.time)) {
       let defind_data;
 
     if (data.files !== undefined) {
@@ -52,6 +52,10 @@ const _apiResponse = (res: Response, data: ApiResponseData, message = '', status
       defind_data = data.lines;
     } else if (data.new_path !== undefined) {
       defind_data = data.new_path;
+    } else if (data.full_path !== undefined) {
+      defind_data = data.full_path;
+    } else if (data.items !== undefined) {
+      defind_data = data;
     } else if ((data.os !== undefined) && (data.system_hardware !== undefined) && (data.current_directory !== undefined) && (data.time !== undefined)) {
       defind_data = data
     }
@@ -425,7 +429,58 @@ app.get('/files/CurrentDirectory', (_req: Request, res: Response) => {
     return _apiResponse(res, null, err.message, 500);
   }
 });
+// Get full file path
+app.post('/files/get_full_path', (req: Request, res: Response) => {
+  const { file_name } = req.body;
+  if (!file_name) return _apiResponse(res, null, 'Missing file_name', 400);
+
+  const fullPath = _getFullPath(file_name);
+  if (!fs.existsSync(fullPath)) return _apiResponse(res, null, 'File not found', 404);
+
+  return _apiResponse(res, { full_path: fullPath }, `Full path for '${file_name}' retrieved successfully`);
+});
+
+// Browse directory
+app.post('/files/browse', (req: Request, res: Response) => {
+  const { directory } = req.body;
+  const targetDir = directory ? path.resolve(BASE_DIR, directory) : BASE_DIR;
+  
+  if (!fs.existsSync(targetDir) || !fs.statSync(targetDir).isDirectory()) {
+    return _apiResponse(res, null, 'Directory does not exist', 404);
+  }
+
+  try {
+    const items = fs.readdirSync(targetDir);
+    const itemsWithDetails = items.map(item => {
+      const itemPath = path.join(targetDir, item);
+      const stats = fs.statSync(itemPath);
+      return {
+        name: item,
+        path: itemPath,
+        isDirectory: stats.isDirectory(),
+        size: stats.size,
+        modified: stats.mtime
+      };
+    });
+
+    // Sort directories first, then files
+    itemsWithDetails.sort((a, b) => {
+      if (a.isDirectory && !b.isDirectory) return -1;
+      if (!a.isDirectory && b.isDirectory) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return _apiResponse(res, { 
+      current_directory: targetDir,
+      parent_directory: path.dirname(targetDir),
+      items: itemsWithDetails 
+    }, `Directory contents for '${targetDir}' retrieved successfully`);
+  } catch (err: any) {
+    return _apiResponse(res, null, err.message, 500);
+  }
+});
 
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+
 
 

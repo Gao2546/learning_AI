@@ -624,11 +624,11 @@ router.post('/message', async (req, res) => {
                         //     // ]
                         //   },
                         // ],
-                        stream: false,
+                        stream: true,
                         "reasoning": {
                             // One of the following (not both):
                             // "effort": "high", // Can be "high", "medium", or "low" (OpenAI-style)
-                            // "max_tokens": 2000, // Specific token limit (Anthropic-style)
+                            "max_tokens": 20000, // Specific token limit (Anthropic-style)
                             // Optional: Default is false. All models support this.
                             "exclude": false, // Set to true to exclude reasoning tokens from response
                             // Or enable reasoning with the default parameters:
@@ -654,6 +654,7 @@ router.post('/message', async (req, res) => {
                     let assistancePrefixRemoved = false;
                     stream.on("data", (chunk) => {
                         const text = chunk.toString("utf8");
+                        console.log(text);
                         // Check for context length error
                         if (text.includes('{"error":{"message":"')) {
                             try {

@@ -804,14 +804,14 @@ router.post('/message', async (req : Request, res : Response) => {
             //     // ]
             //   },
             // ],
-            stream: false,
+            stream: true,
             "reasoning": {
 
               // One of the following (not both):
 
               // "effort": "high", // Can be "high", "medium", or "low" (OpenAI-style)
 
-              // "max_tokens": 2000, // Specific token limit (Anthropic-style)
+              "max_tokens": 20000, // Specific token limit (Anthropic-style)
 
               // Optional: Default is false. All models support this.
 
@@ -846,6 +846,7 @@ router.post('/message', async (req : Request, res : Response) => {
               
         stream.on("data", (chunk: Buffer) => {
           const text = chunk.toString("utf8");
+          console.log(text);
 
           // Check for context length error
           if (text.includes('{"error":{"message":"')) {
