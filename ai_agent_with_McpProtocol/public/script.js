@@ -623,9 +623,14 @@ userInput.addEventListener('input', function () {
     this.style.height = (this.scrollHeight) + 'px';
 });
 
+
 async function sendMessage() {
     const defaultMode = populateModes(true); // Get default without modifying DOM yet
     const defaultModel = populateModels(true); // Get default without modifying DOM yet
+
+    // Show stop button and hide send button when message is sent
+    sendButton.style.display = 'none';
+    stopButton.style.display = 'inline-flex';
 
     // Check middleware status first
     try {
@@ -652,13 +657,17 @@ async function sendMessage() {
     } catch (err) {
         console.error('Error fetching middleware status:', err);
         // Optionally display an error to the user
+        resetButtonState(); // Reset button state on error
         return; // Stop if middleware check fails
     }
 
     let currentMessage = userInput.value.trim();
     const userFiles = document.getElementById('fileInput')
     let currentFiles = userFiles.files;
-    if (currentMessage === '') return;
+    if (currentMessage === '') {
+        resetButtonState(); // Reset button state if message is empty
+        return;
+    }
 
     displayMessage(currentMessage, 'user-message'); // Display initial user message
     // userInput.value = ''; // Clear input field
@@ -727,6 +736,7 @@ async function sendMessage() {
         console.error(err);
         // alert("Error sending message.");
         console.log("Error sending message")
+        resetButtonState(); // Reset button state on error
     }
 
     try { // Wrap the loop in a try-catch
@@ -744,6 +754,7 @@ async function sendMessage() {
               } catch (err) {
                 console.error("Agent unreachable", err);
                 openModal();
+                resetButtonState(); // Reset button state on error
                 return;
               }
             }
@@ -795,7 +806,7 @@ async function sendMessage() {
             //         if (done) break;
                     
             //         const chunk = decoder.decode(value, { stream: true });
-            //         // Sanitize HTML to prevent injection, although we expect plain text
+            //         // Sanitize HTML to prevent injection, although we expect plain
             //         const sanitizedChunk = chunk.replace(/</g, "&lt;").replace(/>/g, "&gt;");
             //         // responseContainer.innerHTML += sanitizedChunk;
             //         displayMarkdownMessageStream(sanitizedChunk,messageElement)
@@ -806,6 +817,8 @@ async function sendMessage() {
 
             
 
+
+            
 
 
             const data = await response.json();
@@ -865,6 +878,7 @@ async function sendMessage() {
         displayMarkdownMessage('Network error or issue communicating with the agent.', 'agent-message error-message');
     } finally {
         // This block executes regardless of whether the loop completed successfully or broke due to error/limit
+        resetButtonState(); // Reset button state when finished
 
         // Update chat list and session info after the loop finishes
         try {
@@ -899,6 +913,7 @@ async function sendMessage() {
     }
 }
 
+
 function displayMessage(text, className) {
     const messageElement = document.createElement('div');
     messageElement.textContent = text;
@@ -907,7 +922,14 @@ function displayMessage(text, className) {
     messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to bottom
 }
 
+
 let stopCon = false;
+
+// Function to reset button state to show send button and hide stop button
+function resetButtonState() {
+    sendButton.style.display = 'inline-flex';
+    stopButton.style.display = 'none';
+}
 
 stopButton.addEventListener('click', async () => {
     const sessionResponse = await fetch('/auth/session');
@@ -923,9 +945,11 @@ stopButton.addEventListener('click', async () => {
     console.log(res);
     if (res.success){
         stopCon = true;
+        resetButtonState(); // Reset button state after successful stop
         }
     });
 })
+
 
 async function displayChatList(chatIds) {
     const chatListDiv = document.getElementById('chatListEle');

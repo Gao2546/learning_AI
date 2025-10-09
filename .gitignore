@@ -24,6 +24,7 @@ tmp/
 *.log
 *.pth
 *.zip
+*.backup
 .key
 __pycache__/
 data*/

@@ -15,25 +15,24 @@
         <a href="auth/login" class="login-button" id="loginBtn">Login</a>
     </div>
 
-      <!-- Modal Popup -->
-      <div id="setupModal" class="modal">
-        <div class="modal-content">
-          <span class="close" onclick="closeModal()">&times;</span>
-          <h1>⚙️ Setup Local Agent</h1>
-          <p>Click the button below to download the appropriate setup script for your system:</p>
-          <button onclick="downloadScript()">🔽 Download Setup Script</button>
+  <div id="setupModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal()">×</span>
+      <h1>⚙️ Setup Local Agent</h1>
+      <p>Click the button below to download the appropriate setup script for your system:</p>
+      <button onclick="downloadScript()">🔽 Download Setup Script</button>
 
-          <h2>🧾 How to Use</h2>
-          <pre>
+      <h2>🧾 How to Use</h2>
+      <pre>
     🔹 Windows:
       - Double click **entrypoint.bat** or run in CMD
 
     🔹 macOS/Linux:
       chmod +x entrypoint.sh
       ./entrypoint.sh
-          </pre>
-        </div>
-      </div>
+      </pre>
+    </div>
+  </div>
 
     <div class="container">
         <div id="chatList">
@@ -42,20 +41,17 @@
             <div class="mode-selector-container">
                 <label for="modeSelector">Mode:</label>
                 <select id="modeSelector">
-                    <!-- Options will be populated dynamically -->
-                </select>
+                    </select>
             </div>
             <div class="model-selector-container">
                 <label for="modelSelector">Model:</label>
                 <select id="modelSelector">
-                    <!-- Options will be populated dynamically -->
-                </select>
+                    </select>
             </div>
             <h3 id="chathishead">Chat History</h3>
             <div id="chatListEle">
             </div>
-            <!-- Trigger Button -->
-            <button id = "openModal" onclick="openModal()">⚙️ Open Setup<br>Instructions</button>
+            <button id="openModal" onclick="openModal()">⚙️ Open Setup<br>Instructions</button>
         </div>
         <div id="chatbox">
             <h1 class="header1"><button id="toggleSidebarButton"><i class="fas fa-bars"></i></button> AI Agent Interface</h1>
@@ -69,18 +65,18 @@
                                 .py,.c,.cpp,.h,.hpp,.java,.js,.ts,.cs,.go,.rs,.php,.rb,.swift,.kt,.m,.sh,.xls,.xlsx,.xlsm,.csv,.yml,.bat,.xml,.html,.css,.ts,
                                 image/*" 
                         multiple />
-   
+           
                 <label for="fileInput" class="file-input-label">
                     <i class="fas fa-paperclip"></i>
                 </label>
                 
                 <button id="sendButton">Send</button>
-                <button id="stopButton">Stop</button>
+                <button id="stopButton" style="display: none;">Stop</button>
+
             </div>
+            <div id="selectedFiles" style="display: none;"></div>
             <div class="warning">warning: is Alpha version</div>
-            <!-- Trigger Button -->
-            <!-- <button id = "openModal" onclick="openModal()">⚙️ Open Setup Instructions</button> -->
-        </div>
+            </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>

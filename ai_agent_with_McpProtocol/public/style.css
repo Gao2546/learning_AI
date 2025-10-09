@@ -365,6 +365,33 @@ thinking {
     transform: scale(0.95);
 }
 
+#stopButton {
+    padding: 0 20px; /* Adjust padding */
+    background-color: #007acc; /* Match new chat button */
+    color: #fff;
+    border: none;
+    border-radius: 0 18px 18px 0; /* Rounded corners */
+    cursor: pointer;
+    height: 100%; /* Match input height */
+    font-size: 1.2em; /* Make icon slightly larger if using one */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    box-sizing: border-box;
+    border: 1px solid #007acc; /* Match border style */
+    border-left: none; /* Remove left border */
+}
+
+#stopButton:hover {
+    background-color: #005fa3;
+    transform: scale(1.05);
+}
+
+#stopButton:active {
+    transform: scale(0.95);
+}
+
 /* Message Styles */
 .user-message, .agent-message {
     margin-bottom: 15px; /* Increase spacing */

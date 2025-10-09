@@ -84,7 +84,7 @@ async function readFile(filename: string) {
   })
 }
 
-let setting_prompt : string = await readFile("./build/setting.txt") as string;
+let setting_prompts : string = await readFile("./build/setting.txt") as string;
 
 // interface MCPToolData {
 //   attempt_completion: {
@@ -163,7 +163,7 @@ interface SearchSimilarResponse {
 }
 const xmlToJson = async (xml: string): Promise<Record<string , any>> => {
   const parser = new XMLParser({ignoreAttributes: false,
-                                stopNodes: ["*.result"],
+                                stopNodes: ["*.result","*.text"],
                                 cdataPropName: false  // (optional) ถ้าอยากให้ parser แยกเก็บ CDATA ชัดเจน
                                 });
   const jsonObj = parser.parse(xml);
@@ -421,8 +421,8 @@ router.post('/message', async (req : Request, res : Response) => {
     const systemInformationJSON = await JSON.parse(systemInformation.content[0].text);
     // console.log(systemInformation);
     // console.log(systemInformationJSON);
-    setting_prompt += "\n\n\n\n----------------------- **USER SYSTEM INFORMATION** -----------------------\n\n" + `## **Operation System**\n${JSON.stringify(systemInformationJSON.os)}\n\n---\n\n` + `## **System Hardware**\n${JSON.stringify(systemInformationJSON.system_hardware)}\n\n---\n\n` + `## **Current Directory**\n${JSON.stringify(systemInformationJSON.current_directory)}\n\n---\n\n` + `## **System Time**\n${JSON.stringify(systemInformationJSON.time)}\n\n----------------------- **END** -----------------------\n\n`
-    console.log(setting_prompt);
+    let setting_prompt;
+    setting_prompt = setting_prompts + "\n\n\n\n----------------------- **USER SYSTEM INFORMATION** -----------------------\n\n" + `## **Operation System**\n${JSON.stringify(systemInformationJSON.os)}\n\n---\n\n` + `## **System Hardware**\n${JSON.stringify(systemInformationJSON.system_hardware)}\n\n---\n\n` + `## **Current Directory**\n${JSON.stringify(systemInformationJSON.current_directory)}\n\n---\n\n` + `## **System Time**\n${JSON.stringify(systemInformationJSON.time)}\n\n----------------------- **END** -----------------------\n\n`
     // if (!userMessage) {
     //   return res.status(400).json({ error: 'Message is required' });
     // }
@@ -549,9 +549,11 @@ router.post('/message', async (req : Request, res : Response) => {
     question =  "Model name: " + 
                 modelToUse.match(regexM)[1] + 
                 "\n\n" + 
-                question
+                "--------------** Start Conversation Section** --------------\n\n" + 
+                question +
+                "--------------** End Conversation Section** --------------\n\n"
 
-    // let question_backup = question;
+    // let question_backup = question; Conv
 
 
     try{
@@ -560,11 +562,13 @@ router.post('/message', async (req : Request, res : Response) => {
         "## **If user do not mation to user system information do not talk about that"+
         "\n\n" + 
         question + `\n\n## **Current Directory (current working dir)**\n${JSON.stringify(systemInformationJSON.current_directory)}\n\n---\n\n`; //+ "\n\n" + "If you complete the task you must use **attempt_completion** Tool";
+        console.log(question);
       }
       else{
         question = "\n\n\n\n----------------------- **USER SYSTEM INFORMATION** -----------------------\n\n" + `## **Operation System**\n${JSON.stringify(systemInformationJSON.os)}\n\n---\n\n` + `## **System Hardware**\n${JSON.stringify(systemInformationJSON.system_hardware)}\n\n---\n\n` + `## **Current Directory**\n${JSON.stringify(systemInformationJSON.current_directory)}\n\n---\n\n` + `## **System Time**\n${JSON.stringify(systemInformationJSON.time)}\n\n----------------------- **END** -----------------------\n\n` + 
                     "## **If user do not mation to user system information do not talk about that\n\n"+
                     question;
+        console.log(question)
       }
     }
     catch(err) {
@@ -594,18 +598,23 @@ router.post('/message', async (req : Request, res : Response) => {
         try {
           console.log(`Streaming response for prompt: "${question}"`);
         
+
           const result = await ai.models.generateContentStream({
             model: modelToUse.replace("{_Google_API_}",""),
             contents: question,
             config: {
               maxOutputTokens: 1_000_000,
-            }
+            },
           });
+
         
           let out_res = '';
           let assistancePrefixRemoved = false;
         
           for await (const chunk of result) {
+            if (controller.signal.aborted){
+              return res.status(500).json({ error:'Error streaming Aborted'});
+            }
             let chunkText = chunk.text;
             if (chunkText !== undefined) {
               out_res += chunkText;
@@ -797,7 +806,7 @@ router.post('/message', async (req : Request, res : Response) => {
             // ],
             stream: true,
             // temperature: 0.05, // ไม่สุ่มเลย
-            max_tokens: 10_000,
+            // max_tokens: 1_000_000,
             // top_p: 1.0,
             // frequency_penalty: 0.0,
             // presence_penalty: 0.0,
@@ -813,32 +822,58 @@ router.post('/message', async (req : Request, res : Response) => {
               
         stream.on("data", (chunk: Buffer) => {
           const text = chunk.toString("utf8");
-          // console.log(text);
-        
+          console.log(text);
+
+          // Check for context length error
+          if (text.includes('{"error":{"message":"')) {
+            try {
+              const errorObj = JSON.parse(text);
+              if (
+                errorObj.error &&
+                errorObj.error.message &&
+                errorObj.error.message.includes("maximum context length is")
+              ) {
+                reject(new Error(errorObj.error.message));
+                return;
+              }
+            } catch (e) {
+              // If not JSON, just continue
+            }
+          }
+
           const lines = text.split("\n").filter(
             (line) => line.trim() !== "" && line.startsWith("data:")
           );
-        
+
           for (const line of lines) {
             const data = line.slice(5).trim(); // remove "data: "
             if (data === "[DONE]") {
               // Stream finished
+              console.log("streaming DONE");
               resolve(out_res); // resolve the promise immediately
               return;
             }
-          
+
             try {
               const json = JSON.parse(data);
+              // Check for context length error in streamed data
+              if (
+                json.error &&
+                json.error.message &&
+                json.error.message.includes('{"error":{"message":"')
+              ) {
+                reject(new Error(json.error.message));
+                return;
+              }
               const delta = json.choices?.[0]?.delta?.content || "";
-              // const delta = json.choices?.[0]?.text || "";
               out_res += delta;
-            
+
               // Optional: strip unwanted prefix
               if (!assistancePrefixRemoved && out_res.startsWith("assistance:")) {
                 out_res = out_res.slice("assistance:".length).trimStart();
                 assistancePrefixRemoved = true;
               }
-            
+
               socket?.emit("StreamText", out_res);
             } catch (e) {
               console.error("Invalid JSON:", data, e);
@@ -954,12 +989,12 @@ router.post('/message', async (req : Request, res : Response) => {
           
       if (rrs.length > 0) {
         // ครอบทุก <text>...</text> ด้วย <![CDATA[ ... ]]>
-        rrs = rrs.map(xml =>
-          xml.replace(
-            /<text>([\s\S]*?)<\/text>/g,
-            (match, p1) => `<text><![CDATA[\n${p1}\n]]></text>`
-          )
-        );
+        // rrs = rrs.map(xml =>
+        //   xml.replace(
+        //     /<text>([\s\S]*?)<\/text>/g,
+        //     (match, p1) => `<text><![CDATA[\n${p1}\n]]></text>`
+        //   )
+        // );
       }
       
       console.log(rrs);
