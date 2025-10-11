@@ -163,9 +163,12 @@ interface SearchSimilarResponse {
 }
 const xmlToJson = async (xml: string): Promise<Record<string , any>> => {
   const parser = new XMLParser({ignoreAttributes: false,
-                                stopNodes: ["*.result","*.text"],
+                                // stopNodes: ["*.result"],
                                 cdataPropName: false  // (optional) ถ้าอยากให้ parser แยกเก็บ CDATA ชัดเจน
                                 });
+  
+  // console.log("show xml")
+  // console.log(xml)
   const jsonObj = parser.parse(xml);
 
   const toolName = Object.keys(jsonObj)[0];  // สมมุติว่า root element มีแค่หนึ่ง
@@ -530,7 +533,7 @@ router.post('/message', async (req : Request, res : Response) => {
     let question : string = "";
     let question_backup
     if ((currentChatMode) && (serch_doc != '')){
-      question = "document" + ": " + serch_doc + "\n\n" + chatContent.replace(/\n<DATA_SECTION>\n/g, "\n");
+      question = chatContent.replace(/\n<DATA_SECTION>\n/g, "\n") + "\n\ndocument" + ": " + serch_doc;
       question_backup = chatContent + "\n\n" + "document" + ": " + serch_doc
     }
     else{
@@ -546,12 +549,14 @@ router.post('/message', async (req : Request, res : Response) => {
     const modeToUse = currentChatMode || initialMode; // Use session mode or default
     console.log(`Using AI mode: ${modeToUse}`); // Log the mode being used
     const regexM = /\{.*?\}\s*(.*)/;
-    question =  "Model name: " + 
+    question =  
+                "Model name: " + 
                 modelToUse.match(regexM)[1] + 
                 "\n\n" + 
                 "--------------** Start Conversation Section** --------------\n\n" + 
-                question +
-                "--------------** End Conversation Section** --------------\n\n"
+                question 
+                // +
+                // "--------------** End Conversation Section** --------------\n\n"
 
     // let question_backup = question; Conv
 
@@ -561,12 +566,32 @@ router.post('/message', async (req : Request, res : Response) => {
         question = setting_prompt + 
         "## **If user do not mation to user system information do not talk about that"+
         "\n\n" + 
-        question + `\n\n## **Current Directory (current working dir)**\n${JSON.stringify(systemInformationJSON.current_directory)}\n\n---\n\n`; //+ "\n\n" + "If you complete the task you must use **attempt_completion** Tool";
+        question ;
+        // + `\n\n## **Current Directory (current working dir)**\n${JSON.stringify(systemInformationJSON.current_directory)}\n\n---\n\n`; //+ "\n\n" + "If you complete the task you must use **attempt_completion** Tool";
         console.log(question);
       }
       else{
-        question = "\n\n\n\n----------------------- **USER SYSTEM INFORMATION** -----------------------\n\n" + `## **Operation System**\n${JSON.stringify(systemInformationJSON.os)}\n\n---\n\n` + `## **System Hardware**\n${JSON.stringify(systemInformationJSON.system_hardware)}\n\n---\n\n` + `## **Current Directory**\n${JSON.stringify(systemInformationJSON.current_directory)}\n\n---\n\n` + `## **System Time**\n${JSON.stringify(systemInformationJSON.time)}\n\n----------------------- **END** -----------------------\n\n` + 
-                    "## **If user do not mation to user system information do not talk about that\n\n"+
+        question = "\n\n\n\n----------------------- **USER SYSTEM INFORMATION** -----------------------\n\n" + `## **Operation System**\n${JSON.stringify(systemInformationJSON.os)}\n\n---\n\n` + `## **System Hardware**\n${JSON.stringify(systemInformationJSON.system_hardware)}\n\n---\n\n` + `## **Current Directory**\n${JSON.stringify(systemInformationJSON.current_directory)}\n\n---\n\n` + `## **System Time**\n${JSON.stringify(systemInformationJSON.time)}\n\n---\n\n` + `----------------------- **END USER SYSTEM INFORMATION** -----------------------\n\n` + 
+                   "\n\n\n\n------------------------- **SYSTEM INSTRUCTION**---------------------------\n\n" + `## **If user do not mation to user system information do not talk about that\n\n` + `## **You are assistance\n\n` + `## **You must answer user question\n\n` + `## **If in normal conversation do not use any markdown Code Block in three backticks\n\n` + `## **Use Markdown Code Block in three backticks only in code\n\n` 
+//                    + `Example Conversation\n\nuser: hello
+
+// assistance: Hello! How can I assist you today?
+
+// user: why sky is blue
+
+// assistance:  The sky appears blue due to a phenomenon called Rayleigh scattering. Here's a simplified explanation:
+
+// *   **Sunlight and Colors:** Sunlight is actually made up of all the colors of the.
+// *   **osphere:** As sunlight the Earth's, it collides with tiny air molecules (mostly nitrogen and oxygen).
+// *   **Scattering:** This collision causes the sunlight to scatter in different directions.
+// *   **Blue Light:** Blue and violet light have shorter wavelengths and are scattered more strongly than other colors like red and orange.
+// *   **Our Eyes:** Because blue light is scattered more, it's what we see when we look up at the sky.
+
+// It's worth noting that at sunrise and sunset, the sunlight has to travel through more of the atmosphere. This means that most of the blue light is scattered away, leaving the longer wavelengths like red and orange to dominate, which is why we see those colors during those times.
+
+// Do you want me to elaborate on any part of this explanation, or would you like to know about something else?\n\n` 
++ `----------------------------------- **END SYSTEM INSTRUCTION** -----------------------------------\n\n` +
+                    // "system: You are assistance\n\n" + "system: You must answer user question"
                     question;
         console.log(question)
       }
@@ -754,7 +779,9 @@ router.post('/message', async (req : Request, res : Response) => {
                                 "\n\nModel name : " + 
                                 modelToUse.match(regexM)[1] + 
                                 "\n\n",
-                                question_backup + `\n\n## **Current Directory (current working dir)**\n${JSON.stringify(systemInformationJSON.current_directory)}\n\n---\n\n`);
+                                question_backup 
+                                // + `\n\n## **Current Directory (current working dir)**\n${JSON.stringify(systemInformationJSON.current_directory)}\n\n---\n\n`
+                              );
       }
 
       console.log(message);
@@ -780,8 +807,39 @@ router.post('/message', async (req : Request, res : Response) => {
           },
           body: JSON.stringify({
             model: modelToUse.replace("{_OpenRouter_API_}", ""),
-            // prompt: question,
-            "messages": message,
+            ...(modelToUse.startsWith("{_OpenRouter_API_}google")
+                ? { prompt: question }
+                : { messages: message }
+            ),
+            ...(modelToUse.startsWith("{_OpenRouter_API_}google")
+                ? { 'provider': {
+                      'order': [
+                        'deepinfra/bf16',
+                        'chutes',
+                        'together',
+                        'google-vertex',
+                        'google-ai-studio',
+
+                      ],
+                    } }
+                : { 'provider': {
+                      'order': [
+                        'deepinfra/fp4',
+                        'chutes/bf4',
+                        'deepinfra/fp8',
+                        'chutes/bf8',
+                        'deepinfra/fp16',
+                        'chutes/bf16',
+                        'deepinfra',
+                        'chutes',
+                        'together',
+                        'xai',
+                        'google-vertex',
+                        'google-ai-studio',
+                        'inference-net'
+                      ],
+                    } }
+            ),
             // [
             //   {
             //     "role": "system",
@@ -846,7 +904,7 @@ router.post('/message', async (req : Request, res : Response) => {
               
         stream.on("data", (chunk: Buffer) => {
           const text = chunk.toString("utf8");
-          console.log(text);
+          // console.log(text);
 
           // Check for context length error
           if (text.includes('{"error":{"message":"')) {
@@ -889,7 +947,8 @@ router.post('/message', async (req : Request, res : Response) => {
                 reject(new Error(json.error.message));
                 return;
               }
-              const delta = json.choices?.[0]?.delta?.content || "";
+              const delta = json.choices?.[0]?.delta?.content || json.choices?.[0]?.text || "";
+              // const delta = json.choices?.[0]?.text;
               out_res += delta;
 
               // Optional: strip unwanted prefix
@@ -992,7 +1051,7 @@ router.post('/message', async (req : Request, res : Response) => {
                                     // .replace("thinking\n","\n<thinking>\n")
                                     // .replace("<thinking>","\n<thinking>\n")
                                     // .replace("</thinking>","\n</thinking>\n")
-                                    // .replace("```xml","\n```xml")
+                                    .replace("```xml","\n```xml")
                                     // .replace("```tool_code","\n```tool_code")
                                     // .replace("TOOL USE\n```xml", "TOOL USE")
                                     // .replace("TOOL USE", "TOOL USE\n```xml")
@@ -1013,12 +1072,19 @@ router.post('/message', async (req : Request, res : Response) => {
           
       if (rrs.length > 0) {
         // ครอบทุก <text>...</text> ด้วย <![CDATA[ ... ]]>
-        // rrs = rrs.map(xml =>
-        //   xml.replace(
-        //     /<text>([\s\S]*?)<\/text>/g,
-        //     (match, p1) => `<text><![CDATA[\n${p1}\n]]></text>`
-        //   )
-        // );
+        rrs = rrs.map(xml =>
+          xml.replace(
+            /<text>([\s\S]*?)<\/text>/g,
+            (match, p1) => `<text><![CDATA[\n${p1}\n]]></text>`
+          )
+        );
+
+        rrs = rrs.map(xml =>
+          xml.replace(
+            /<result>([\s\S]*?)<\/result>/g,
+            (match, p1) => `<result><![CDATA[\n${p1}\n]]></result>`
+          )
+        );
       }
       
       console.log(rrs);

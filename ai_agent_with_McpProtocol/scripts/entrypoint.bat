@@ -20,7 +20,7 @@ Set-Location $installDir
 if (-not (Test-Path "package.json")) {
     npm init -y | Out-Null
 }
-npm install api_local_server
+npm i api_local_server
 
 # Run the package
 Write-Host "=== Running api_local_server ==="

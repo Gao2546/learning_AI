@@ -383,7 +383,7 @@ thinking {
     max-height: 150px;
     min-height: 48px;
     height: 48px; /* Initial height for one line */
-    width: calc(100% - 120px);
+    width: calc(100% - 220px);
     /* margin-right: 100px; */
     overflow-y: auto;
     margin: 0;
@@ -714,6 +714,37 @@ strong {
     margin-right: auto;
 }
 
+
+/* Change Directory Button Styles */
+#changeDirButton {
+    background-color: #3c3c3c;
+    border: 1px solid #4a4a4a;
+    border-radius: 8px;
+    color: #e0e0e0;
+    cursor: pointer;
+    display: none; /* Hidden by default */
+    align-items: center;
+    justify-content: center;
+    height: 46px;
+    width: 46px;
+    position: absolute;
+    bottom: 0px;
+    right: 190px;
+    z-index: 10;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+#changeDirButton:hover {
+    background-color: #444;
+    border-color: #007acc;
+    box-shadow: 0 2px 5px rgba(0, 122, 204, 0.2);
+}
+
+#changeDirButton i {
+    color: #e0e0e0;
+    font-size: 16px;
+}
 
 /* File Dialog Button Styles */
 #fileDialogButton {
@@ -1319,15 +1350,18 @@ strong {
         right: 140px;
     }
     
+    #changeDirButton {
+        right: 190px;
+    }
+    
     .file-input-label {
         right: 90px;
     }
     
     /* User input responsive styles */
     #userInput {
-        width: calc(100% - 180px);
+        width: calc(100% - 220px);
     }
-    
     .user-message, .agent-message {
         margin-bottom: 12px; /* Adjust spacing */
         line-height: 1.5; /* Improve readability */

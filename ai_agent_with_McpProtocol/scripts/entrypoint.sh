@@ -40,7 +40,7 @@ mkdir -p "$INSTALL_DIR"
 echo "=== Installing api_local_server in $INSTALL_DIR ==="
 cd "$INSTALL_DIR"
 npm init -y >/dev/null 2>&1
-npm install api_local_server
+npm i api_local_server
 
 # Run package (adjust if it has a specific start script)
 echo "=== Running api_local_server ==="

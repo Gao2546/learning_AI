@@ -215,6 +215,7 @@ const stopButton = document.getElementById('stopButton');
 const fileInput = document.getElementById('fileInput');
 const selectedFilesDiv = document.getElementById('selectedFiles');
 const fileDialogButton = document.getElementById('fileDialogButton');
+const changeDirButton = document.getElementById('changeDirButton');
 fileInput.addEventListener('change', function() {
     selectedFilesDiv.innerHTML = '';
     if (this.files.length > 0) {
@@ -668,12 +669,18 @@ userInput.addEventListener('keydown',async (event) => {
     }
 });
 
-// Add event listener for file dialog button
-fileDialogButton.addEventListener('click', function() {
-    // Open our custom file browser instead of the native file input
-    openFileBrowser();
-});
-
+    
+    // Add event listener for file dialog button
+    fileDialogButton.addEventListener('click', function() {
+        // Open our custom file browser instead of the native file input
+        openFileBrowser();
+    });
+    
+    // Add event listener for change directory button
+    changeDirButton.addEventListener('click', function() {
+        // Open file browser to select a directory
+        openDirectoryBrowser();
+    });
 // Add event listener to detect @ symbol in input
 userInput.addEventListener('input', function() {
     const cursorPos = userInput.selectionStart;
@@ -685,9 +692,13 @@ userInput.addEventListener('input', function() {
     if (lastChar === '@') {
         // Show the file dialog button
         fileDialogButton.style.display = 'inline-flex';
+        // Show the change directory button
+        changeDirButton.style.display = 'inline-flex';
     } else {
         // Hide the file dialog button
         fileDialogButton.style.display = 'none';
+        // Hide the change directory button
+        changeDirButton.style.display = 'none';
     }
     
     // Also adjust textarea height
@@ -750,7 +761,7 @@ async function sendMessage() {
     let attempt_completion = false;
     let img_url = null;
     let loopCount = 0; // Add a counter to prevent infinite loops in case of unexpected issues
-    const MAX_LOOPS = 10; // Set a maximum number of iterations
+    const MAX_LOOPS = 100; // Set a maximum number of iterations
     const selectedMode = modeSelector ? modeSelector.value : defaultMode; // Get selected mode *before* loop
     const selectedModel = modelSelector ? modelSelector.value : defaultModel; // Get selected model *before* loop
     let role = "user";
@@ -837,6 +848,19 @@ async function sendMessage() {
             const sessionResponse = await fetch('/auth/session');
             const sessionData = await sessionResponse.json();
             console.log(socket.id + sessionData.currChatId)
+            // Set your desired timeout in milliseconds (e.g., 30 seconds)
+            const TIMEOUT_DURATION = 1000*60*60*2;
+                    
+            // 1. Create an AbortController instance
+            const controller = new AbortController();
+            const signal = controller.signal;
+                    
+            // 2. Set up the timeout
+            const timeoutId = setTimeout(() => {
+                console.log('Request timed out!');
+                controller.abort(); // This will cancel the fetch request
+            }, TIMEOUT_DURATION);
+
             // Send message to the backend
             const response = await fetch('/api/message', {
                 method: 'POST',
@@ -844,14 +868,15 @@ async function sendMessage() {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    message: currentMessage, // Use currentMessage for the loop
-                    // Use the actual current values from selectors or defaults captured *before* the loop
+                    message: currentMessage,
                     mode: selectedMode,
                     model: selectedModel,
                     role: role,
-                    socket: socket.id, //****************************************************************************************************************** */
+                    socket: socket.id,
                     requestId: socket.id + sessionData.currChatId
-                })
+                }),
+                // 3. Pass the signal to the fetch options
+                signal: signal
             });
 
 
@@ -943,7 +968,7 @@ async function sendMessage() {
             }
         role = "assistance";
         // Loop ONLY if mode is 'code' AND until completion signal, error, or max loops reached
-        } while ((selectedMode === 'code') && (!attempt_completion) && (!followup_question) && (agentResponse !== "error"));
+        } while ((selectedMode === 'code') && (!attempt_completion) && (!followup_question));
 
     } catch (error) {
         console.error('Error during message loop:', error);
@@ -1286,21 +1311,26 @@ function populateModels(returnDefault = false) {
         // { id: '{_Ollama_API_}deepcoder:14b', name: 'deepcoder:14b' },
         // { id: '{_Ollama_API_}deepseek-coder:1.3b', name: 'deepseek-coder:1.3b' },
         // { id: '{_Ollama_API_}deepseek-coder:6.7b', name: 'deepseek-coder:6.7b' },
-        { id: '{_Ollama_API_}deepseek-r1:1.5b', name: 'deepseek-r1:1.5b' },
-        { id: '{_Ollama_API_}deepseek-r1:8b', name: 'deepseek-r1:8b'},
+        { id: '{_Ollama_API_}deepseek-r1:1.5b', name: 'OLdeepseek-r1:1.5b' },
+        { id: '{_Ollama_API_}deepseek-r1:8b', name: 'OLdeepseek-r1:8b'},
         // { id: '{_Ollama_API_}deepseek-r1:14b', name: 'deepseek-r1:14b' },
         // { id: '{_Ollama_API_}deepseek-r1:32b', name: 'deepseek-r1:32b' },
         // { id: '{_Ollama_API_}deepseek-r1:latest', name: 'deepseek-r1:latest' },
-        { id: '{_Ollama_API_}gemma3:270m', name: 'gemma3:270m' },
-        { id: '{_Ollama_API_}gemma3:1b', name: 'gemma3:1b' },
-        { id: '{_Ollama_API_}gemma3:4b', name: 'gemma3:4b' },
+        { id: '{_Ollama_API_}gemma3:270m', name: 'OLgemma3:270m' },
+        { id: '{_Ollama_API_}gemma3:1b', name: 'OLgemma3:1b' },
+        { id: '{_Ollama_API_}gemma3:4b', name: 'OLgemma3:4b' },
+        { id: '{_Ollama_API_}gemma3n:e4b', name: 'OLgemma3n:e4b'},
+        { id: '{_Ollama_API_}gpt-oss:20b', name: 'OLgpt-oss:20b'},
         // { id: '{_Ollama_API_}gemma3:12b', name: 'gemma3:12b' },
         // { id: '{_Ollama_API_}gemma3:27b', name: 'gemma3:27b' },
-        { id: '{_Google_API_}gemma-3-1b-it', name: 'gemma-3-1b-it'},
-        { id: '{_Google_API_}gemma-3-4b-it', name: 'gemma-3-4b-it'},
-        { id: '{_Google_API_}gemma-3-12b-it', name: 'gemma-3-12b-it'},
-        { id: '{_Google_API_}gemma-3-27b-it', name: 'gemma-3-27b-it'},
-        { id: '{_Ollama_API_}gemma3n:e4b', name: 'gemma3n:e4b'},
+        { id: '{_Google_API_}gemma-3-1b-it', name: 'GGgemma-3-1b-it'},
+        { id: '{_Google_API_}gemma-3-4b-it', name: 'GGemma-3-4b-it'},
+        { id: '{_Google_API_}gemma-3-12b-it', name: 'GGgemma-3-12b-it'},
+        { id: '{_Google_API_}gemma-3-27b-it', name: 'GGgemma-3-27b-it'},
+        { id: '{_Google_API_}gemini-2.5-pro', name: 'GGgemini-2.5-pro' },
+        { id: '{_Google_API_}gemini-2.5-flash-lite', name: 'GGgemini-2.5-flash-lite'},
+        { id: '{_Google_API_}gemini-2.5-flash', name: 'GGgemini-2.5-flash'},
+        { id: '{_Google_API_}gemini-2.0-flash', name: 'GGgemini-2.0-flash'},
         // { id: 'gemini-1.5-flash-002', name: 'gemini-1.5-flash-002' },
         // { id: 'gemini-1.5-flash-8b-exp-0827', name: 'gemini-1.5-flash-8b-exp-0827' },
         // { id: 'gemini-1.5-flash-exp-0827', name: 'gemini-1.5-flash-exp-0827' },
@@ -1312,26 +1342,30 @@ function populateModels(returnDefault = false) {
         // { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'gemini-2.0-flash-thinking-exp-01-21' },
         // { id: 'gemini-2.0-flash-thinking-exp-1219', name: 'gemini-2.0-flash-thinking-exp-1219' },
         // { id: 'gemini-2.0-pro-exp-02-05', name: 'gemini-2.0-pro-exp-02-05' },
-        { id: '{_Google_API_}gemini-2.5-pro', name: 'gemini-2.5-pro' },
         // { id: 'gemini-exp-1206', name: 'gemini-exp-1206' },
-        { id: '{_Google_API_}gemini-2.5-flash-lite', name: 'gemini-2.5-flash-lite'},
-        { id: '{_Google_API_}gemini-2.5-flash', name: 'gemini-2.5-flash'},
-        { id: '{_Google_API_}gemini-2.0-flash', name: 'gemini-2.0-flash'},
-        { id: '{_Ollama_API_}gpt-oss:20b', name: 'gpt-oss:20b'},
-        { id: '{_OpenRouter_API_}deepseek/deepseek-chat-v3-0324:free', name: 'deepseek-chat-v3-0324:free'},
-        { id: '{_OpenRouter_API_}deepseek/deepseek-r1-0528:free', name: 'deepseek-r1-0528:free'},
-        { id: '{_OpenRouter_API_}qwen/qwen3-coder:free', name: 'qwen3-coder:free'},
-        { id: '{_OpenRouter_API_}google/gemma-3-27b-it:free', name: 'gemma-3-27b-it:free'},
-        { id: '{_OpenRouter_API_}openai/gpt-oss-20b', name: 'gpt-oss-20b'},
-        { id: '{_OpenRouter_API_}openai/gpt-oss-120b', name: 'gpt-oss-120b'},
-        { id: '{_OpenRouter_API_}google/gemma-3-27b-it', name: 'gemma-3-27b-it'},
-        { id: '{_OpenRouter_API_}google/gemini-2.0-flash-001', name: 'gemini-2.0-flash-001'},
-        { id: '{_OpenRouter_API_}google/gemini-2.5-flash', name: 'gemini-2.5-flash'},
-        { id: '{_OpenRouter_API_}deepseek/deepseek-chat-v3-0324', name: 'deepseek-chat-v3-0324'},
-        { id: '{_OpenRouter_API_}qwen/qwen3-coder', name: 'qwen3-coder'},
-        { id: '{_OpenRouter_API_}z-ai/glm-4.6', name: 'glm-4.6'},
-        { id: '{_OpenRouter_API_}x-ai/grok-code-fast-1', name: 'grok-code-fast-1'},
-        { id: '{_OpenRouter_API_}x-ai/grok-4-fast', name: 'grok-4-fast'},
+        
+        { id: '{_OpenRouter_API_}deepseek/deepseek-chat-v3-0324:free', name: 'ORdeepseek-chat-v3-0324:free'},
+        { id: '{_OpenRouter_API_}deepseek/deepseek-r1-0528:free', name: 'ORdeepseek-r1-0528:free'},
+        { id: '{_OpenRouter_API_}deepseek/deepseek-chat-v3-0324', name: 'ORdeepseek-chat-v3-0324'},
+        { id: '{_OpenRouter_API_}deepseek/deepseek-chat-v3.1', name: 'ORdeepseek-chat-v3.1'},
+        { id: '{_OpenRouter_API_}openai/gpt-oss-20b', name: 'ORgpt-oss-20b'},
+        { id: '{_OpenRouter_API_}openai/gpt-oss-120b', name: 'ORgpt-oss-120b'},
+        { id: '{_OpenRouter_API_}google/gemma-3-27b-it:free', name: 'ORgemma-3-27b-it:free'},
+        { id: '{_OpenRouter_API_}google/gemma-3-27b-it', name: 'ORgemma-3-27b-it'},
+        { id: '{_OpenRouter_API_}google/gemma-3-12b-it:free', name: 'ORgemma-3-12b-it:free'},
+        { id: '{_OpenRouter_API_}google/gemma-3-12b-it', name: 'ORgemma-3-12b-it'},
+        { id: '{_OpenRouter_API_}google/gemma-3-4b-it:free', name: 'ORgemma-3-4b-it:free'},
+        { id: '{_OpenRouter_API_}google/gemma-3-4b-it', name: 'ORgemma-3-4b-it'},
+        { id: '{_OpenRouter_API_}google/gemini-2.0-flash-001', name: 'ORgemini-2.0-flash-001'},
+        { id: '{_OpenRouter_API_}google/gemini-2.5-flash', name: 'ORgemini-2.5-flash'},
+        { id: '{_OpenRouter_API_}z-ai/glm-4.6', name: 'ORglm-4.6'},
+        { id: '{_OpenRouter_API_}x-ai/grok-code-fast-1', name: 'ORgrok-code-fast-1'},
+        { id: '{_OpenRouter_API_}x-ai/grok-4-fast', name: 'ORgrok-4-fast'},
+        { id: '{_OpenRouter_API_}qwen/qwen3-coder:free', name: 'ORqwen3-coder:free'},
+        { id: '{_OpenRouter_API_}qwen/qwen3-coder', name: 'ORqwen3-coder'},
+        { id: '{_OpenRouter_API_}qwen/qwen3-coder-30b-a3b-instruct', name: 'ORqwen3-coder-30b-a3b-instruct'},
+        { id: '{_OpenRouter_API_}meta-llama/llama-3.1-8b-instruct', name: 'ORllama-3.1-8b-instruct'},
+        { id: '{_OpenRouter_API_}meta-llama/llama-3.2-1b-instruct', name: 'ORllama-3.1-1b-instruct'},
         // { id: '{_Ollama_API_}hhao/qwen2.5-coder-tools:7b', name: 'hhao/qwen2.5-coder-tools:7b' },
         // { id: '{_Ollama_API_}hhao/qwen2.5-coder-tools:14b', name: 'hhao/qwen2.5-coder-tools:14b' },
         // { id: '{_Ollama_API_}llama3.2:latest', name: 'llama3.2:latest' },
@@ -1472,3 +1506,341 @@ window.onclick = function(event) {
     modal.style.display = "none";
   }
 }
+// Function to format file size
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Function to open directory browser for changing current directory
+function openDirectoryBrowser() {
+    const modal = document.getElementById('fileBrowserModal');
+    if (!modal) {
+        createDirectoryBrowserModal();
+    }
+
+    // Start with the current working directory
+    loadDirectoryForChange('');
+    document.getElementById('directoryBrowserModal').style.display = 'flex';
+}
+
+// Function to create directory browser modal
+function createDirectoryBrowserModal() {
+    const modal = document.createElement('div');
+    modal.id = 'directoryBrowserModal';
+    modal.className = 'directory-browser-modal';
+    modal.innerHTML = `
+        <div class="file-browser-content">
+            <div class="file-browser-header">
+                <h3>Change Directory</h3>
+                <button class="close-button" onclick="closeDirectoryBrowser()">&times;</button>
+            </div>
+            <div class="file-browser-path">
+                <input type="text" id="currentDirPath" readonly>
+            </div>
+            <div class="file-browser-nav">
+                <button id="parentDirBtn" onclick="navigateToParentDirectoryForChange()">..</button>
+                <button id="homeDirBtn" onclick="navigateToHomeDirectoryForChange()">Home</button>
+                <input type="text" id="searchBox1" oninput="filterItemsForChange()" placeholder="Search current directory..." class="file-browser-search">
+            </div>
+            <div class="file-browser-list" id="dirFileList">
+            </div>
+            <div class="file-browser-footer">
+                <button id="changeBtn" onclick="confirmDirectoryChange()" disabled>Change</button>
+                <button onclick="closeDirectoryBrowser()">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    // Add styles for the modal (reusing existing styles)
+    const style = document.createElement('style');
+    style.textContent = `
+        .directory-browser-modal {
+            display: none; position: fixed; z-index: 1000;
+            left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            align-items: center; justify-content: center;
+        }
+        .file-browser-content {
+            background-color: #2a2a2a; margin: auto; padding: 0;
+            border: 1px solid #3a3a3a; width: 80%; max-width: 800px;
+            height: 70%; max-height: 600px; border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            display: flex; flex-direction: column;
+            backdrop-filter: blur(5px);
+        }
+        .file-browser-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 20px; background-color: #007acc; color: white;
+            border-radius: 8px 8px 0 0;
+        }
+        .file-browser-header h3 { margin: 0; font-weight: 600; }
+        .close-button {
+            background: none; border: none; font-size: 24px;
+            cursor: pointer; color: white; transition: color 0.2s ease;
+        }
+        .close-button:hover { color: #e0e0e0; }
+        .file-browser-path {
+            padding: 10px 20px; background-color: #1e1e1e;
+            border-bottom: 1px solid #3a3a3a;
+        }
+        .file-browser-path input {
+            width: 100%; padding: 8px; border: 1px solid #4a4a4a;
+            border-radius: 8px; background-color: #3c3c3c; color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .file-browser-path input:focus { outline: none; border-color: #007acc; }
+        .file-browser-nav { padding: 10px 20px; display: flex; align-items: center; gap: 10px; }
+        .file-browser-nav button {
+            padding: 8px 15px; background-color: #3c3c3c;
+            border: 1px solid #4a4a4a; border-radius: 8px; cursor: pointer;
+            color: #e0e0e0; transition: background-color 0.2s ease, transform 0.1s ease;
+            flex-shrink: 0;
+        }
+        .file-browser-nav button:hover { background-color: #4a4a4a; transform: scale(1.02); }
+        .file-browser-nav button:active { transform: scale(0.98); }
+        .file-browser-search {
+            flex-grow: 1;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #4a4a4a;
+            background-color: #3c3c3c;
+            color: #e0e0e0;
+            font-family: inherit;
+            font-size: 0.9em;
+        }
+        .file-browser-search:focus {
+            outline: none;
+            border-color: #007acc;
+        }
+        .file-browser-list {
+            flex-grow: 1; overflow-y: auto; padding: 10px 20px;
+            background-color: #1e1e1e; scrollbar-width: thin;
+            scrollbar-color: #555 #2a2a2a;
+        }
+        .file-browser-list::-webkit-scrollbar { width: 8px; }
+        .file-browser-list::-webkit-scrollbar-track { background: #2a2a2a; border-radius: 10px; }
+        .file-browser-list::-webkit-scrollbar-thumb {
+            background-color: #555; border-radius: 10px; border: 2px solid #2a2a2a;
+        }
+        .file-browser-list::-webkit-scrollbar-thumb:hover { background-color: #777; }
+        .file-item {
+            display: flex; align-items: center; padding: 10px;
+            cursor: pointer; border-radius: 8px; margin-bottom: 5px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+        .file-item:hover { background-color: #3a3a3a; transform: scale(1.01); }
+        .file-item.selected { background-color: #007acc; color: white; }
+        .file-icon { margin-right: 10px; width: 20px; text-align: center; }
+        .file-name { flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .file-size { margin-left: 10px; color: #b0b0b0; font-size: 0.9em; }
+        .file-item.selected .file-size { color: rgba(255, 255, 255, 0.8); }
+        .file-browser-footer {
+            padding: 15px 20px; display: flex; justify-content: flex-end;
+            gap: 10px; border-top: 1px solid #3a3a3a;
+        }
+        .file-browser-footer button {
+            padding: 10px 20px; border: none; border-radius: 8px;
+            cursor: pointer; font-weight: 600;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+        #changeBtn { background-color: #007acc; color: white; }
+        #changeBtn:hover { background-color: #005fa3; transform: scale(1.02); }
+        #changeBtn:active { transform: scale(0.98); }
+        #changeBtn:disabled { background-color: #555; cursor: not-allowed; transform: none; }
+        .file-browser-footer button:not(#changeBtn) {
+            background-color: #3c3c3c; color: #e0e0e0; border: 1px solid #4a4a4a;
+        }
+        .file-browser-footer button:not(#changeBtn):hover { background-color: #4a4a4a; transform: scale(1.02); }
+        .file-browser-footer button:not(#changeBtn):active { transform: scale(0.98); }
+    `;
+
+    document.head.appendChild(style);
+    document.body.appendChild(modal);
+}
+
+// Function to close directory browser modal
+function closeDirectoryBrowser() {
+    document.getElementById('directoryBrowserModal').style.display = 'none';
+    selectedDirectoryPath = '';
+}
+
+// Global variable to store selected directory path
+let selectedDirectoryPath = '';
+
+// Function to load directory for change directory browser
+async function loadDirectoryForChange(directory) {
+    try {
+        const response = await fetch('http://localhost:3333/files/browse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ directory: directory }),
+            mode: "cors",
+            credentials: "include"
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const content = data.content[0];
+            const dirData = JSON.parse(content.text);
+
+            currentDirectory = dirData.current_directory;
+            document.getElementById('currentDirPath').value = currentDirectory;
+
+            // Reset search box when navigating to a new directory
+            const searchBox1 = document.getElementById('searchBox1');
+            if (searchBox1) {
+                searchBox1.value = '';
+            }
+
+            const parentDirBtn = document.getElementById('parentDirBtn');
+            parentDirBtn.disabled = (currentDirectory === dirData.parent_directory);
+
+            const fileList = document.getElementById('dirFileList');
+            fileList.innerHTML = ''; // Clear previous list
+
+            // Only show directories in the directory browser
+            const directories = dirData.items.filter(item => item.isDirectory);
+            directories.sort((a, b) => a.name.localeCompare(b.name));
+
+            directories.forEach(item => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <div class="file-icon">${item.isDirectory ? '📁' : '📄'}</div>
+                    <div class="file-name">${item.name}</div>
+                    <div class="file-size">${item.isDirectory ? '' : formatFileSize(item.size)}</div>
+                `;
+
+                fileItem.addEventListener('click', () => {
+                    selectDirectoryForChange(item.path, fileItem);
+                });
+
+                if (item.isDirectory) {
+                    fileItem.addEventListener('dblclick', () => loadDirectoryForChange(item.path));
+                    fileItem.title = `Double-click to open '${item.name}'`;
+                } else {
+                    fileItem.title = `Select file '${item.name}'`;
+                }
+
+                fileList.appendChild(fileItem);
+            });
+        } else {
+            console.error('Failed to load directory:', response.statusText);
+            alert('Error: Could not load directory contents.');
+        }
+    } catch (error) {
+        console.error('Error loading directory:', error);
+        alert('An error occurred while trying to connect to the server.');
+    }
+}
+
+// Function to handle directory selection
+function selectDirectoryForChange(dirPath, element) {
+    console.log("check select")
+    console.log(dirPath)
+    console.log(element)
+    document.querySelectorAll('#dirFileList .file-item.selected').forEach(item => {
+        item.classList.remove('selected');
+    });
+    element.classList.add('selected');
+    selectedDirectoryPath = dirPath;
+    console.log(selectedDirectoryPath);
+    document.getElementById('changeBtn').disabled = false;
+}
+
+// Function to navigate to parent directory for change directory browser
+function navigateToParentDirectoryForChange() {
+    let path = currentDirectory.replace(/\\/g, '/');
+    if (path.length > 1 && path.endsWith('/')) {
+        path = path.slice(0, -1);
+    }
+
+    const lastSlashIndex = path.lastIndexOf('/');
+    if (lastSlashIndex === -1) {
+        loadDirectoryForChange('');
+        return;
+    }
+    
+    if (lastSlashIndex === 0) {
+        loadDirectoryForChange('/');
+        return;
+    }
+
+    const parentDir = path.substring(0, lastSlashIndex);
+    
+    if (/^[a-zA-Z]:$/.test(parentDir)) {
+        loadDirectoryForChange(parentDir + '/');
+    } else {
+        loadDirectoryForChange(parentDir);
+    }
+}
+
+// Function to navigate to home directory for change directory browser
+function navigateToHomeDirectoryForChange() {
+    loadDirectoryForChange('');
+}
+
+// Function to filter items in change directory browser
+function filterItemsForChange() {
+    const searchInput1 = document.getElementById('searchBox1');
+    if (!searchInput1) return;
+
+    const searchTerm = searchInput1.value.toLowerCase();
+    const items = document.querySelectorAll('#dirFileList .file-item');
+
+    items.forEach(item => {
+        const itemNameElement = item.querySelector('.file-name');
+        if (itemNameElement) {
+            const itemName = itemNameElement.textContent.toLowerCase();
+            // Show item if its name includes the search term
+            item.style.display = itemName.includes(searchTerm) ? 'flex' : 'none';
+        }
+    });
+}
+
+// Function to confirm directory change
+async function confirmDirectoryChange() {
+    console.log(selectedDirectoryPath);
+    if (selectedDirectoryPath) {
+        try {
+            const response = await fetch('http://localhost:3333/files/change_dir', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    new_path: selectedDirectoryPath,
+                }),
+                mode: "cors",
+                credentials: "include"
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                // Display success message
+                displayMarkdownMessage(`Successfully changed directory to: ${selectedDirectoryPath}`, 'agent-message');
+            } else {
+                // Display error message
+                displayMarkdownMessage(`Error changing directory: ${data.error || 'Unknown error'}`, 'agent-message error-message');
+            }
+        } catch (error) {
+            console.error('Error changing directory:', error);
+            displayMarkdownMessage('An error occurred while changing directory.', 'agent-message error-message');
+        }
+
+        closeDirectoryBrowser();
+    }
+}
+
+// Make functions globally accessible on the window object
+window.openDirectoryBrowser = openDirectoryBrowser;
+window.closeDirectoryBrowser = closeDirectoryBrowser;
+window.navigateToParentDirectoryForChange = navigateToParentDirectoryForChange;
+window.navigateToHomeDirectoryForChange = navigateToHomeDirectoryForChange;
+window.confirmDirectoryChange = confirmDirectoryChange;
+window.filterItemsForChange = filterItemsForChange;
+window.selectDirectoryForChange = selectDirectoryForChange;
+

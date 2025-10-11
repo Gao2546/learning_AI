@@ -1,39 +1,54 @@
-from flask import Flask, request, jsonify, send_from_directory
+import asyncio
+import os
+import random
+import re
+import sys
+import time
+from typing import List, TypedDict  # Added these as they are commonly used in LangChain/Python projects, though commented out in your original
+import requests
+
+# Third-party libraries
+import bs4
+import dotenv
+import torch
+from cachetools import TTLCache
+from duckduckgo_search import DDGS
+from flask import Flask, jsonify, request, send_from_directory
+from googlesearch import search
 from pandas import options
 from selenium import webdriver
+from selenium.common.exceptions import NoAlertPresentException, UnexpectedAlertPresentException
+from selenium.webdriver.common.alert import Alert
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
-from selenium.webdriver.common.alert import Alert
-import bs4
+from transformers import AutoModel, AutoTokenizer, BitsAndBytesConfig
+
+# LangChain and related libraries
 from langchain import hub
-# from langchain_community.document_loaders import WebBaseLoader
-# from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-# from typing_extensions import List, TypedDict
-# from langchain_ollama import OllamaEmbeddings
+from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import OpenAIEmbeddings
-from duckduckgo_search import DDGS
-import time
-import random
-# from flask_sqlalchemy import SQLAlchemy
-# from flask_marshmallow import Marshmallow
-import os
-import sys
-import re
-import dotenv
-from googlesearch import search
-from utils.util import extract_excel_text, extract_pdf_text, extract_image_text, extract_docx_text, extract_pptx_text, extract_txt_file, encode_text_for_embedding, extract_xls_text, save_vector_to_db, search_similar_documents_by_chat, EditedFileSystem
-import requests
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from langchain_core.embeddings import Embeddings
-from transformers import AutoModel, AutoTokenizer, BitsAndBytesConfig
-import torch
+# Local imports (assuming 'utils' is a local package/directory)
+from utils.util import (
+    EditedFileSystem,
+    encode_text_for_embedding,
+    extract_docx_text,
+    extract_excel_text,
+    extract_image_text,
+    extract_pdf_text,
+    extract_pptx_text,
+    extract_txt_file,
+    extract_xls_text,
+    save_vector_to_db,
+    search_similar_documents_by_chat,
+)
+
 
 TEXT_FILE_EXTENSIONS = ['.txt', '.pdf', '.docx', '.pptx', '.odt', '.rtf']
 
@@ -436,7 +451,7 @@ def Search_By_DuckDuckGo():
         sto = time.time()
         print(f"Error occurred: {e}")
     print(f'complete dT = {sto - st} Sec')
-    results = "\n".join(results)
+    results = "\n\n".join(results)
     return jsonify({'result': results})
 
 
