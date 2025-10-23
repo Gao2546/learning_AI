@@ -862,7 +862,7 @@ router.post('/message', async (req : Request, res : Response) => {
             //     // ]
             //   },
             // ],
-            stream: true,
+            stream: modeToUse == "ask" ? true : false,
             "reasoning": {
 
               // One of the following (not both):
@@ -889,16 +889,19 @@ router.post('/message', async (req : Request, res : Response) => {
           signal: controller.signal, // 👈 important
         });
 
-        const stream = openRouterFetchResponse.body as unknown as NodeJS.ReadableStream;
+      let result = "";
 
-        // const openRouterData = await openRouterFetchResponse.json() as OpenRouterChatResponse;
-        // let result = "";
-        // if (openRouterData.choices && openRouterData.choices[0]?.message?.content) {
-        //   result = openRouterData.choices[0].message.content;
-        //   socket?.emit("StreamText", result);
-        // }
+      if (modeToUse == "code"){
+        const openRouterData = await openRouterFetchResponse.json() as OpenRouterChatResponse;
+        if (openRouterData.choices && openRouterData.choices[0]?.message?.content) {
+          result = openRouterData.choices[0].message.content;
+          socket?.emit("StreamText", result);
+        }
+      }
+      else{
+      const stream = openRouterFetchResponse.body as unknown as NodeJS.ReadableStream;
 
-        const result = await new Promise<string>((resolve, reject) => {
+        result = await new Promise<string>((resolve, reject) => {
         let out_res = "";
         let assistancePrefixRemoved = false;
               
@@ -967,7 +970,7 @@ router.post('/message', async (req : Request, res : Response) => {
         stream.on("end", () => resolve(out_res));
         stream.on("error", reject);
       });
-
+      }
 
       
         response = { text: result };

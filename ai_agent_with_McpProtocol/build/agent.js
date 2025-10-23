@@ -672,7 +672,7 @@ router.post('/message', async (req, res) => {
                         //     // ]
                         //   },
                         // ],
-                        stream: true,
+                        stream: modeToUse == "ask" ? true : false,
                         "reasoning": {
                             // One of the following (not both):
                             // "effort": "high", // Can be "high", "medium", or "low" (OpenAI-style)
@@ -690,70 +690,74 @@ router.post('/message', async (req, res) => {
                     }),
                     signal: controller.signal, // 👈 important
                 });
-                const stream = openRouterFetchResponse.body;
-                // const openRouterData = await openRouterFetchResponse.json() as OpenRouterChatResponse;
-                // let result = "";
-                // if (openRouterData.choices && openRouterData.choices[0]?.message?.content) {
-                //   result = openRouterData.choices[0].message.content;
-                //   socket?.emit("StreamText", result);
-                // }
-                const result = await new Promise((resolve, reject) => {
-                    let out_res = "";
-                    let assistancePrefixRemoved = false;
-                    stream.on("data", (chunk) => {
-                        const text = chunk.toString("utf8");
-                        // console.log(text);
-                        // Check for context length error
-                        if (text.includes('{"error":{"message":"')) {
-                            try {
-                                const errorObj = JSON.parse(text);
-                                if (errorObj.error &&
-                                    errorObj.error.message &&
-                                    errorObj.error.message.includes("maximum context length is")) {
-                                    reject(new Error(errorObj.error.message));
+                let result = "";
+                if (modeToUse == "code") {
+                    const openRouterData = await openRouterFetchResponse.json();
+                    if (openRouterData.choices && openRouterData.choices[0]?.message?.content) {
+                        result = openRouterData.choices[0].message.content;
+                        socket?.emit("StreamText", result);
+                    }
+                }
+                else {
+                    const stream = openRouterFetchResponse.body;
+                    result = await new Promise((resolve, reject) => {
+                        let out_res = "";
+                        let assistancePrefixRemoved = false;
+                        stream.on("data", (chunk) => {
+                            const text = chunk.toString("utf8");
+                            // console.log(text);
+                            // Check for context length error
+                            if (text.includes('{"error":{"message":"')) {
+                                try {
+                                    const errorObj = JSON.parse(text);
+                                    if (errorObj.error &&
+                                        errorObj.error.message &&
+                                        errorObj.error.message.includes("maximum context length is")) {
+                                        reject(new Error(errorObj.error.message));
+                                        return;
+                                    }
+                                }
+                                catch (e) {
+                                    // If not JSON, just continue
+                                }
+                            }
+                            const lines = text.split("\n").filter((line) => line.trim() !== "" && line.startsWith("data:"));
+                            for (const line of lines) {
+                                const data = line.slice(5).trim(); // remove "data: "
+                                if (data === "[DONE]") {
+                                    // Stream finished
+                                    console.log("streaming DONE");
+                                    resolve(out_res); // resolve the promise immediately
                                     return;
                                 }
-                            }
-                            catch (e) {
-                                // If not JSON, just continue
-                            }
-                        }
-                        const lines = text.split("\n").filter((line) => line.trim() !== "" && line.startsWith("data:"));
-                        for (const line of lines) {
-                            const data = line.slice(5).trim(); // remove "data: "
-                            if (data === "[DONE]") {
-                                // Stream finished
-                                console.log("streaming DONE");
-                                resolve(out_res); // resolve the promise immediately
-                                return;
-                            }
-                            try {
-                                const json = JSON.parse(data);
-                                // Check for context length error in streamed data
-                                if (json.error &&
-                                    json.error.message &&
-                                    json.error.message.includes('{"error":{"message":"')) {
-                                    reject(new Error(json.error.message));
-                                    return;
+                                try {
+                                    const json = JSON.parse(data);
+                                    // Check for context length error in streamed data
+                                    if (json.error &&
+                                        json.error.message &&
+                                        json.error.message.includes('{"error":{"message":"')) {
+                                        reject(new Error(json.error.message));
+                                        return;
+                                    }
+                                    const delta = json.choices?.[0]?.delta?.content || json.choices?.[0]?.text || "";
+                                    // const delta = json.choices?.[0]?.text;
+                                    out_res += delta;
+                                    // Optional: strip unwanted prefix
+                                    if (!assistancePrefixRemoved && out_res.startsWith("assistance:")) {
+                                        out_res = out_res.slice("assistance:".length).trimStart();
+                                        assistancePrefixRemoved = true;
+                                    }
+                                    socket?.emit("StreamText", out_res);
                                 }
-                                const delta = json.choices?.[0]?.delta?.content || json.choices?.[0]?.text || "";
-                                // const delta = json.choices?.[0]?.text;
-                                out_res += delta;
-                                // Optional: strip unwanted prefix
-                                if (!assistancePrefixRemoved && out_res.startsWith("assistance:")) {
-                                    out_res = out_res.slice("assistance:".length).trimStart();
-                                    assistancePrefixRemoved = true;
+                                catch (e) {
+                                    console.error("Invalid JSON:", data, e);
                                 }
-                                socket?.emit("StreamText", out_res);
                             }
-                            catch (e) {
-                                console.error("Invalid JSON:", data, e);
-                            }
-                        }
+                        });
+                        stream.on("end", () => resolve(out_res));
+                        stream.on("error", reject);
                     });
-                    stream.on("end", () => resolve(out_res));
-                    stream.on("error", reject);
-                });
+                }
                 response = { text: result };
             }
             catch (err) {

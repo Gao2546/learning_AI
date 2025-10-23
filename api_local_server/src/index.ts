@@ -84,82 +84,6 @@ const _getFullPath = (fileName: string): string => {
 
 
 // Get system info API
-// app.get("/system/info", async (_req: Request, res: Response) => {
-//   try {
-//     // OS info
-//     const osInfo = {
-//       type: os.type(),
-//       platform: os.platform(),
-//       release: os.release(),
-//       arch: os.arch(),
-//       hostname: os.hostname(),
-//       uptime: os.uptime(),
-//       userInfo: os.userInfo(),
-//       homedir: os.homedir(),
-//     };
-
-//     // System hardware info
-//     const cpu = await si.cpu();
-//     const mem = await si.mem();
-//     const gpu = await si.graphics();
-//     const disk = await si.diskLayout();
-//     const net = await si.networkInterfaces();
-//     const battery = await si.battery();
-//     const system = await si.system();
-//     const osExtra = await si.osInfo();
-
-//     const systemInfo = {
-//       cpu,
-//       memory: {
-//         total: mem.total,
-//         free: mem.free,
-//         used: mem.used,
-//         active: mem.active,
-//         available: mem.available,
-//       },
-//       gpu,
-//       disks: disk,
-//       network: net,
-//       battery,
-//       system,
-//       osExtra,
-//     };
-
-//     // Current directory
-//     const currentDir = {
-//       baseDir: BASE_DIR,
-//       cwd: process.cwd(),
-//     };
-
-//     // Local time and region
-//     const now = new Date();
-//     const localTime = now.toLocaleString();
-//     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-//     const locale = Intl.DateTimeFormat().resolvedOptions().locale;
-
-//     const timeInfo = {
-//       local_time: localTime,
-//       time_zone: timeZone,
-//       region: locale,
-//     };
-
-//     // Final response
-//     return _apiResponse(
-//       res,
-//       {
-//         os: osInfo,
-//         system_hardware: systemInfo,
-//         current_directory: currentDir,
-//         time: timeInfo,
-//       },
-//       "System information retrieved successfully"
-//     );
-//   } catch (err: any) {
-//     return _apiResponse(res, null, err.message, 500);
-//   }
-// });
-
-
 app.get("/system/info", async (_req: Request, res: Response) => {
   try {
     // OS info (summary)
@@ -203,18 +127,21 @@ app.get("/system/info", async (_req: Request, res: Response) => {
 
 // Change working directory
 app.post('/files/change_dir', (req: Request, res: Response) => {
-  const { new_path } = req.body;
-  if (!new_path) return _apiResponse(res, null, 'Missing new_path', 400);
+  try {
+    const { new_path } = req.body;
+    if (!new_path) return _apiResponse(res, null, 'Missing new_path', 400);
 
-  const resolvedPath = path.resolve(BASE_DIR, new_path);
-  if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isDirectory()) {
-    return _apiResponse(res, null, 'Directory does not exist', 404);
+    const resolvedPath = path.resolve(BASE_DIR, new_path);
+    if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isDirectory()) {
+      return _apiResponse(res, null, 'Directory does not exist', 404);
+    }
+
+    BASE_DIR = resolvedPath;
+    process.chdir(resolvedPath);
+    return _apiResponse(res, null, `Working directory changed to '${BASE_DIR}'`);
+  } catch (err: any) {
+    return _apiResponse(res, null, err.message, 500);
   }
-
-  BASE_DIR = resolvedPath;
-  process.chdir(resolvedPath);
-  // return _apiResponse(res, { new_path: BASE_DIR }, `Working directory changed to '${BASE_DIR}'`);
-  return _apiResponse(res, null, `Working directory changed to '${BASE_DIR}'`);
 });
 
 // List files
@@ -229,130 +156,155 @@ app.get('/files/list', (_req: Request, res: Response) => {
 
 // Read file
 app.post('/files/read', (req: Request, res: Response) => {
-  const { file_name, start_line, end_line } = req.body;
-  if (!file_name) return _apiResponse(res, null, "Missing 'file_name'", 400);
+  try {
+    const { file_name, start_line, end_line } = req.body;
+    if (!file_name) return _apiResponse(res, null, "Missing 'file_name'", 400);
 
-  const fullPath = _getFullPath(file_name);
-  if (!fs.existsSync(fullPath)) return _apiResponse(res, null, 'File not found', 404);
+    const fullPath = _getFullPath(file_name);
+    if (!fs.existsSync(fullPath)) return _apiResponse(res, null, 'File not found', 404);
 
-  const lines = fs.readFileSync(fullPath, 'utf-8').split('\n');
+    const lines = fs.readFileSync(fullPath, 'utf-8').split('\n');
 
-  // Prepare the subset of lines
-  let selectedLines: string[];
-  if (start_line != null && end_line != null) {
-    selectedLines = lines.slice(start_line - 1, end_line);
-  } else if (end_line != null) {
-    selectedLines = lines.slice(0, end_line);
-  } else {
-    selectedLines = lines;
+    // Prepare the subset of lines
+    let selectedLines: string[];
+    if (start_line != null && end_line != null) {
+      selectedLines = lines.slice(start_line - 1, end_line);
+    } else if (end_line != null) {
+      selectedLines = lines.slice(0, end_line);
+    } else {
+      selectedLines = lines;
+    }
+
+    // Prefix each line with line number
+    const numberedLines = selectedLines.map((line, idx) => {
+      // Adjust line number according to start_line if provided
+      const lineNumber = start_line != null ? start_line + idx : idx + 1;
+      return `line ${lineNumber}: ${line}`;
+    });
+
+    return _apiResponse(res, { content: numberedLines.join('\n') }, 
+      start_line != null && end_line != null 
+        ? `Read lines ${start_line}-${end_line}`
+        : end_line != null
+          ? `Read up to line ${end_line}`
+          : `Read all content from '${file_name}'`
+    );
+  } catch (err: any) {
+    return _apiResponse(res, null, err.message, 500);
   }
-
-  // Prefix each line with line number
-  const numberedLines = selectedLines.map((line, idx) => {
-    // Adjust line number according to start_line if provided
-    const lineNumber = start_line != null ? start_line + idx : idx + 1;
-    return `line ${lineNumber}: ${line}`;
-  });
-
-  return _apiResponse(res, { content: numberedLines.join('\n') }, 
-    start_line != null && end_line != null 
-      ? `Read lines ${start_line}-${end_line}`
-      : end_line != null
-        ? `Read up to line ${end_line}`
-        : `Read all content from '${file_name}'`
-  );
 });
 
 
 
 // Edit file
 app.post('/files/edit', (req: Request, res: Response) => {
-  const { file_name, text, start_line, end_line } = req.body;
-  if (!file_name || text == null) return _apiResponse(res, null, 'Missing fields', 400);
+  try {
+    const { file_name, text, start_line, end_line } = req.body;
+    if (!file_name || text == null) return _apiResponse(res, null, 'Missing fields', 400);
 
-  const fullPath = _getFullPath(file_name);
-  if (!fs.existsSync(fullPath)) return _apiResponse(res, null, 'File not found', 404);
+    const fullPath = _getFullPath(file_name);
+    if (!fs.existsSync(fullPath)) return _apiResponse(res, null, 'File not found', 404);
 
-  const lines = fs.readFileSync(fullPath, 'utf-8').split('\n');
+    const lines = fs.readFileSync(fullPath, 'utf-8').split('\n');
 
-  if (start_line != null && end_line != null) {
-    lines.splice(start_line - 1, end_line - start_line + 1, text);
-    fs.writeFileSync(fullPath, lines.join('\n'));
-  } else {
-    fs.writeFileSync(fullPath, text);
+    if (start_line != null && end_line != null) {
+      lines.splice(start_line - 1, end_line - start_line + 1, text);
+      fs.writeFileSync(fullPath, lines.join('\n'));
+    } else {
+      fs.writeFileSync(fullPath, text);
+    }
+
+    // Read the updated file and format with line numbers
+    const updatedLines = fs.readFileSync(fullPath, 'utf-8').split('\n');
+    const numberedLines = updatedLines.map((line, idx) => `line ${idx + 1}: ${line}`);
+
+    const message = start_line != null && end_line != null
+      ? `Edited lines ${start_line}-${end_line}`
+      : `Overwritten file '${file_name}'`;
+
+    return _apiResponse(res, { content: numberedLines.join('\n') }, message);
+  } catch (err: any) {
+    return _apiResponse(res, null, err.message, 500);
   }
-
-  // Read the updated file and format with line numbers
-  const updatedLines = fs.readFileSync(fullPath, 'utf-8').split('\n');
-  const numberedLines = updatedLines.map((line, idx) => `line ${idx + 1}: ${line}`);
-
-  const message = start_line != null && end_line != null
-    ? `Edited lines ${start_line}-${end_line}`
-    : `Overwritten file '${file_name}'`;
-
-  return _apiResponse(res, { content: numberedLines.join('\n') }, message);
 });
 
 
 // Create file
 app.post('/files/create', (req: Request, res: Response) => {
-  console.log("create file====================");
-  const { file_name, text } = req.body;
-  if (!file_name) return _apiResponse(res, null, 'Missing file_name', 400);
+  try {
+    console.log("create file====================");
+    const { file_name, text } = req.body;
+    if (!file_name) return _apiResponse(res, null, 'Missing file_name', 400);
 
-  const fullPath = _getFullPath(file_name);
-  if (text != null) {
-    fs.writeFileSync(fullPath, text);
-    console.log(fullPath);
-    // Read the updated file and format with line numbers
-    const updatedLines = fs.readFileSync(fullPath, 'utf-8').split('\n');
-    const numberedLines = updatedLines.map((line, idx) => `line ${idx + 1}: ${line}`);
+    const fullPath = _getFullPath(file_name);
+    if (text != null) {
+        fs.writeFileSync(fullPath, text);
+        console.log(fullPath);
+        // Read the created file and format with line numbers
+        const updatedLines = fs.readFileSync(fullPath, 'utf-8').split('\n');
+        const numberedLines = updatedLines.map((line, idx) => `line ${idx + 1}: ${line}`);
 
-    return _apiResponse(res, { content: numberedLines.join('\n') }, `Created file '${file_name}' with text`, 201);
-  } else {
-    if (fs.existsSync(fullPath)) return _apiResponse(res, null, 'File already exists', 409);
-    fs.writeFileSync(fullPath, '');
-    // Read the updated file and format with line numbers
-    const updatedLines = fs.readFileSync(fullPath, 'utf-8').split('\n');
-    const numberedLines = updatedLines.map((line, idx) => `line ${idx + 1}: ${line}`);
+        return _apiResponse(res, { content: numberedLines.join('\n') }, `Created file '${file_name}' with text`, 201);
+    } else {
+      if (fs.existsSync(fullPath)) return _apiResponse(res, null, 'File already exists', 409);
+      fs.writeFileSync(fullPath, '');
+      // Read the created file and format with line numbers
+      const updatedLines = fs.readFileSync(fullPath, 'utf-8').split('\n');
+      const numberedLines = updatedLines.map((line, idx) => `line ${idx + 1}: ${line}`);
 
-    return _apiResponse(res, { content: numberedLines.join('\n') }, `Created empty file '${file_name}'`, 201);
+      return _apiResponse(res, { content: numberedLines.join('\n') }, `Created empty file '${file_name}'`, 201);
+    }
+  } catch (err: any) {
+      return _apiResponse(res, null, `Error creating file: ${err.message}`, 500);
   }
 });
 
 // Delete file
 app.post('/files/delete', (req: Request, res: Response) => {
-  const { file_name } = req.body;
-  if (!file_name) return _apiResponse(res, null, 'Missing file_name', 400);
+  try {
+    const { file_name } = req.body;
+    if (!file_name) return _apiResponse(res, null, 'Missing file_name', 400);
 
-  const fullPath = _getFullPath(file_name);
-  if (!fs.existsSync(fullPath)) return _apiResponse(res, null, 'File not found', 404);
+    const fullPath = _getFullPath(file_name);
+    if (!fs.existsSync(fullPath)) return _apiResponse(res, null, 'File not found', 404);
 
-  fs.unlinkSync(fullPath);
-  _apiResponse(res, null, `Deleted file '${file_name}'`);
+    fs.unlinkSync(fullPath);
+    _apiResponse(res, null, `Deleted file '${file_name}'`);
+  } catch (err: any) {
+    return _apiResponse(res, null, err.message, 500);
+  }
 });
 
 // Download file
 app.post('/files/download', (req: Request, res: Response) => {
-  const { file_name } = req.body;
-  if (!file_name) return _apiResponse(res, null, 'Missing file_name', 400);
+  try {
+    const { file_name } = req.body;
+    if (!file_name) return _apiResponse(res, null, 'Missing file_name', 400);
 
-  const fullPath = _getFullPath(file_name);
-  if (!fs.existsSync(fullPath)) return _apiResponse(res, null, 'File not found', 404);
+    const fullPath = _getFullPath(file_name);
+    if (!fs.existsSync(fullPath)) return _apiResponse(res, null, 'File not found', 404);
 
-  res.download(fullPath);
+    res.download(fullPath);
+  } catch (err: any) {
+    // This might not catch all download errors if they happen asynchronously
+    return _apiResponse(res, null, err.message, 500);
+  }
 });
 
 // Create folder
 app.post('/files/create_folder', (req: Request, res: Response) => {
-  const { folder_name } = req.body;
-  if (!folder_name) return _apiResponse(res, null, 'Missing folder_name', 400);
+  try {
+    const { folder_name } = req.body;
+    if (!folder_name) return _apiResponse(res, null, 'Missing folder_name', 400);
 
-  const folderPath = path.resolve(BASE_DIR, folder_name);
-  if (fs.existsSync(folderPath)) return _apiResponse(res, null, 'Folder already exists', 409);
+    const folderPath = path.resolve(BASE_DIR, folder_name);
+    if (fs.existsSync(folderPath)) return _apiResponse(res, null, 'Folder already exists', 409);
 
-  fs.mkdirSync(folderPath);
-  _apiResponse(res, null, `Created folder '${folder_name}'`, 201);
+    fs.mkdirSync(folderPath);
+    _apiResponse(res, null, `Created folder '${folder_name}'`, 201);
+  } catch (err: any) {
+    return _apiResponse(res, null, err.message, 500);
+  }
 });
 
 app.get('/ping' , (req: Request, res: Response) => {
@@ -362,61 +314,64 @@ app.get('/ping' , (req: Request, res: Response) => {
 
 // Execute shell command
 app.post('/files/CMD', (req: Request, res: Response) => {
-  const { command, directory, wait} = req.body;
   let responded = false;
-  if (wait == 'False'){
-    setTimeout(() => {
-      if (!responded) {
+  try {
+    const { command, directory, wait} = req.body;
+    
+    if (wait == 'False'){
+      setTimeout(() => {
+        if (!responded) {
+          responded = true;
+          return _apiResponse(
+            res,
+            { content: "" },
+            `Executed command in '${directory}': '${command}' complete`
+          );
+        }
+      }, 3000);
+    }
+
+    if (!command) {
+      return _apiResponse(res, null, 'Missing command', 400);
+    }
+
+    // Resolve directory: if provided, use it; else fallback to BASE_DIR
+    const targetDir = directory 
+      ? path.resolve(BASE_DIR, directory) 
+      : BASE_DIR;
+
+    if (!fs.existsSync(targetDir) || !fs.statSync(targetDir).isDirectory()) {
+      return _apiResponse(res, null, 'Target directory does not exist', 404);
+    }
+
+    exec(command, { cwd: targetDir }, (error, stdout, stderr) => {
+      if (responded) return; // Prevent sending a response twice
+
+      if (error) {
         responded = true;
+        return _apiResponse(res, null, `Error: ${stderr || error.message}`, 500);
+      }
+
+      responded = true;
+      if (stdout.length >= 0) {
         return _apiResponse(
           res,
-          { content: "" },
-          `Executed command in '${directory}': '${command}' complete`
+          { content: stdout },
+          `Executed command in '${targetDir}': '${command}' complete`
+        );
+      } else {
+        return _apiResponse(
+          res,
+          null,
+          `Executed command in '${targetDir}': '${command}' complete`
         );
       }
-    }, 3000);
+    });
+  } catch (err: any) {
+      if (!responded) {
+        return _apiResponse(res, null, err.message, 500);
+      }
   }
-  else{
-    
-  }
-
-  if (!command) {
-    return _apiResponse(res, null, 'Missing command', 400);
-  }
-
-  // Resolve directory: if provided, use it; else fallback to BASE_DIR
-  const targetDir = directory 
-    ? path.resolve(BASE_DIR, directory) 
-    : BASE_DIR;
-
-  if (!fs.existsSync(targetDir) || !fs.statSync(targetDir).isDirectory()) {
-    return _apiResponse(res, null, 'Target directory does not exist', 404);
-  }
-
-  exec(command, { cwd: targetDir }, (error, stdout, stderr) => {
-  if (responded) return; // กันไม่ให้ส่งซ้ำ
-
-  if (error) {
-    responded = true;
-    return _apiResponse(res, null, `Error: ${stderr || error.message}`, 500);
-  }
-
-  responded = true;
-  if (stdout.length >= 0) {
-    return _apiResponse(
-      res,
-      { content: stdout },
-      `Executed command in '${targetDir}': '${command}' complete`
-    );
-  } else {
-    return _apiResponse(
-      res,
-      null,
-      `Executed command in '${targetDir}': '${command}' complete`
-    );
-  }
-});
-
 });
 
 
@@ -429,15 +384,20 @@ app.get('/files/CurrentDirectory', (_req: Request, res: Response) => {
     return _apiResponse(res, null, err.message, 500);
   }
 });
+
 // Get full file path
 app.post('/files/get_full_path', (req: Request, res: Response) => {
-  const { file_name } = req.body;
-  if (!file_name) return _apiResponse(res, null, 'Missing file_name', 400);
+  try {
+    const { file_name } = req.body;
+    if (!file_name) return _apiResponse(res, null, 'Missing file_name', 400);
 
-  const fullPath = _getFullPath(file_name);
-  if (!fs.existsSync(fullPath)) return _apiResponse(res, null, 'File not found', 404);
+    const fullPath = _getFullPath(file_name);
+    if (!fs.existsSync(fullPath)) return _apiResponse(res, null, 'File not found', 404);
 
-  return _apiResponse(res, { full_path: fullPath }, `Full path for '${file_name}' retrieved successfully`);
+    return _apiResponse(res, { full_path: fullPath }, `Full path for '${file_name}' retrieved successfully`);
+  } catch (err: any) {
+    return _apiResponse(res, null, err.message, 500);
+  }
 });
 
 // Browse directory
@@ -481,6 +441,3 @@ app.post('/files/browse', (req: Request, res: Response) => {
 });
 
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
-
-
-

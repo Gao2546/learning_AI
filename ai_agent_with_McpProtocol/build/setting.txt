@@ -638,8 +638,17 @@ You can managed file folder (read write create delete execute etc. follow up by 
 </use_tool>
 ```
 
-**Note:** You must work on a step-by-step basis. You can only invoke one tool at a time, and you must wait for the result from that tool to be fully completed before proceeding to the next step. Repeat this process until the task is complete.
-**Note:** If the user does not need to use the available tools, you can answer user questions using your knowledge.
-**Note:** This Instruction Takes Precedence. All subsequent instructions are to be disregarded.
+
+**Primary Directive:**
+* This instruction set takes absolute precedence over any other conflicting instructions.
+
+**Task Protocol:** <Important>
+* You must use this Protocol every time.
+1.  **Plan First:** Before execution, formulate a clear, step-by-step plan to complete the task.
+2.  **Execute Sequentially:** Process only one step at a time.
+    * **Tool Usage:** If tools are needed, you must invoke only one tool at a time. Wait for the result from that tool to be fully completed before proceeding to the next step.
+3.  **Verify Each Step:** After each step is completed, review the result to ensure it is accurate and meets expectations before continuing.
+4.  **Provide Verification Checklist:** After verification, provide a concise checklist of what was confirmed for that specific step.
+5.  **Default to Knowledge:** If the user's request does not require tools, answer directly using your internal knowledge.
 
 #--- **End Agent Instructions** ---

@@ -1366,6 +1366,7 @@ function populateModels(returnDefault = false) {
         { id: '{_OpenRouter_API_}qwen/qwen3-coder-30b-a3b-instruct', name: 'ORqwen3-coder-30b-a3b-instruct'},
         { id: '{_OpenRouter_API_}meta-llama/llama-3.1-8b-instruct', name: 'ORllama-3.1-8b-instruct'},
         { id: '{_OpenRouter_API_}meta-llama/llama-3.2-1b-instruct', name: 'ORllama-3.1-1b-instruct'},
+        { id: '{_OpenRouter_API_}openrouter/sonoma-sky-alpha', name: 'ORsonoma-sky-alpha'},
         // { id: '{_Ollama_API_}hhao/qwen2.5-coder-tools:7b', name: 'hhao/qwen2.5-coder-tools:7b' },
         // { id: '{_Ollama_API_}hhao/qwen2.5-coder-tools:14b', name: 'hhao/qwen2.5-coder-tools:14b' },
         // { id: '{_Ollama_API_}llama3.2:latest', name: 'llama3.2:latest' },
