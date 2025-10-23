@@ -11,7 +11,6 @@ import requests
 import bs4
 import dotenv
 import torch
-from cachetools import TTLCache
 from duckduckgo_search import DDGS
 from flask import Flask, jsonify, request, send_from_directory
 from googlesearch import search
@@ -48,6 +47,8 @@ from utils.util import (
     save_vector_to_db,
     search_similar_documents_by_chat,
 )
+from TextToImage.utils.node import *
+from object_detection_byVLM_Grounding_DINO.grounding_dino_api import detect_objects_from_url
 
 
 TEXT_FILE_EXTENSIONS = ['.txt', '.pdf', '.docx', '.pptx', '.odt', '.rtf']
@@ -61,8 +62,6 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-
-from TextToImage.utils.node import *
 
 app = Flask(__name__)
 
@@ -717,6 +716,57 @@ def api_create_folder():
         return _api_response(None, error, 409) # 409 Conflict if folder exists, or 500 for other errors
     return _api_response(None, f"Successfully created folder '{folder_name}'.", 201)
 
+
+@app.route('/detect_objects', methods=['POST'])
+def detect_objects_route():
+    """
+    Performs zero-shot object detection using Grounding DINO.
+    
+    Expected JSON body:
+    {
+        "image_url": "http://example.com/image.jpg",
+        "text_labels": ["a dog", "a tree"],
+        "box_threshold": 0.4,
+        "text_threshold": 0.3
+    }
+    """
+    clear_gpu() # Clear GPU memory before loading the large Grounding DINO model
+    st = time.time()
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body must be JSON."}), 400
+
+    image_url = data.get('image_url')
+    text_labels = data.get('text_labels')
+    box_threshold = data.get('box_threshold', 0.4)
+    text_threshold = data.get('text_threshold', 0.3)
+
+    if not image_url or not isinstance(text_labels, list) or not text_labels:
+        return jsonify({
+            "error": "Missing or invalid 'image_url' or 'text_labels' (must be a non-empty list of strings)."
+        }), 400
+
+    # Call the core detection logic from the imported module
+    detections, error_msg = detect_objects_from_url(
+        image_url=image_url,
+        text_labels=text_labels,
+        box_threshold=float(box_threshold),
+        text_threshold=float(text_threshold)
+    )
+
+    if error_msg:
+        return jsonify({"error": error_msg}), 500
+
+    sto = time.time()
+    print(f'Grounding DINO complete. dT = {sto - st} Sec. Detections: {len(detections)}')
+    
+    return jsonify({
+        'result': f'Successfully detected {len(detections)} objects.',
+        'detections': detections,
+        'duration_sec': round(sto - st, 3)
+    })
+
 class GemmaEmbeddings(Embeddings):
     def __init__(self, model_name: str = "google/embeddinggemma-300m", quantized: bool = True):
         self.model_name = model_name
@@ -775,10 +825,10 @@ if __name__ == '__main__':
     # embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L12-v2") # *** ***
     # embeddings = OpenAIEmbeddings(model="text-embedding-3-small") *** *** ***
     # embeddings = HuggingFaceEmbeddings(model_name="nomic-ai/nomic-embed-text-v2-moe")
-    # embeddings = HuggingFaceEmbeddings(model_name="all-mpnet-base-v2") ## slowest and but efficient *** *** ***
+    embeddings = HuggingFaceEmbeddings(model_name="all-mpnet-base-v2") ## slowest and but efficient *** *** ***
     # embeddings = HuggingFaceEmbeddings(model_name="google/embeddinggemma-300m")
 
-    embeddings = GemmaEmbeddings(model_name="google/embeddinggemma-300m", quantized=True)
+    # embeddings = GemmaEmbeddings(model_name="google/embeddinggemma-300m", quantized=True)
     
     # embeddings = HuggingFaceEmbeddings(model_name="voyageai/voyage-3.5-lite")
     # embeddings = HuggingFaceEmbeddings(model_name="multi-qa-MiniLM-L6-cos-v1") ##fastest but less efficient
