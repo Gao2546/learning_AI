@@ -26,7 +26,6 @@ from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
 from transformers import AutoModel, AutoTokenizer, BitsAndBytesConfig
 
 # LangChain and related libraries
-from langchain import hub
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
