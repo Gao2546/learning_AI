@@ -47,6 +47,26 @@ services:
     #       - node.hostname == host_a_hostname # Replace with Host A's actual hostname
 
 
+  minio: # <=============================================== NEW SECTION
+    image: minio/minio:latest
+    command: server /data --console-address ":9090"
+    ports:
+      - "9010:9000" # For API access
+      - "9090:9090" # For the web console
+    environment:
+      MINIO_ROOT_USER: minioadmin # <-- IMPORTANT: Change for production
+      MINIO_ROOT_PASSWORD: minioadmin # <-- IMPORTANT: Change for production
+    volumes:
+      - minio_data:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+
 
 
 
@@ -104,6 +124,7 @@ services:
 
 volumes:
   postgres_data:
+  minio_data: {}
 
 # networks:
 #   app-network:

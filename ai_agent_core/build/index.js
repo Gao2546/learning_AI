@@ -10,9 +10,9 @@ import { Server as SocketIOServer } from 'socket.io';
 import { fileURLToPath } from 'url';
 import { GetSocketIO } from "./api.js";
 // Import DB functions for session timeout cleanup
-import { setCurrentChatId, setUserActiveStatus, deleteUserAndHistory, getUserByUsername, deleteInactiveGuestUsersAndChats, deleteUserFolder, deleteOrphanedUserFolders, deleteAllGuestUsersAndChats } from './db.js';
+import { setCurrentChatId, setUserActiveStatus, deleteUserAndHistory, getUserByUsername, deleteInactiveGuestUsersAndChats, deleteAllGuestUsersAndChats } from './db.js';
 deleteAllGuestUsersAndChats();
-deleteOrphanedUserFolders();
+// deleteOrphanedUserFolders();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
@@ -48,14 +48,14 @@ setInterval(async () => {
     // console.log('Starting periodic cleanup of inactive guest users and chats...');
     try {
         await deleteInactiveGuestUsersAndChats();
-        await deleteOrphanedUserFolders();
+        // await deleteOrphanedUserFolders();
         console.log('Periodic cleanup completed.');
     }
     catch (error) {
         console.error('Error during periodic cleanup:', error);
     }
 }, CLEANUP_INTERVAL_MS);
-const BypassSession = ["/auth/login", "/auth/register", "/auth/logout", "/auth/styleRL.css", "/api/message", "/api/create_record", "/auth/login.js", "/auth/register.js", "/auth/admin", "/auth/login?error=invalide_username_or_password", "/auth/login?success=registered", "/auth/login?error=server_error", "/auth/register?error=server_error", "/auth/register?error=username_exists", "/auth/register?error=email_exists", "/api/download-script", "/api/download-script/entrypoint.sh", "/api/download-script/entrypoint.bat", "/api/detect-platform", "/.well-known/appspecific/com.chrome.devtools.json", "/api/set-model", "/api/save_img", "/api/stop"];
+const BypassSession = ["/auth/login", "/auth/register", "/auth/styleRL.css", "/api/message", "/api/create_record", "/auth/login.js", "/auth/register.js", "/auth/admin", "/auth/login?error=invalide_username_or_password", "/auth/login?success=registered", "/auth/login?error=server_error", "/auth/register?error=server_error", "/auth/register?error=username_exists", "/auth/register?error=email_exists", "/api/download-script", "/api/download-script/entrypoint.sh", "/api/download-script/entrypoint.bat", "/api/detect-platform", "/.well-known/appspecific/com.chrome.devtools.json", "/api/set-model", "/api/save_img", "/api/stop"];
 const BypassSessionNRe = ["/api/download-script", "/api/download-script/entrypoint.sh", "/api/download-script/entrypoint.bat", "/.well-known/appspecific/com.chrome.devtools.json"];
 // Session timeout cleanup middleware
 app.use(async (req, res, next) => {
@@ -102,7 +102,7 @@ app.use(async (req, res, next) => {
                 }
                 if (isGuest) {
                     await deleteUserAndHistory(userId);
-                    await deleteUserFolder(userId);
+                    // await deleteUserFolder(userId);
                 }
             }
             catch (cleanupErr) {
@@ -115,7 +115,7 @@ app.use(async (req, res, next) => {
             });
             console.log('Session expired');
             await deleteInactiveGuestUsersAndChats();
-            await deleteOrphanedUserFolders();
+            // await deleteOrphanedUserFolders();
             // return res.redirect('/');
             return res.json({ exp: true });
         }

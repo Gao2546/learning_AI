@@ -27,3 +27,7 @@ python-docx
 python-pptx
 openpyxl 
 xlrd
+unstructured[all-docs]>=0.18.15
+docling[full]
+mlx-vlm
+minio

@@ -7,7 +7,8 @@ import cors from 'cors';
 import dotenv from "dotenv";
 import { exec } from 'child_process';
 import os from "os";
-import si from "systeminformation"; // npm install systeminformation
+import si from "systeminformation";
+import screenshot from "screenshot-desktop";
 
 dotenv.config()
 
@@ -437,6 +438,28 @@ app.post('/files/browse', (req: Request, res: Response) => {
     }, `Directory contents for '${targetDir}' retrieved successfully`);
   } catch (err: any) {
     return _apiResponse(res, null, err.message, 500);
+  }
+});
+
+app.get('/system/screenshot', async (req, res) => {
+  console.log('Received request to take a screenshot...');
+
+  try {
+    // Call screenshot() without a filename to get the image as a buffer
+    const imgBuffer = await screenshot();
+    console.log(imgBuffer);
+    console.log(imgBuffer.length);
+
+    // Set the proper content type for the response
+    res.set('Content-Type', 'image/png');
+
+    // Send the image buffer back to the client
+    res.send(imgBuffer);
+    console.log('Screenshot sent successfully!');
+
+  } catch (err) {
+    console.error('An error occurred:', err);
+    res.status(500).send({ error: 'Failed to take screenshot' });
   }
 });
 

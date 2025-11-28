@@ -6,56 +6,29 @@ import axios from 'axios';
 import path from 'path';
 import dotenv from "dotenv";
 import FormData from 'form-data';
-// import { DOMParser } from 'xmldom';
 import { XMLParser } from 'fast-xml-parser';
+import * as Minio from 'minio'; // Import for /save_img endpoint
 dotenv.config();
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from "@google/genai";
-import fetch from 'node-fetch'; // Import the node-fetch library
-// import { Ollama } from 'ollama';
-// import bcrypt from 'bcrypt';
-import { setChatMode, setChatModel } from './db.js'; // Import necessary DB functions
-import { newChatHistory, storeChatHistory, readChatHistory, deleteChatHistory, setCurrentChatId, listChatHistory, setUserActiveStatus, createUserFolder, createChatFolder, deleteChatFolder } from './db.js';
+import fetch from 'node-fetch';
+import { setChatMode, setChatModel } from './db.js';
+import { createGuestUser, newChatHistory, storeChatHistory, readChatHistory, deleteChatHistory, setCurrentChatId, listChatHistory, setUserActiveStatus, uploadFile, // Import the new MinIO upload function
+getFileInfoByObjectName, getFileByObjectName } from './db.js';
 import { callToolFunction } from "./api.js";
-// const controller = new AbortController();
-// const timeoutMs = 100000; // 5 seconds timeout
-// const timeoutId = setTimeout(() => {
-//   controller.abort();
-// }, timeoutMs);
-// Initialize transport
-// const transport_mcp_BrowserBase = new StdioClientTransport({
-//   // "command": "bash"
-//   "command": "node"
-// ,  "args": [
-//       // "-c",
-//       // "cd /home/athip/psu/learning_AI/mcp_BrowserBase/ && ./build/index.js"
-//       // path.join('/', 'app', 'mcp', 'mcp_BrowserBase', 'build', 'index.js')
-//       // path.join('.', 'mcp', 'mcp_BrowserBase', 'build', 'index.js')
-//       path.join('..', 'mcp_BrowserBase', 'build', 'index.js')
-//     ],
-// });
-// console.log("Agent: Transport initialized.\n");
-// Initialize client
-// const client = new Client(
-//   {
-//     name: "example-client",
-//     version: "1.0.0"
-//   },
-//   {
-//     capabilities: {
-//       prompts: {},
-//       resources: {},
-//       tools: {}
-//     }
-//   }
-// );
-// console.log("Agent: Client object initialized.\n");
+// --- MinIO Client Setup (for direct use in /save_img) ---
+const minioClient = new Minio.Client({
+    endPoint: process.env.MINIO_ENDPOINT || 'localhost',
+    port: parseInt(process.env.MINIO_PORT || '9000', 10),
+    useSSL: process.env.MINIO_USE_SSL === 'true',
+    accessKey: process.env.MINIO_ACCESS_KEY || '',
+    secretKey: process.env.MINIO_SECRET_KEY || '',
+});
+const minioBucketName = process.env.MINIO_BUCKET || 'uploads';
 const ai = new GoogleGenAI({ apiKey: process.env.Google_API_KEY });
-// import readline = require('readline');
 const fs = __require("fs");
-// import { json } from 'stream/consumers';
-// import { Socket } from 'socket.io';
-const upload = multer({ dest: 'uploads/' });
+// Configure Multer to use memory storage instead of disk
+const upload = multer({ storage: multer.memoryStorage() });
 async function readFile(filename) {
     return new Promise((resolve, reject) => {
         fs.readFile(filename, 'utf8', (err, data) => {
@@ -70,156 +43,137 @@ async function readFile(filename) {
 }
 let setting_prompts = await readFile("./build/setting.txt");
 const xmlToJson = async (xml) => {
-    const parser = new XMLParser({ ignoreAttributes: false,
-        // stopNodes: ["*.result"],
-        cdataPropName: false // (optional) ถ้าอยากให้ parser แยกเก็บ CDATA ชัดเจน
-    });
-    // console.log("show xml")
-    // console.log(xml)
+    const parser = new XMLParser({ ignoreAttributes: false, cdataPropName: false });
     const jsonObj = parser.parse(xml);
-    const toolName = Object.keys(jsonObj)[0]; // สมมุติว่า root element มีแค่หนึ่ง
+    const toolName = Object.keys(jsonObj)[0];
     const content = jsonObj[toolName];
     const toolData = {
         toolName,
         arguments: {}
     };
     for (const key in content) {
-        toolData.arguments[key] = content[key]; //.push({ [key]: content[key] });
+        toolData.arguments[key] = content[key];
     }
     return toolData;
 };
-// const parseXML = async (xmlString: string): Promise<Record<string , any>> => {
-//   // xmlString = xmlString.replace(/<\?xml.*?\?>/, ""); // Remove XML declaration if present
-//   // xmlString = xmlString.replace("\n", ""); // Replace
-//   // console.log(xmlString);
-//   try {
-//     const result = (await parseStringPromise(xmlString)) as MCPToolData;
-//     const thinking = result?.thinking? result.thinking[0] : null;
-//     const serverName = result?.use_mcp_tool?.server_name? result.use_mcp_tool.server_name[0] : null;
-//     const toolName = result?.use_mcp_tool?.tool_name? result.use_mcp_tool.tool_name[0] : null;
-//     const argumentsText = result?.use_mcp_tool?.arguments? result.use_mcp_tool.arguments[0] : null;
-//     const results = result?.attempt_completion?.result? result.attempt_completion.result[0] : null;
-//     const followupQuestion = result?.ask_followup_question?.question? result.ask_followup_question.question[0] : null;
-//     // Use nullish coalescing to default to an empty array if suggestions are missing
-//     // Access the first element of the follow_up array before getting suggestions
-//     const followupSuggestions: string[] = result?.ask_followup_question?.follow_up?.[0]?.suggest ?? [];
-//     // Optional: Log a warning if a question exists but suggestions are empty
-//     if (followupQuestion && followupSuggestions.length === 0) {
-//       console.warn("Follow-up question received, but no suggestions were provided.");
-//     }
-//     // console.log("Follow-up Suggestions:", followupSuggestions); // Adjusted log if needed
-//     let argumentsObj: Record<string, any> = {}; // Default to empty object
-//     if (argumentsText) {
-//       try {
-//         argumentsObj = JSON.parse(argumentsText);
-//       } catch (parseError) {
-//         console.error("Error parsing arguments JSON:", parseError, "Raw arguments text:", argumentsText);
-//         // Keep argumentsObj as {} or handle error as needed
-//       }
-//     }
-//     const parsedData = {
-//       thinking,
-//       serverName,
-//       toolName,
-//       arguments: argumentsObj,
-//       results,
-//       followupQuestion,
-//       followupSuggestions,
-//     };
-//     return parsedData;
-//   } catch (error) {
-//     console.error("Error parsing XML:", error);
-//     throw error;
-//   }
-// };
-// const ChatHistory : any[]= []
-// await addChatHistory(setting_prompt);
 let io;
 const router = express.Router();
 export default async function agentRouters(ios) {
     io = ios;
-    // const router = Router();
-    // router.post('/notify', (req: Request, res: Response) => {
-    //   const message = req.body.message || 'default message';
-    //   // Emit to all connected clients
-    //   io.emit('agent_notification', { message });
-    //   res.json({ status: 'sent', message });
-    // });
     return router;
 }
 function buildMessages(setting_prompt, question) {
     const messages = [];
-    // Always start with system prompt
-    messages.push({
-        role: "system",
-        content: setting_prompt,
-    });
-    // messages.push({
-    //   role: "user",
-    //   content: "If you are an agent,Do not use &lt; &gt; or &amp; in code\n\n" + 
-    //   "Here's the format for using a tool:\n\n```xml\n<use_tool>\n<ToolName>\n  <parameter1_name>value1</parameter1_name>\n  <parameter2_name>value2</parameter2_name>\n  ...\n</ToolName>\n</use_tool>\n```\nYou must add ```xml ```"
-    // })
-    // Split into sections (or fallback to raw question if no <DATA_SECTION>)
+    messages.push({ role: "system", content: setting_prompt });
     const parts = question.includes("<DATA_SECTION>")
         ? question.split("\n<DATA_SECTION>\n").filter(s => s.trim() !== "")
         : [question.trim()];
     for (const part of parts) {
         if (part.startsWith("user:")) {
-            messages.push({
-                role: "user",
-                content: part.replace(/^user:\s*/, ""),
-            });
+            messages.push({ role: "user", content: part.replace(/^user:\s*/, "") });
         }
         else if (part.startsWith("assistance:")) {
-            messages.push({
-                role: "assistant",
-                content: part.replace(/^assistance:\s*/, ""),
-            });
+            messages.push({ role: "assistant", content: part.replace(/^assistance:\s*/, "") });
         }
     }
     return messages;
 }
 function wrapUseToolWithXml(responsetext) {
-    // ถ้ามี ```xml อยู่แล้ว ไม่ทำอะไร
     if (/```xml([\s\S]*?)```/g.test(responsetext)) {
         return responsetext;
     }
-    // หา <use_tool>...</use_tool> ทุก block
     return responsetext.replace(/(<use_tool>[\s\S]*?<\/use_tool>)/g, "```xml\n$1\n```");
 }
+// =================================================================================
+// ⭐ NEW API ENDPOINT TO SERVE FILES FROM STORAGE ⭐
+// =================================================================================
+router.get('/storage/*', async (req, res) => {
+    // The '*' captures the entire path after /storage/, including slashes
+    const objectName = req.params[0];
+    if (!objectName) {
+        return res.status(400).send('File path is required.');
+    }
+    try {
+        // 1. Get file metadata (like MIME type) from the database
+        const fileInfo = await getFileInfoByObjectName(objectName);
+        if (!fileInfo) {
+            return res.status(404).send('File not found in database records.');
+        }
+        // 2. Get the file stream from MinIO
+        const fileStream = await getFileByObjectName(objectName);
+        // 3. Set headers to tell the browser how to handle the file
+        // 'Content-Type' lets the browser know if it's an image, pdf, etc.
+        res.setHeader('Content-Type', fileInfo.mime_type || 'application/octet-stream');
+        // 'Content-Disposition' suggests the original filename
+        res.setHeader('Content-Disposition', `inline; filename="${fileInfo.file_name}"`);
+        // 4. Pipe the stream from MinIO directly to the response
+        fileStream.pipe(res);
+    }
+    catch (error) {
+        console.error(`Failed to retrieve file '${objectName}':`, error);
+        // Check for MinIO's specific 'NoSuchKey' error
+        if (error.code === 'NoSuchKey') {
+            return res.status(404).send('File not found in storage.');
+        }
+        res.status(500).send('Internal server error while retrieving file.');
+    }
+});
+// =================================================================================
+// UPDATED /upload ENDPOINT TO USE MINIO
+// =================================================================================
 router.post('/upload', upload.array('files'), async (req, res) => {
     const text = req.body.text;
     const files = req.files;
+    const userId = req.session.user?.id;
+    const chatId = req.session.user?.currentChatId;
+    if (!userId || !chatId) {
+        return res.status(401).send("User session not found or no active chat.");
+    }
     try {
-        // const FormData = require('form-data');
+        // 1. Upload files to MinIO and store records in PostgreSQL
+        // for (const file of files) {
+        //     console.log(`Uploading ${file.originalname} to MinIO...`);
+        //     await uploadFile(
+        //         userId,
+        //         chatId,
+        //         file.originalname,
+        //         file.buffer,
+        //         file.mimetype,
+        //         file.size
+        //     );
+        // }
+        // console.log("All files successfully uploaded to MinIO.");
+        // 2. Forward files to the Python processing server
         const form = new FormData();
-        form.append('user_id', req.session.user.id);
-        form.append('chat_history_id', req.session.user.currentChatId);
+        form.append('user_id', userId);
+        form.append('chat_history_id', chatId);
         form.append('text', text);
+        form.append('processing_mode', 'legacy_text'); //legacy_text or new_page_image
         for (const file of files) {
-            form.append('files', fs.createReadStream(file.path), file.originalname);
+            // Append the buffer directly instead of creating a read stream
+            form.append('files', file.buffer, file.originalname);
         }
         const API_SERVER_URL = process.env.API_SERVER_URL || 'http://localhost:5000';
+        console.log(`Forwarding to Python server at ${API_SERVER_URL}/process...`);
         const flaskRes = await axios.post(`${API_SERVER_URL}/process`, form, {
             headers: form.getHeaders()
         });
         res.json(flaskRes.data.reply);
     }
     catch (err) {
-        console.error(err);
-        return res.status(500).send("Failed to process message");
+        console.error("Error during the upload process:", err);
+        return res.status(500).send("Failed to process message and upload files.");
     }
 });
 router.post('/create_record', async (req, res) => {
     const { message: userMessage, model: selectedModel, mode: selectedMode, role: selectedRole, socket: socketId } = req.body;
-    const initialMode = selectedMode ?? 'ask'; // Default if not provided on first message
-    const initialModel = selectedModel ?? 'gemma3:1b'; // Default if not provided on first message
+    const initialMode = selectedMode ?? 'ask';
+    const initialModel = selectedModel ?? 'gemma3:1b';
     try {
         if (req.session.user) {
             if (!req.session.user.currentChatId) {
-                //create chat
                 const chat_history_id = await newChatHistory(req.session.user.id);
-                await createChatFolder(req.session.user.id, chat_history_id);
+                // REMOVED: createChatFolder(req.session.user.id, chat_history_id);
                 req.session.user.currentChatId = chat_history_id;
                 const chatHistories = await listChatHistory(req.session.user.id);
                 req.session.user.chatIds = chatHistories.map((chat) => chat.id);
@@ -229,27 +183,23 @@ router.post('/create_record', async (req, res) => {
             }
         }
         else {
-            // Create guest user on first message
             const guestName = `guest_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
             try {
-                const guestUser = await import('./db.js').then(db => db.createGuestUser(guestName));
+                const guestUser = await createGuestUser(guestName);
                 req.session.user = {
                     id: guestUser.id,
                     username: guestUser.username,
                     isGuest: true,
                     chatIds: [],
                     currentChatId: null,
-                    currentChatMode: null, // Initialize mode/model in session
+                    currentChatMode: null,
                     currentChatModel: null,
                     socketId: socketId
                 };
-                // const chatId = await import('./db.js').then(db => db.newChatHistory(guestUser.id));
-                // req.session.user.currentChatId = chatId;
-                // req.session.user.chatIds = [chatId];
                 await setUserActiveStatus(guestUser.id, true);
-                await createUserFolder(guestUser.id);
+                // REMOVED: createUserFolder(guestUser.id);
                 const chat_history_id = await newChatHistory(req.session.user.id);
-                await createChatFolder(req.session.user.id, chat_history_id);
+                // REMOVED: createChatFolder(req.session.user.id, chat_history_id);
                 req.session.user.currentChatId = chat_history_id;
                 const chatHistories = await listChatHistory(req.session.user.id);
                 req.session.user.chatIds = chatHistories.map((chat) => chat.id);
@@ -257,14 +207,11 @@ router.post('/create_record', async (req, res) => {
                 await setChatMode(chat_history_id, initialMode);
                 await setChatModel(chat_history_id, initialModel);
                 await setCurrentChatId(req.session.user.id, chat_history_id);
-                // return res.status(200).json({ok:"ok"})
             }
             catch (err) {
                 console.error('Error creating guest user/session:', err);
                 return res.status(500).json({ error: 'Failed to create guest session' });
             }
-            //create gusess user
-            //create chat_history
         }
         req.session.user.currentChatMode = initialMode;
         req.session.user.currentChatModel = initialModel;
@@ -272,85 +219,58 @@ router.post('/create_record', async (req, res) => {
     }
     catch (err) {
         console.log(err);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-// At top level
 const runningRequests = new Map();
 let requestId = "";
-// API endpoint to handle messages from the UI
 router.post('/message', async (req, res) => {
     try {
-        const { message: userMessage, model: selectedModel, mode: selectedMode, role: selectedRole, socket: socketId, work_dir: work_dir, requestId: requestId_ } = req.body; // Get mode and model from body
-        requestId = typeof requestId_ == "string" ? requestId_ : ""; // or generate unique ID per request
+        const { message: userMessage, model: selectedModel, mode: selectedMode, role: selectedRole, socket: socketId, work_dir: work_dir, requestId: requestId_ } = req.body;
+        requestId = typeof requestId_ == "string" ? requestId_ : "";
         const controller = new AbortController();
         runningRequests.set(requestId, controller);
         const socket = io.sockets.sockets.get(socketId);
         const systemInformation = await callToolFunction('GetSystemInformation', {}, socketId);
         const systemInformationJSON = await JSON.parse(systemInformation.content[0].text);
-        // console.log(systemInformation);
-        // console.log(systemInformationJSON);
         let setting_prompt;
         setting_prompt = setting_prompts + "\n\n\n\n----------------------- **USER SYSTEM INFORMATION** -----------------------\n\n" + `## **Operation System**\n${JSON.stringify(systemInformationJSON.os)}\n\n---\n\n` + `## **System Hardware**\n${JSON.stringify(systemInformationJSON.system_hardware)}\n\n---\n\n` + `## **Current Directory**\n${JSON.stringify(systemInformationJSON.current_directory)}\n\n---\n\n` + `## **System Time**\n${JSON.stringify(systemInformationJSON.time)}\n\n----------------------- **END** -----------------------\n\n`;
-        // if (!userMessage) {
-        //   return res.status(400).json({ error: 'Message is required' });
-        // }
-        // Basic validation for mode and model if provided in this specific request
-        // Note: Mode/Model are primarily set via /set-mode and /set-model,
-        // but we need them here for the *first* message of a *new* chat.
-        const initialMode = selectedMode ?? 'code'; // Default if not provided on first message
-        const initialModel = selectedModel ?? 'gemini-2.0-flash-001'; // Default if not provided on first message
-        // if (!req.session.user) {
-        //   // Create guest user on first message
-        //   const guestName = `guest_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-        //   try {
-        //     const guestUser = await import('./db.js').then(db => db.createGuestUser(guestName));
-        //     req.session.user = {
-        //       id: guestUser.id,
-        //       username: guestUser.username,
-        //       isGuest: true,
-        //       chatIds: [],
-        //       currentChatId: null,
-        //       currentChatMode: null, // Initialize mode/model in session
-        //       currentChatModel: null,
-        //       socketId: socketId
-        //     };
-        //     // const chatId = await import('./db.js').then(db => db.newChatHistory(guestUser.id));
-        //     // req.session.user.currentChatId = chatId;
-        //     // req.session.user.chatIds = [chatId];
-        //     await setUserActiveStatus(guestUser.id, true);
-        //     await createUserFolder(guestUser.id);
-        //   } catch (err) {
-        //     console.error('Error creating guest user/session:', err);
-        //     return res.status(500).json({ error: 'Failed to create guest session' });
-        //   }
-        // }
+        const initialMode = selectedMode ?? 'code';
+        const initialModel = selectedModel ?? 'gemini-2.0-flash-001';
         let userId = req.session.user?.id;
         let currentChatId = req.session.user?.currentChatId ?? null;
         let currentChatMode = req.session.user?.currentChatMode ?? null;
         let currentChatModel = req.session.user?.currentChatModel ?? null;
         let serch_doc = "";
-        if (currentChatMode) {
+        if (currentChatId) {
             const API_SERVER_URL = process.env.API_SERVER_URL || 'http://localhost:5000';
             const response_similar_TopK = await fetch(`${API_SERVER_URL}/search_similar`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     query: userMessage,
                     user_id: userId,
                     chat_history_id: currentChatId,
-                    top_k: 10
+                    top_k: 20,
+                    top_k_pages: 5,
+                    top_k_text: 5,
+                    threshold: 8.0
                 }),
-                signal: controller.signal, // 👈 important
+                signal: controller.signal,
             });
             const result_similar_TopK = await response_similar_TopK.json();
-            if (result_similar_TopK) {
+            if (result_similar_TopK && result_similar_TopK.results) {
                 result_similar_TopK.results.forEach(doc => {
-                    console.log(`📄 ${doc.file_name} — score: ${doc.distance.toFixed(3)}`);
-                    serch_doc += doc.text + "\n\n";
+                    try {
+                        console.log(`📄 ${doc.file_name} — score: ${doc.distance.toFixed(3)}`);
+                        serch_doc += doc.text + "\n\n";
+                    }
+                    catch (error) {
+                        console.error(`Error processing document ${doc.file_name}:`, error);
+                        serch_doc += doc + "\n\n";
+                    }
                 });
             }
         }
@@ -358,33 +278,24 @@ router.post('/message', async (req, res) => {
         console.log("*-*--*--*-*-*--*-*--*-*-*-*--**--");
         let chatContent = "";
         if (currentChatId) {
-            // Load existing chat content and potentially mode/model if not in session
             const rows = await readChatHistory(currentChatId);
-            await createChatFolder(userId, currentChatId);
+            // REMOVED: await createChatFolder(userId, currentChatId);
             if (rows.length > 0) {
                 chatContent = rows[0].message;
-                // Ensure session reflects DB if somehow out of sync (e.g., server restart)
                 if (!currentChatMode) {
-                    currentChatMode = rows[0].chat_mode ?? initialMode; // Use DB or default
+                    currentChatMode = rows[0].chat_mode ?? initialMode;
                     req.session.user.currentChatMode = currentChatMode;
                 }
                 if (!currentChatModel) {
-                    // We need to read chat_model from DB here as well
-                    //  const dbModel = await getChatModel(currentChatId); // Fetch model separately if needed
-                    currentChatModel = rows[0].chat_model ?? initialModel; // Use DB or default
+                    currentChatModel = rows[0].chat_model ?? initialModel;
                     req.session.user.currentChatModel = currentChatModel;
                 }
             }
             req.session.user.socketId = socketId;
         }
-        // Append user message
         if (selectedRole == "user") {
             chatContent += (chatContent ? "\n<DATA_SECTION>\n" : "") + "user" + ": " + userMessage + "\n";
         }
-        else if (selectedRole == "assistance") {
-            // chatContent += (chatContent ? "\n<DATA_SECTION>\n" : "") + "assistance" + ": " + userMessage + "\n";
-        }
-        // Prepare prompt
         let question = "";
         let question_backup;
         if ((currentChatMode) && (serch_doc != '')) {
@@ -395,57 +306,34 @@ router.post('/message', async (req, res) => {
             question = chatContent.replace(/\n<DATA_SECTION>\n/g, "\n");
             question_backup = chatContent;
         }
-        // Determine model to use for the AI call (prioritize session)
-        const modelToUse = currentChatModel || initialModel; // Use session model or default
-        console.log(`Using AI model: ${modelToUse}`); // Log the model being used
-        // Determine mode to use for the AI call (prioritize session)
-        const modeToUse = currentChatMode || initialMode; // Use session mode or default
-        console.log(`Using AI mode: ${modeToUse}`); // Log the mode being used
+        const modelToUse = currentChatModel || initialModel;
+        console.log(`Using AI model: ${modelToUse}`);
+        const modeToUse = currentChatMode || initialMode;
+        console.log(`Using AI mode: ${modeToUse}`);
         const regexM = /\{.*?\}\s*(.*)/;
-        question =
-            "Model name: " +
-                modelToUse.match(regexM)[1] +
-                "\n\n" +
-                "--------------** Start Conversation Section** --------------\n\n" +
-                question;
-        // +
-        // "--------------** End Conversation Section** --------------\n\n"
-        // let question_backup = question; Conv
+        question = "Model name: " + modelToUse.match(regexM)[1] + "\n\n" + "--------------** Start Conversation Section** --------------\n\n" + question;
         try {
             if (modeToUse === 'code') {
-                question = setting_prompt +
-                    "## **If user do not mation to user system information do not talk about that" +
-                    "\n\n" +
-                    question;
-                // + `\n\n## **Current Directory (current working dir)**\n${JSON.stringify(systemInformationJSON.current_directory)}\n\n---\n\n`; //+ "\n\n" + "If you complete the task you must use **attempt_completion** Tool";
-                console.log(question);
+                question = setting_prompt + "## **If user do not mation to user system information do not talk about that" + "\n\n" + question;
+                // console.log(question);
             }
             else {
                 question = "\n\n\n\n----------------------- **USER SYSTEM INFORMATION** -----------------------\n\n" + `## **Operation System**\n${JSON.stringify(systemInformationJSON.os)}\n\n---\n\n` + `## **System Hardware**\n${JSON.stringify(systemInformationJSON.system_hardware)}\n\n---\n\n` + `## **Current Directory**\n${JSON.stringify(systemInformationJSON.current_directory)}\n\n---\n\n` + `## **System Time**\n${JSON.stringify(systemInformationJSON.time)}\n\n---\n\n` + `----------------------- **END USER SYSTEM INFORMATION** -----------------------\n\n` +
                     "\n\n\n\n------------------------- **SYSTEM INSTRUCTION**---------------------------\n\n" + `## **If user do not mation to user system information do not talk about that\n\n` + `## **You are assistance\n\n` + `## **You must answer user question\n\n` + `## **If in normal conversation do not use any markdown Code Block in three backticks\n\n` + `## **Use Markdown Code Block in three backticks only in code\n\n`
-                    //                    + `Example Conversation\n\nuser: hello
-                    // assistance: Hello! How can I assist you today?
-                    // user: why sky is blue
-                    // assistance:  The sky appears blue due to a phenomenon called Rayleigh scattering. Here's a simplified explanation:
-                    // *   **Sunlight and Colors:** Sunlight is actually made up of all the colors of the.
-                    // *   **osphere:** As sunlight the Earth's, it collides with tiny air molecules (mostly nitrogen and oxygen).
-                    // *   **Scattering:** This collision causes the sunlight to scatter in different directions.
-                    // *   **Blue Light:** Blue and violet light have shorter wavelengths and are scattered more strongly than other colors like red and orange.
-                    // *   **Our Eyes:** Because blue light is scattered more, it's what we see when we look up at the sky.
-                    // It's worth noting that at sunrise and sunset, the sunlight has to travel through more of the atmosphere. This means that most of the blue light is scattered away, leaving the longer wavelengths like red and orange to dominate, which is why we see those colors during those times.
-                    // Do you want me to elaborate on any part of this explanation, or would you like to know about something else?\n\n` 
                     + `----------------------------------- **END SYSTEM INSTRUCTION** -----------------------------------\n\n` +
-                    // "system: You are assistance\n\n" + "system: You must answer user question"
                     question;
-                console.log(question);
+                // console.log(question)
             }
         }
         catch (err) {
             console.error('Error setting chat mode:', err);
             return res.status(500).json({ error: `${err}` });
         }
-        let response = null; // Variable to hold the response text compatible with later processing
-        // Call AI model
+        let response = null;
+        // AI Model calling logic (Google, Ollama, OpenRouter, MyModel) remains the same...
+        // ... [ The large block of code for calling different AI APIs is omitted for brevity but should be kept as is ] ...
+        // --- Assume one of the blocks below runs and populates `response` ---
+        // Example for Google Gemini API
         if (
         // modelToUse.startsWith("gemini") || 
         // modelToUse.startsWith("gemma-3") || 
@@ -598,7 +486,7 @@ router.post('/message', async (req, res) => {
                 // + `\n\n## **Current Directory (current working dir)**\n${JSON.stringify(systemInformationJSON.current_directory)}\n\n---\n\n`
                 );
             }
-            console.log(message);
+            // console.log(message);
             // let sys_prompt = ""
             // if (modeToUse == 'code'){
             //   sys_prompt = "system:\nYour are agent \n\n If user give instruction tool and task you must be complete the task by use the tool \n\n # **you can call only one to per round**"
@@ -806,69 +694,42 @@ router.post('/message', async (req, res) => {
                 return res.status(500).json({ error: `Failed to communicate with MyModel model: ${err instanceof Error ? err.message : String(err)}` });
             }
         }
-        // let modelToUse_ollama = "qwen2.5-coder:1.5b";
-        // Note: The code execution continues here ONLY if the try block succeeded
-        // and assigned a value to the 'response' variable.
         if (!response) {
             console.error("No response received from AI model");
             return res.status(500).json({ error: "No response received from AI model" });
         }
-        console.log("************************************");
-        console.log(response.text);
-        console.log("************************************");
+        console.log("************************************\n", response.text, "\n************************************");
         let responsetext = "";
         let tool_u = null;
         let img_url = null;
-        if (response && response.text) { // Check if response is not null before accessing text
-            console.log(",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,");
-            responsetext = (response.text)
-                // .replace("thinking ","\n<thinking>\n")
-                // .replace("thinking\n","\n<thinking>\n")
-                // .replace("<thinking>","\n<thinking>\n")
-                // .replace("</thinking>","\n</thinking>\n")
-                .replace("```xml", "\n```xml")
-                // .replace("```tool_code","\n```tool_code")
-                // .replace("TOOL USE\n```xml", "TOOL USE")
-                // .replace("TOOL USE", "TOOL USE\n```xml")
-                // .replace("</use_mcp_tool>\n```","</use_mcp_tool>")
-                // .replace("</use_mcp_tool>","</use_mcp_tool>\n```")
-                // .replace("</attempt_completion>\n```","</attempt_completion>")
-                // .replace("</attempt_completion>","</attempt_completion>\n```")
-                // .replace("</ask_followup_question>\n```","</ask_followup_question>")
-                // .replace("</ask_followup_question>","</ask_followup_question>\n```")
-                .replace("assistance: assistance:", "assistance:");
+        if (response && response.text) {
+            responsetext = (response.text).replace("```xml", "\n```xml").replace("assistance: assistance:", "assistance:");
             responsetext = wrapUseToolWithXml(responsetext);
             let rrs;
-            // const regex = /```xml([\s\S]*?)```/g;
             const regex = /<use_tool>([\s\S]*?)<\/use_tool>/g;
-            // ดึง XML block ออกมา (array)
             rrs = [...responsetext.matchAll(regex)].map(m => m[1].trim());
             if (rrs.length > 0) {
-                // ครอบทุก <text>...</text> ด้วย <![CDATA[ ... ]]>
-                rrs = rrs.map(xml => xml.replace(/<text>([\s\S]*?)<\/text>/g, (match, p1) => `<text><![CDATA[\n${p1}\n]]></text>`));
-                rrs = rrs.map(xml => xml.replace(/<result>([\s\S]*?)<\/result>/g, (match, p1) => `<result><![CDATA[\n${p1}\n]]></result>`));
+                rrs = rrs.map(xml => xml.replace(/<text>([\s\S]*?)<\/text>/g, (match, p1) => `<text><![CDATA[\n${p1}\n]]></text>`)
+                    .replace(/<result>([\s\S]*?)<\/result>/g, (match, p1) => `<result><![CDATA[\n${p1}\n]]></result>`));
             }
             console.log(rrs);
             if (rrs.length > 0 && modeToUse === 'code') {
-                // ถ้าอยากแปลงทุก block
                 const xmloutput = await Promise.all(rrs.map(xml => xmlToJson(xml)));
-                console.log("/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*");
-                console.log(xmloutput);
+                console.log("/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*\n", xmloutput);
                 tool_u = xmloutput;
             }
         }
-        // ... existing XML parsing above remains unchanged
         let resultText = null;
         let all_response = "";
         let lastToolName = null;
+        let new_img_url = null;
         const list_toolname = [
             'IMG_Generate', 'GetPage', 'ClickElement', 'GetSourcePage', 'GetTextPage',
             'GetData', 'SearchByID', 'SearchByDuckDuckGo', 'ProcessFiles', 'SearchSimilar',
             'attempt_completion', 'ask_followup_question', 'ListFiles', 'ReadFile',
             'EditFile', 'CreateFile', 'DeleteFile', 'DownloadFile', 'CreateFolder',
-            'ChangeDirectory', 'ExecuteCommand', 'CurrentDirectory'
+            'ChangeDirectory', 'ExecuteCommand', 'CurrentDirectory', 'GetSystemInformation', 'RequestScreenshot',
         ];
-        // --- normalize tool_u into array for looping ---
         let toolList = Array.isArray(tool_u) ? tool_u : (tool_u ? [tool_u] : []);
         if (toolList.length > 0) {
             try {
@@ -876,37 +737,54 @@ router.post('/message', async (req, res) => {
                     const tool = toolList[i];
                     if (tool?.toolName != null && list_toolname.includes(tool.toolName)) {
                         lastToolName = tool.toolName;
-                        // ✅ assign img_url for IMG_Generate
                         if (tool.toolName === "IMG_Generate") {
-                            tool.arguments.img_url = `user_files/user_${userId}/chat_${currentChatId}/gen_${i}/`;
-                            img_url = tool.arguments.img_url;
+                            // The save path is handled by minioClient.putObject in /save_img now,
+                            // but we can construct the expected final object name if needed.
+                            tool.arguments.img_url = `user_${userId}/chat_${currentChatId}/gen_${i}/`;
+                            img_url = tool.arguments.img_url; // For reference
                         }
                         const response = await callToolFunction(tool.toolName, tool.arguments, socketId);
-                        // --- handle special cases ---
+                        console.log("Tool Response:\n", response, "\n================================================");
                         if (tool.toolName === "attempt_completion" && tool.arguments.results) {
-                            console.log(`\n\nattempt_completion : ${tool.arguments.results}`);
                             responsetext += `\n\nattempt_completion : ${tool.arguments.results}`;
                         }
                         else if (tool.toolName === "ask_followup_question") {
-                            responsetext += `\n\n**ask_followup_question :**  ${tool.arguments.question} \n\n ${tool.arguments.follow_up.suggest.map((item) => `* **suggest** ${tool.arguments.follow_up.suggest.indexOf(item) + 1}: ${item}`).join('\n')} \n\nselect suggestion and send it back to me.`;
+                            responsetext += `\n\n**ask_followup_question :** ${tool.arguments.question} \n\n ${tool.arguments.follow_up.suggest.map((item) => `* **suggest** ${tool.arguments.follow_up.suggest.indexOf(item) + 1}: ${item}`).join('\n')} \n\nselect suggestion and send it back to me.`;
                         }
                         console.log("RESPONSE:\n", response.content[0].text, "\n================================================");
-                        // --- image handling ---
                         const imageUrlContent = response.content.find(item => item.type === 'resource_link');
-                        if (imageUrlContent) {
+                        if (imageUrlContent)
                             img_url = imageUrlContent.text;
-                            console.log(img_url);
+                        // =================================================================
+                        // ⭐ UPDATED LOGIC USING THE `uploadFile` HELPER FUNCTION ⭐
+                        // =================================================================
+                        const base64Content = response.content.find(item => item.type === 'resource_data');
+                        if (base64Content && base64Content.text) {
+                            console.log("Found base64 image data, preparing to save...");
+                            const base64Data = base64Content.text.split(';base64,').pop();
+                            if (base64Data) {
+                                const imageBuffer = Buffer.from(base64Data, 'base64');
+                                const timestamp = Date.now();
+                                // Prepare the data for the uploadFile function
+                                const fileName = `tool_screenshot_${timestamp}.png`;
+                                const mimeType = 'image/png';
+                                const fileSize = imageBuffer.length;
+                                // Call the single helper function to handle both upload and DB insert
+                                const uploadResult = await uploadFile(userId, currentChatId, fileName, imageBuffer, mimeType, fileSize);
+                                // Use the objectName returned from the function
+                                const publicUrl = uploadResult.objectName;
+                                console.log(`✅ Image saved and record created. Object Name: ${publicUrl}`);
+                                new_img_url = publicUrl;
+                                img_url = publicUrl;
+                                response.content[0].text += `\n\nImage captured and saved at: ${publicUrl}`;
+                            }
+                            else {
+                                response.content[0].text += `\n\nWarning: Could not decode base64 image data for saving.`;
+                            }
                         }
-                        if (response.content.length > 1 && response.content[1].type === "resource_link") {
-                            img_url = response.content[1].text.replace("ai_agent_with_McpProtocol/user_files", "");
-                        }
+                        // =================================================================
                         resultText = `Result:\n${response.content[0].text}\n user: current step using ${tool.toolName} is complete move to next step, If this task is completed, use tool <attempt_completion>`;
-                        // --- append this tool response ---
-                        // all_response += `\n\n[Tool:${tool.toolName}]\n${resultText} **model Do not generate this**`;
                         all_response += `\n\n[Tool:${tool.toolName}]\n${resultText}`;
-                    }
-                    else {
-                        console.log("No valid Tool for:", tool?.toolName);
                     }
                 }
             }
@@ -915,36 +793,25 @@ router.post('/message', async (req, res) => {
                 return res.status(500).json({ error: `Error during call Tool: ${toolError}` });
             }
         }
-        // --- Save history and finalize ---
         if (all_response) {
             chatContent += "\n<DATA_SECTION>\n" + "assistance: " + responsetext + "\n<DATA_SECTION>\n" + "user: \n" + all_response + "\n";
         }
         else {
-            console.log("no data from tool_response");
             chatContent += "\n<DATA_SECTION>\n" + "assistance: " + responsetext + "\n";
             all_response = responsetext;
         }
-        if (img_url) {
+        if (img_url)
             chatContent += "\n<DATA_SECTION>\n" + "img_url:" + img_url + "\n";
-        }
         chatContent = chatContent.replace("assistance: assistance:", "assistance:");
         all_response = all_response.replace("assistance:", "");
         if (userId) {
-            try {
-                await storeChatHistory(currentChatId, chatContent);
-            }
-            catch (err) {
-                console.error('Error updating chat history:', err);
-            }
+            await storeChatHistory(currentChatId, chatContent);
         }
-        // === final return based on last tool executed ===
         if (lastToolName === "attempt_completion") {
-            console.log("Tool Name is attempt_completion.\n=============================================");
             return res.json({ response: all_response, attempt_completion: true, followup_question: false, img_url: img_url });
         }
         if (lastToolName === "ask_followup_question") {
-            all_response = responsetext;
-            return res.json({ response: all_response, attempt_completion: false, followup_question: true, img_url: img_url });
+            return res.json({ response: responsetext, attempt_completion: false, followup_question: true, img_url: img_url });
         }
         return res.json({ response: all_response, attempt_completion: false, followup_question: false, img_url: img_url });
     }
@@ -956,70 +823,52 @@ router.post('/message', async (req, res) => {
         runningRequests.delete(requestId);
     }
 });
-// API endpoint to stop chat request
 router.post('/stop', async (req, res) => {
     const { requestId } = req.body;
     const controller = runningRequests.get(requestId);
     if (controller) {
-        controller.abort(); // cancels fetch
+        controller.abort();
         runningRequests.delete(requestId);
         return res.json({ success: true, message: 'Process stopped' });
     }
     return res.status(404).json({ success: false, message: 'No running request found' });
 });
-// API endpoint to get chat history
 router.get('/chat-history', async (req, res) => {
     try {
         const chatId = req.query.chatId;
         const userId = req.session?.user?.id;
-        if (chatId === "bypass") {
-            return res.status(400).json({ error: 'Bypass mode not supported anymore' });
-        }
-        if (!userId) {
+        if (!userId)
             return res.status(401).json({ error: 'Unauthorized' });
-        }
-        if (!chatId) {
+        if (!chatId)
             return res.status(400).json({ error: 'ChatId is required' });
-        }
-        // Update current chat id in session and database
-        req.session.user.currentChatId = chatId;
-        await setCurrentChatId(userId, parseInt(chatId.toString()));
-        const rows = await readChatHistory(parseInt(chatId.toString())); // This should fetch mode/model too if DB function is updated
+        req.session.user.currentChatId = parseInt(chatId);
+        await setCurrentChatId(userId, parseInt(chatId));
+        const rows = await readChatHistory(parseInt(chatId));
         let chatContent = "";
         let chatMode = null;
         let chatModel = null;
         if (rows.length > 0) {
             chatContent = rows[0].message;
-            // Assuming readChatHistory now returns chat_mode and chat_model
-            chatMode = rows[0].chat_mode ?? 'code'; // Default if null
-            chatModel = rows[0].chat_model ?? 'gemini-2.0-flash-001'; // Default if null
-            // Update session
+            chatMode = rows[0].chat_mode ?? 'code';
+            chatModel = rows[0].chat_model ?? 'gemini-2.0-flash-001';
             req.session.user.currentChatMode = chatMode;
             req.session.user.currentChatModel = chatModel;
         }
         else {
-            // If chat history is empty/not found, maybe clear session mode/model?
             req.session.user.currentChatMode = null;
             req.session.user.currentChatModel = null;
         }
-        // const chatHistoryArray = (chatContent ? chatContent.split('\n<DATA_SECTION>\n') : []).map((item) => item.replace("</thinking>","</thinking>\n")
-        //                                                                                                         .replace("```xml","\n```xml")
-        //                                                                                                         .replace("TOOL USE\n```xml", "TOOL USE")
-        //                                                                                                         .replace("TOOL USE", "TOOL USE\n```xml")
-        //                                                                                                         .replace("</use_mcp_tool>\n```","</use_mcp_tool>")
-        //                                                                                                         .replace("</use_mcp_tool>","</use_mcp_tool>\n```"));
         const chatHistoryArray = (chatContent ? chatContent.split('\n<DATA_SECTION>\n') : []);
-        res.json({
-            chatHistory: chatHistoryArray,
-            chatMode: chatMode, // Return mode
-            chatModel: chatModel // Return model
-        });
+        res.json({ chatHistory: chatHistoryArray, chatMode: chatMode, chatModel: chatModel });
     }
     catch (error) {
         console.error('Error getting chat history:', error);
         return res.status(500).json({ error: 'Internal Server Error' });
     }
 });
+// =================================================================================
+// UPDATED /chat-history/:chatId ENDPOINT
+// =================================================================================
 router.delete('/chat-history/:chatId', async (req, res) => {
     const chatIdParam = req.params.chatId;
     const chatId = parseInt(chatIdParam, 10);
@@ -1027,15 +876,15 @@ router.delete('/chat-history/:chatId', async (req, res) => {
         return res.status(400).json({ error: 'Invalid chatId' });
     }
     try {
+        // This single call now handles DB records AND MinIO file cleanup
         await deleteChatHistory(chatId);
-        await deleteChatFolder(req.session.user.id, chatId);
+        // REMOVED: await deleteChatFolder(req.session.user.id, chatId);
         if (req.session.user) {
             req.session.user.chatIds = req.session.user.chatIds.filter((id) => id !== chatId);
             req.session.user.currentChatId = null;
         }
         ;
-        res.status(200).json({ message: `Chat history ${chatId} 
-       successfully` });
+        res.status(200).json({ message: `Chat history ${chatId} deleted successfully` });
     }
     catch (error) {
         console.error('Error deleting chat history:', error);
@@ -1046,17 +895,13 @@ router.get('/ClearChat', async (req, res) => {
     const userId = req.session.user?.id;
     if (userId) {
         await setCurrentChatId(userId, null);
-        // Clear session variables related to the cleared chat
         if (req.session.user) {
             req.session.user.currentChatId = null;
             req.session.user.currentChatMode = null;
             req.session.user.currentChatModel = null;
         }
-        res.status(200).json({ message: 'Chat cleared successfully' });
     }
-    else {
-        res.status(200).json({ message: 'Chat cleared successfully' });
-    }
+    res.status(200).json({ message: 'Chat cleared successfully' });
 });
 router.get('/reload-page', async (req, res) => {
     try {
@@ -1218,24 +1063,31 @@ router.get('/download-script/:filename', (req, res) => {
     }
     res.download(filePath, file);
 });
+// =================================================================================
+// UPDATED /save_img ENDPOINT TO USE MINIO
+// =================================================================================
 router.post("/save_img", upload.single("file"), async (req, res) => {
     try {
         const file = req.file;
-        const savePath = req.body.save_path;
-        if (!file || !savePath) {
-            return res.status(400).json({ error: "Missing file or save_path" });
+        // The `save_path` is now treated as the desired object name in MinIO.
+        // e.g., 'user_files/user_123/chat_456/gen_0/image.png'
+        const objectName = req.body.save_path;
+        if (!file || !objectName) {
+            return res.status(400).json({ error: "Missing file or save_path (objectName)" });
         }
-        // Create target directory
-        const targetDir = path.dirname(savePath);
-        fs.mkdirSync(targetDir, { recursive: true });
-        // Move file from temp to desired location
-        const finalPath = savePath;
-        fs.renameSync(file.path, finalPath);
-        console.log("✅ Image saved:", finalPath);
-        res.status(200).json({ status: "success", path: finalPath });
+        // Use the MinIO client to upload the file buffer.
+        // Provide the numeric size argument before metadata to match MinIO signature.
+        const objectSize = file.buffer.length;
+        await minioClient.putObject(minioBucketName, objectName, file.buffer, objectSize, {
+            'Content-Type': file.mimetype,
+        });
+        console.log("✅ Image saved to MinIO:", objectName);
+        // Note: This does NOT create a record in the `uploaded_files` table.
+        // This is for direct storage, separate from the chat upload flow.
+        res.status(200).json({ status: "success", path: objectName });
     }
     catch (err) {
-        console.error("❌ Error saving file:", err);
-        return res.status(500).json({ error: "Failed to save file" });
+        console.error("❌ Error saving file to MinIO:", err);
+        return res.status(500).json({ error: "Failed to save file to object storage" });
     }
 });

@@ -23,7 +23,7 @@ import { parseStringPromise } from 'xml2js';
 
 // import bcrypt from 'bcrypt';
 import { setChatMode, setChatModel, getChatMode, getChatModel } from './db.js'; // Import necessary DB functions
-import pool, { createUser, getUserByUsername, newChatHistory, storeChatHistory, readChatHistory, deleteChatHistory, setCurrentChatId, listChatHistory, getUserActiveStatus, setUserActiveStatus, createUserFolder, createChatFolder, deleteChatFolder } from './db.js';
+import pool, { createUser, getUserByUsername, newChatHistory, storeChatHistory, readChatHistory, deleteChatHistory, setCurrentChatId, listChatHistory, getUserActiveStatus, setUserActiveStatus } from './db.js';
 import { text } from 'stream/consumers';
 // import { Socket } from 'socket.io-client';
 
@@ -366,6 +366,61 @@ function emitWithAck<T = any>(socket: Socket, toolName: string, toolParameters: 
   });
 }
 
+// New Type Definition for the screenshot result (must match client's callback data structure)
+// The client will return an object with a base64 'imageData' string.
+export type ResultRequestScreenshot = { 
+    imageData: string; // Base64 encoded image string
+    message: string;   // Optional success/status message
+};
+
+/**
+ * Sends a request to the client to capture a screenshot and waits for the base64 image data.
+ * @param socket The client's Socket.IO socket object.
+ * @returns A promise that resolves with the base64 image data.
+ */
+async function RequestScreenshot(socket: Socket): Promise<resultsT> {
+    try {
+        console.log(`Requesting screenshot from client ${socket.id}...`);
+        
+        // 1. Use the existing emitWithAck mechanism to call a client-side function named 'TakeScreenshot'
+        // The server waits for the client to call the callback function passed to its 'CallTool' listener.
+        const responseData = await emitWithAck<ResultRequestScreenshot>(socket, 'TakeScreenshot', {}); 
+
+        console.log("Screenshot received from client, size:", responseData.imageData.length, "bytes");
+
+        // 2. Process the received data (e.g., save it, or pass the base64 string to the LLM)
+        // For demonstration, we'll return the base64 string and a message.
+        // NOTE: If you need to save the file on the server, you would do the base64 decoding and fs.writeFileSync here.
+        
+        // Return a structured response (resultsT)
+        const output: resultsT = {
+            "content": [
+                {
+                    "type": "string",
+                    "text": `Screenshot captured successfully. Data length: ${responseData.imageData.length}.`
+                },
+                {
+                    "type": "resource_data", // A new type to indicate base64 image data
+                    "text": responseData.imageData 
+                }
+            ]
+        };
+        return output;
+
+    } catch (error) {
+        console.error('Error in RequestScreenshot:', error);
+        const output: resultsT = {
+            "content": [
+                {
+                    "type": "string",
+                    "text": `Error capturing screenshot: ${error instanceof Error ? error.message : String(error)}`
+                }
+            ]
+        };
+        return output;
+    }
+}
+
 // async function ListFiles() {
 //     try {
 //         const response = await fetch(`${process.env.API_SERVER_URL}/files/list`, {
@@ -674,6 +729,40 @@ export async function callToolFunction(toolName: string, toolParameters: { [key:
 
     // --- END NEW FILE TOOL CASES ---
 
+    // --- NEW SCREENSHOT TOOL CASE ---
+
+    case 'RequestScreenshot': // New case
+        if (!socket) throw new Error('Socket not found for RequestScreenshot.');
+        return await RequestScreenshot(socket);
+
+    case 'findObjectOnScreen': {
+      if (typeof toolParameters.object_prompt !== 'string') throw new Error('findObjectOnScreen requires an object_prompt.');
+      // Use request screenshot first
+      const screenshotResponse = await RequestScreenshot(socket);
+      // Now call findObjectOnScreen with the screenshot data
+      // const response = await findObjectOnScreen(toolParameters.object_prompt, screenshotResponse);
+      return response
+    }
+
+    case 'clickObjectOnScreen': {
+      if (typeof toolParameters.object_location !== 'string') throw new Error('clickObjectOnScreen requires an object_location.');
+      const response = await emitWithAck(socket, toolName, toolParameters);
+      console.log("Response from server:", response);
+      return response
+    }
+
+    case 'findObjectOnScreenAndClick': {
+      if (typeof toolParameters.object_prompt !== 'string') throw new Error('findObjectOnScreenAndClick requires an object_prompt.');
+      // Use request screenshot first
+      const screenshotResponse = await RequestScreenshot(socket);
+      // Now call findObjectOnScreen with the screenshot data
+      // const findResponse = await findObjectOnScreen(toolParameters.object_prompt, screenshotResponse);
+      // Then click at the found location
+      // const clickResponse = await clickObjectOnScreen(findResponse.location);
+      return response
+    }
+
+    // --- END NEW SCREENSHOT_TOOL CASE ---
     case 'attempt_completion':
       if (typeof toolParameters.command == 'string'){
         const response = await emitWithAck(socket, 'ExecuteCommand', toolParameters);

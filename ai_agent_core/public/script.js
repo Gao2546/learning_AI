@@ -184,7 +184,49 @@ socket.on('CallTool', async (toolName, toolParameters, callback) => {
         console.log(data);
         callback(data);
         break;
-      }
+        }
+
+        case 'TakeScreenshot': {
+          console.log("Server requested screenshot via 'TakeScreenshot' tool.");
+        
+          try {
+            // 1. Fetch the image from your local API
+            const response = await fetch(`${baseSysURL}/screenshot`);
+        
+            // 2. Check if the network request was successful
+            if (!response.ok) {
+              throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+        
+            // 3. Get the raw image data as a Blob
+            const imageBlob = await response.blob();
+        
+            // 4. Convert the Blob to a Base64 string to send via the callback
+            const base64Image = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result); // The result is the base64 string
+              reader.onerror = reject;
+              reader.readAsDataURL(imageBlob); // This starts the conversion
+            });
+        
+            // 5. Now, send the base64 string back to the server
+            console.log(`Screenshot sent back to server. Size: ${base64Image.length}`);
+            callback({
+              imageData: base64Image, // This is now a proper base64 data URL
+              message: "Screenshot captured successfully."
+            });
+        
+          } catch (error) {
+            console.error("Screenshot capture failed:", error);
+            // Send an error back if any step failed
+            callback({
+              imageData: null,
+              message: `Error: Could not capture screenshot. ${error.message}`
+            });
+          }
+          break;
+        }
+
 
 
 
@@ -196,6 +238,57 @@ socket.on('CallTool', async (toolName, toolParameters, callback) => {
     callback(`Tool function '${toolName}' not found.`);
   }
 });
+
+async function captureScreenFrameAsBase64() {
+    try {
+        // Request screen sharing with simplified constraints
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: false // Explicitly disable audio
+        });
+
+        const videoTracks = stream.getVideoTracks();
+        if (videoTracks.length === 0) {
+            console.error("No video track found in the screen stream.");
+            return null;
+        }
+
+        const track = videoTracks[0];
+        const imageCapture = new ImageCapture(track);
+
+        // Capture a single frame as an ImageBitmap
+        const bitmap = await imageCapture.grabFrame();
+
+        // Important: Stop the track to end the screen sharing session
+        track.stop();
+
+        // Use a canvas to convert the ImageBitmap to a data URL
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0);
+
+        // Convert canvas content to base64 PNG
+        return canvas.toDataURL('image/png');
+
+    } catch (err) {
+        // Handle cases where the user denies permission or another error occurs
+        console.error("Error capturing screen:", err);
+        return null;
+    }
+}
+
+// How to use it:
+// captureScreenFrameAsBase64().then(imageData => {
+//     if (imageData) {
+//         console.log("Captured Base64 Image:", imageData.substring(0, 50) + "...");
+//         // You can now use this imageData, e.g., set it as an image source
+//         // const myImage = document.getElementById('screenshot-img');
+//         // myImage.src = imageData;
+//     }
+// });
+
 
 const messagesDiv = document.getElementById('messages');
 const userInput = document.getElementById('userInput');
@@ -670,17 +763,17 @@ userInput.addEventListener('keydown',async (event) => {
 });
 
     
-    // Add event listener for file dialog button
-    fileDialogButton.addEventListener('click', function() {
-        // Open our custom file browser instead of the native file input
-        openFileBrowser();
-    });
-    
-    // Add event listener for change directory button
-    changeDirButton.addEventListener('click', function() {
-        // Open file browser to select a directory
-        openDirectoryBrowser();
-    });
+// Add event listener for file dialog button
+fileDialogButton.addEventListener('click', function() {
+    // Open our custom file browser instead of the native file input
+    openFileBrowser();
+});
+
+// Add event listener for change directory button
+changeDirButton.addEventListener('click', function() {
+    // Open file browser to select a directory
+    openDirectoryBrowser();
+});
 // Add event listener to detect @ symbol in input
 userInput.addEventListener('input', function() {
     const cursorPos = userInput.selectionStart;
@@ -767,22 +860,7 @@ async function sendMessage() {
     let role = "user";
     // let data = null;
 
-    const formData = new FormData();
-    formData.append("text", currentMessage);
-    console.log(currentFiles);
-    console.log(currentFiles.length);
-    if (currentFiles.length === 0){
-        console.log("No file")
-    }
-    if (currentFiles) {
-        for (let i = 0; i < currentFiles.length; i++) {
-            formData.append("files", currentFiles[i]); // Use same name: "files"
-        }
-    }
-    console.log("show dataaaaaaaaaaaaaaaa2")
-
     try {
-        console.log("show dataaaaaaaaaaaaaaaa")
 
         const create_record_res = await fetch('/api/create_record', {
                 method: 'POST',
@@ -799,19 +877,33 @@ async function sendMessage() {
                 })
             });
         console.log(create_record_res);
+        const formData = new FormData();
+        formData.append("text", currentMessage);
+        console.log(currentFiles);
+        console.log(currentFiles.length);
         userInput.value = ''; // Clear input field
         userFiles.value = '';
         selectedFilesDiv.style.display = 'none';
         selectedFilesDiv.innerHTML = '';
-        const res = await fetch("/api/upload", {
-            method: "POST",
-            body: formData
-        });
-        console.log(res);
+        if (currentFiles.length === 0){
+            console.log("No file")
+        }
+        else {
+            if (currentFiles) {
+                for (let i = 0; i < currentFiles.length; i++) {
+                    formData.append("files", currentFiles[i]); // Use same name: "files"
+                }
+            }
+            const res = await fetch("/api/upload", {
+                method: "POST",
+                body: formData
+            });
+            console.log(res);
 
-        const result = await res.json();
-        console.log('show result')
-        console.log(result)
+            const result = await res.json();
+            console.log('show result')
+            console.log(result)
+        }
         // Show result in UI
         // document.getElementById("messages").innerHTML += `<p><strong>You:</strong> ${text}</p>`;
         // document.getElementById("messages").innerHTML += `<p><strong>AI:</strong> ${result.reply}</p>`;
@@ -1156,14 +1248,53 @@ function createMarkdownMessageStreamElement(className){
     return messageElement
 }
 
-function displayImageMessage(imageUrl, className = '') {
+// function displayImageMessage(imageUrl, className = '') {
+//     // Create a div to hold the image, allowing for potential styling or future additions
+//     const messageElement = document.createElement('div');
+//     messageElement.className = className; // Apply the provided class name
+
+//     // Create the image element
+//     const imgElement = document.createElement('img');
+//     imgElement.src = imageUrl;
+//     imgElement.alt = 'Chat image'; // Provide a descriptive alt text for accessibility
+//     imgElement.style.maxWidth = '100%'; // Ensure the image fits within its container
+//     imgElement.style.height = 'auto'; // Maintain aspect ratio
+//     imgElement.style.borderRadius = '8px'; // Add some rounded corners for aesthetics
+//     imgElement.style.marginTop = '5px'; // Add a small margin top for spacing
+
+//     // Optional: Add an error handler for broken image links
+//     imgElement.onerror = function() {
+//         console.error('Failed to load image:', imageUrl);
+//         // You could replace the broken image with a placeholder or a "failed to load" message
+//         imgElement.src = 'https://placehold.co/150x150/FF0000/FFFFFF?text=Image+Error';
+//         imgElement.alt = 'Image failed to load';
+//     };
+
+//     // Append the image to the message container
+//     messageElement.appendChild(imgElement);
+
+//     // Assuming 'messagesDiv' is the container where all chat messages are appended
+//     // Make sure 'messagesDiv' is defined in your scope.
+//     if (typeof messagesDiv !== 'undefined' && messagesDiv instanceof Element) {
+//         messagesDiv.appendChild(messageElement);
+//         // Scroll to the bottom of the messages div to show the new message
+//         messagesDiv.scrollTop = messagesDiv.scrollHeight;
+//     } else {
+//         console.error("Error: 'messagesDiv' is not defined or is not a valid DOM element. Please ensure your chat container element is correctly referenced.");
+//     }
+// }
+
+function displayImageMessage(objectName, className = '') {
     // Create a div to hold the image, allowing for potential styling or future additions
     const messageElement = document.createElement('div');
     messageElement.className = className; // Apply the provided class name
 
     // Create the image element
     const imgElement = document.createElement('img');
-    imgElement.src = imageUrl;
+    
+    // ⭐ UPDATE: Construct the full URL using your API endpoint
+    imgElement.src = `/api/storage/${objectName}`; 
+    
     imgElement.alt = 'Chat image'; // Provide a descriptive alt text for accessibility
     imgElement.style.maxWidth = '100%'; // Ensure the image fits within its container
     imgElement.style.height = 'auto'; // Maintain aspect ratio
@@ -1172,7 +1303,7 @@ function displayImageMessage(imageUrl, className = '') {
 
     // Optional: Add an error handler for broken image links
     imgElement.onerror = function() {
-        console.error('Failed to load image:', imageUrl);
+        console.error('Failed to load image from object name:', objectName);
         // You could replace the broken image with a placeholder or a "failed to load" message
         imgElement.src = 'https://placehold.co/150x150/FF0000/FFFFFF?text=Image+Error';
         imgElement.alt = 'Image failed to load';
@@ -1518,7 +1649,7 @@ function formatFileSize(bytes) {
 
 // Function to open directory browser for changing current directory
 function openDirectoryBrowser() {
-    const modal = document.getElementById('fileBrowserModal');
+    const modal = document.getElementById('directoryBrowserModal');
     if (!modal) {
         createDirectoryBrowserModal();
     }

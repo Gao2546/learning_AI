@@ -439,6 +439,28 @@ This tool retrieves the path of the current working directory.
   - This tool takes no parameters.
   - **Corresponds to**: `POST /files/current_directory`
 
+-----
+
+## **Tool: Request Screenshot**
+
+This tool sends a request to the client via WebSocket (Socket.IO acknowledgment) to capture the current state of the client's screen, returning the image data (base64 encoded) back to the server.
+
+```xml
+<use_tool>
+  <RequestScreenshot>
+  </RequestScreenshot>
+</use_tool>
+```
+
+  * This tool takes **no parameters**.
+  * The result is a **structured object** containing:
+      * A status message.
+      * The **base64 encoded image string** (`data:image/png;base64,...`) in the `resource_data` field of the response content.
+  * **Usage Notes**:
+      * Use this tool when you need a visual representation of the current client state (e.g., after navigating a webpage or executing a command that affects the UI).
+      * The base64 image data can be very large, so use this tool judiciously.
+
+-----
 
 Rules:
 

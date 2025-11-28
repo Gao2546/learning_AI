@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
 import { getChatMode, getChatModel } from './db.js'; // Import DB functions
-import { createUser, getUserByUsername, getUserByEmail, listChatHistory, getCurrentChatId, setCurrentChatId, setUserActiveStatus, deleteUserAndHistory, createUserFolder, deleteUserFolder } from './db.js';
+import { createUser, getUserByUsername, getUserByEmail, listChatHistory, getCurrentChatId, setCurrentChatId, setUserActiveStatus, deleteUserAndHistory } from './db.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 const router = express.Router();
@@ -23,7 +23,7 @@ router.post('/register', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         // Insert the user into the database
         const newUser = await createUser(username, hashedPassword, email);
-        await createUserFolder(newUser.id);
+        // await createUserFolder(newUser.id);
         // Redirect to login page upon successful registration
         res.status(201).json({ success: true }); // Send JSON success response
     }
@@ -53,7 +53,7 @@ router.post('/login', async (req, res) => {
         if (req.session.user) {
             if (req.session.user.isGuest === true) {
                 await deleteUserAndHistory(req.session.user.id);
-                await deleteUserFolder(req.session.user.id);
+                // await deleteUserFolder(req.session.user.id);
             }
             else {
                 return res.status(400).json({ error: 'Already logged in' });
@@ -151,7 +151,7 @@ router.get('/endsession', async (req, res) => {
     if (is_guest) {
         console.log(`Deleting guest ${userId}`);
         await deleteUserAndHistory(userId);
-        await deleteUserFolder(userId);
+        // await deleteUserFolder(userId);
         req.session.destroy((err) => {
             if (err) {
                 console.error('Error destroying session:', err);

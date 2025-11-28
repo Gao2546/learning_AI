@@ -6,11 +6,15 @@ import sys
 import time
 from typing import List, TypedDict  # Added these as they are commonly used in LangChain/Python projects, though commented out in your original
 import requests
+import io # NEW IMPORT
+import concurrent.futures
+import multiprocessing
 
 # Third-party libraries
 import bs4
 import dotenv
 import torch
+import fitz # NEW IMPORT
 from duckduckgo_search import DDGS
 from flask import Flask, jsonify, request, send_from_directory
 from googlesearch import search
@@ -45,9 +49,16 @@ from utils.util import (
     extract_xls_text,
     save_vector_to_db,
     search_similar_documents_by_chat,
+    model as embeddings,
+
+    # --- NEW IMPORTS FOR DUAL-METHOD RAG ---
+    upload_file_to_minio_and_db,
+    get_clip_embedding,
+    save_page_vector_to_db,
+    convert_pdf_page_to_image,
+    search_similar_pages,
+    process_pages_with_vlm
 )
-from TextToImage.utils.node import *
-from object_detection_byVLM_Grounding_DINO.grounding_dino_api import detect_objects_from_url
 
 
 TEXT_FILE_EXTENSIONS = ['.txt', '.pdf', '.docx', '.pptx', '.odt', '.rtf']
@@ -61,6 +72,9 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+
+from TextToImage.utils.node import *
+from object_detection_byVLM_Grounding_DINO.grounding_dino_api import detect_objects_from_url, detect_objects_from_image_bytes
 
 app = Flask(__name__)
 
@@ -453,76 +467,370 @@ def Search_By_DuckDuckGo():
     return jsonify({'result': results})
 
 
+# ==============================================================================
+#  UPDATED & NEW RAG ENDPOINTS
+# ==============================================================================
+
+def convert_page_worker(args):
+                    file_bytes, page_num_0_idx = args
+                    img_bytes = convert_pdf_page_to_image(file_bytes, page_num_0_idx)
+                    page_num_1_idx = page_num_0_idx + 1
+                    return (page_num_1_idx, img_bytes)
+
 @app.route('/process', methods=['POST'])
 def process():
+    """
+    Processes uploaded files using one of two methods:
+    1. 'legacy_text': Extracts all text, embeds it, saves to 'document_embeddings'.
+    2. 'new_page_image': Splits PDF into pages, embeds each page as an image,
+                       saves to 'document_page_embeddings'.
+    
+    FORM DATA required:
+    - files: One or more files.
+    - user_id: ID of the user.
+    - chat_history_id: ID of the current chat.
+    - processing_mode: 'legacy_text' (default) or 'new_page_image'.
+    """
     clear_gpu()
-    text = request.form.get('text', '')
-    files = request.files.getlist('files')
-    user_id = request.form.get('user_id', 'default_user')
-    chat_history_id = request.form.get('chat_history_id', 'default_chat')
+    
+    try:
+        files = request.files.getlist('files')
+        user_id = int(request.form.get('user_id'))
+        chat_history_id = int(request.form.get('chat_history_id'))
+        processing_mode = request.form.get('processing_mode', 'legacy_text')
+    except Exception as e:
+        return jsonify({"error": f"Invalid form data: {e}. 'user_id' and 'chat_history_id' must be integers."}), 400
 
-    print(len(files), "files")
-    print(f"Received files: {[file.filename for file in files]}")
+    if not files:
+        return jsonify({"error": "No files provided"}), 400
 
-    extracted_texts = []
-
+    print(f"Processing {len(files)} files with mode: '{processing_mode}'")
+    
+    processed_files = []
+    
     for file in files:
-        filename = file.filename.lower()
-        file_text = ""
-
-        if filename.endswith('.pdf'):
-            file_text = extract_pdf_text(file)
-        elif filename.endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif')):
-            file_text = extract_image_text(file)
-        elif filename.endswith(('.docx','.doc','.odt','.rtf')):
-            file_text = extract_docx_text(file)
-        elif filename.endswith(('.pptx','.ppt')):
-            file_text = extract_pptx_text(file)
-        elif filename.endswith(('.xlsx','.xlsm')):
-            file_text = extract_excel_text(file)
-        elif filename.endswith('.xls'):
-            file_text = extract_xls_text(file)
-
-        else:
-            # Everything else, attempt to read as text/code
-            file_text = extract_txt_file(file)
-
-        if not file_text.strip():
-            print(f"Skipped file (empty or unsupported): {filename}")
+        filename = file.filename
+        file.seek(0) # Rewind file pointer
+        file_bytes = file.read()
+        
+        if not file_bytes:
+            print(f"Skipped file (empty): {filename}")
             continue
 
-        extracted_texts.append(file_text)
-        data_vector = encode_text_for_embedding(file_text)
-        save_vector_to_db(user_id, chat_history_id, filename, file_text, data_vector)
+        # --- 1. Upload file to MinIO and get its DB ID ---
+        uploaded_file_id, object_name = upload_file_to_minio_and_db(
+            user_id=user_id,
+            chat_history_id=chat_history_id,
+            file_name=filename,
+            file_bytes=file_bytes
+        )
+        
+        if not uploaded_file_id:
+            print(f"Failed to upload {filename} to MinIO/DB. Skipping.")
+            continue
+        
+        # --- 2. Branch processing based on mode ---
 
-    combined_text = text + "\n" + "\n".join(extracted_texts)
+        if filename.endswith('.pdf'):
+            pdf_file = fitz.open(stream=file_bytes, filetype='pdf')
+            n_pages = pdf_file.page_count
+        
+        # if (processing_mode == 'legacy_text') or (n_pages <= 25):
+        if (n_pages <= 5):
+            # --- LEGACY TEXT PROCESSING ---
+            print(f"Processing '{filename}' in legacy_text mode...")
+            file_text = ""
+            file_stream = io.BytesIO(file_bytes) # Use BytesIO for extractor functions
+            file_stream.filename = filename # Add filename attribute
+            
+            if filename.lower().endswith('.pdf'):
+                file_text = extract_pdf_text(file_stream)
+            elif filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif')):
+                file_text = extract_image_text(file_stream)
+            elif filename.lower().endswith(('.docx','.doc','.odt','.rtf')):
+                file_text = extract_docx_text(file_stream)
+            elif filename.lower().endswith(('.pptx','.ppt')):
+                file_text = extract_pptx_text(file_stream)
+            elif filename.lower().endswith(('.xlsx','.xlsm')):
+                file_text = extract_excel_text(file_stream)
+            elif filename.lower().endswith('.xls'):
+                file_text = extract_xls_text(file_stream)
+            else:
+                file_text = extract_txt_file(file_stream)
 
-    return jsonify({'reply': f'Processed input with {len(files)} file(s). Preview: ' + combined_text[:300]})
+            if not file_text.strip():
+                print(f"Skipped file (empty or unsupported text): {filename}")
+                continue
+            print(f"Text extracted:\n{file_text}")
+            data_vector = encode_text_for_embedding(file_text)
+            save_vector_to_db(
+                user_id=user_id,
+                chat_history_id=chat_history_id, # This is for compatibility, but uploaded_file_id is the key
+                uploaded_file_id=uploaded_file_id,
+                file_name=filename,
+                text=file_text,
+                embedding=data_vector,
+                page_number=-1 # Explicitly set -1 for legacy
+            )
+            processed_files.append(filename)
 
+        # elif (processing_mode == 'new_page_image') or (n_pages > 25):
+        elif (n_pages > 5):
+            # --- NEW IMAGE-PER-PAGE PROCESSING (BATCHED) ---
+            if not filename.lower().endswith('.pdf'):
+                print(f"Skipped file: 'new_page_image' mode only supports PDF. File: {filename}")
+                continue
+            
+            print(f"Processing '{filename}' in new_page_image mode...")
+            try:
+                pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
+                num_pages = pdf_doc.page_count
+                print(f"Found {num_pages} pages in '{filename}'.")
+                
+                pages_to_embed = [] # NEW: List to hold page data
+                
+                # # --- STAGE 1: Extract all page images ---
+                # for page_num_0_idx in range(num_pages):
+                #     page_num_1_idx = page_num_0_idx + 1
+                #     print(f"  - Converting page {page_num_1_idx}/{num_pages} to image...")
+                    
+                #     # a. Convert page to image
+                #     img_bytes = convert_pdf_page_to_image(file_bytes, page_num_0_idx)
+                #     if not img_bytes:
+                #         print(f"    - FAILED to render image for page {page_num_1_idx}. Skipping this page.")
+                #         continue
+                        
+                #     # Add to our list to process in a batch
+                #     pages_to_embed.append({
+                #         "page_num_1_idx": page_num_1_idx,
+                #         "img_bytes": img_bytes
+                #     })
+
+
+                with multiprocessing.Pool(processes=10) as pool:  # Adjust processes as needed
+                    tasks = [(file_bytes, page_num_0_idx) for page_num_0_idx in range(num_pages)]
+                    results = pool.map(convert_page_worker, tasks)
+
+                for page_num_1_idx, img_bytes in results:
+                    if not img_bytes:
+                        print(f" - FAILED to render image for page {page_num_1_idx}. Skipping this page.")
+                        continue
+                    # Add to our list to process in a batch
+                    pages_to_embed.append({
+                        "page_num_1_idx": page_num_1_idx,
+                        "img_bytes": img_bytes
+                    })
+                
+                pdf_doc.close()
+
+                if not pages_to_embed:
+                    print(f"No pages were successfully converted for '{filename}'. Skipping.")
+                    continue
+
+                # --- STAGE 2: Get all embeddings in one batch call ---
+                print(f"  - Sending {len(pages_to_embed)} images to embedding model in one batch...")
+                image_bytes_batch = [page['img_bytes'] for page in pages_to_embed]
+                
+                # NEW: Call wi(processing_mode == 'new_page_image') or th image_bytes_list
+                embeddings_list = get_clip_embedding(image_bytes_list=image_bytes_batch) 
+                
+                if not embeddings_list or len(embeddings_list) != len(pages_to_embed):
+                    print(f"    - FAILED to get embeddings or count mismatch. Expected {len(pages_to_embed)}, Got {len(embeddings_list) if embeddings_list else 0}.")
+                    continue
+                    
+                print(f"  - Received {len(embeddings_list)} embeddings. Saving to DB...")
+
+                # --- STAGE 3: Save embeddings to DB ---
+                for page_data, img_embedding in zip(pages_to_embed, embeddings_list):
+                    # c. Save page embedding to new table
+                    save_page_vector_to_db(
+                        user_id=user_id,
+                        chat_history_id=chat_history_id,
+                        uploaded_file_id=uploaded_file_id,
+                        page_number=page_data['page_num_1_idx'],
+                        embedding=img_embedding
+                    )
+                
+                processed_files.append(filename)
+                
+            except Exception as e:
+                print(f"Error processing PDF '{filename}' for image embedding: {e}")
+
+        else:
+            print(f"Skipped file: Unknown processing_mode '{processing_mode}'")
+
+    clear_gpu()
+    return jsonify({
+        'reply': f"Processed {len(processed_files)}/{len(files)} files.",
+        'processed_files': processed_files
+    })
+
+
+# @app.route('/search_similar', methods=['POST'])
+# def search_similar_api():
+#     """
+#     LEGACY search endpoint. Searches the 'document_embeddings' table (text vectors).
+#     """
+#     clear_gpu()
+#     data = request.get_json()
+    
+#     try:
+#         query = data.get('query')
+#         user_id = int(data.get('user_id'))
+#         chat_history_id = int(data.get('chat_history_id'))
+#         top_k = int(data.get('top_k', 5))
+#     except Exception as e:
+#         return jsonify({"error": f"Invalid data: {e}. 'user_id', 'chat_history_id', 'top_k' must be integers."}), 400
+
+#     print(f"Searching LEGACY documents with query: {query}, user_id: {user_id}, chat_id: {chat_history_id}, top_k: {top_k}")
+
+#     if not query or not user_id or not chat_history_id:
+#         return jsonify({"error": "Missing required fields: query, user_id, chat_history_id"}), 400
+
+#     results = search_similar_documents_by_chat(
+#         query_text=query,
+#         user_id=user_id,
+#         chat_history_id=chat_history_id,
+#         top_k=top_k
+#     )
+
+#     return jsonify({"results": results})
 
 @app.route('/search_similar', methods=['POST'])
-def search_similar_api():
+def search_similar_api_unified():
+    """
+    UNIFIED search endpoint. Searches both LEGACY text and NEW page images.
+    
+    JSON Body:
+    - query (str): The user's query.
+    - user_id (int): User ID.
+    - chat_history_id (int): Chat ID.
+    - top_k_text (int, optional, default=5): Max legacy text chunks to return.
+    - top_k_pages (int, optional, default=3): Max image pages to search for VLM summary.
+    - threshold (float, optional, default=1.0): Distance threshold for page image search.
+    - run_vlm_summary (bool, optional, default=True): Whether to run the VLM summary on found pages.
+    """
     clear_gpu()
     data = request.get_json()
     
-    query = data.get('query')
-    user_id = data.get('user_id')
-    chat_history_id = data.get('chat_history_id')
-    top_k = int(data.get('top_k', 5))
-
-    print(f"Searching for similar documents with query: {query}, user_id: {user_id}, chat_history_id: {chat_history_id}, top_k: {top_k}")
+    try:
+        query = data.get('query')
+        user_id = int(data.get('user_id'))
+        chat_history_id = int(data.get('chat_history_id'))
+        
+        # รับค่า parameter ที่แยกกันสำหรับแต่ละการค้นหา
+        top_k_text = int(data.get('top_k_text', 5))
+        top_k_pages = int(data.get('top_k_pages', 5))
+        threshold = float(data.get('threshold', 1.0))
+        run_vlm_summary = bool(data.get('run_vlm_summary', True))
+        
+    except Exception as e:
+        return jsonify({"error": f"Invalid data: {e}. 'user_id', 'chat_history_id', 'top_k' must be numbers."}), 400
 
     if not query or not user_id or not chat_history_id:
         return jsonify({"error": "Missing required fields: query, user_id, chat_history_id"}), 400
 
-    results = search_similar_documents_by_chat(
-        query_text=query,
-        user_id=int(user_id),
-        chat_history_id=int(chat_history_id),
-        top_k=top_k
-    )
+    print(f"Running UNIFIED search with query: {query}, user_id: {user_id}, chat_id: {chat_history_id}")
 
-    return jsonify({"results": results})
+    # --- 1. LEGACY Text Search ---
+    print(f"  - Searching legacy text (top_k={top_k_text})...")
+    legacy_results = search_similar_documents_by_chat(
+        query_text=query,
+        user_id=user_id,
+        chat_history_id=chat_history_id,
+        top_k=top_k_text
+    )
+    
+    # --- 2. NEW Page Image Search ---
+    print(f"  - Searching new page images (top_k={top_k_pages}, threshold={threshold})...")
+    page_search_results = search_similar_pages(
+        query_text=query,
+        user_id=user_id,
+        chat_history_id=chat_history_id,
+        top_k=top_k_pages,
+        threshold=threshold
+    )
+    
+    # --- 3. VLM Processing (ถ้าเจอหน้าเอกสารและเปิดใช้งาน) ---
+    vlm_summary = None
+    if page_search_results and run_vlm_summary:
+        print(f"  - Found {len(page_search_results)} relevant pages. Sending to VLM for summary...")
+        vlm_summary = process_pages_with_vlm(
+            search_results=page_search_results,
+            original_query=query
+        )
+    elif not page_search_results:
+        print("  - No relevant pages found for VLM summary.")
+        vlm_summary = "I could not find any relevant document pages for your query."
+    else:
+        print("  - VLM summary processing was skipped (run_vlm_summary=False).")
+        vlm_summary = "VLM summary was not requested."
+        
+    clear_gpu()
+    
+    # --- 4. Return Combined Results ---
+    # ส่งคืนผลลัพธ์ทั้งหมดใน JSON เดียว
+    return jsonify({"results": legacy_results + [vlm_summary]})
+
+# --- NEW RAG ENDPOINT ---
+@app.route('/search_similar_pages', methods=['POST'])
+def search_similar_pages_api():
+    """
+    NEW Multimodal RAG endpoint.
+    1. Takes a text query.
+    2. Searches 'document_page_embeddings' (image vectors).
+    3. Retrieves the matching pages as images from MinIO.
+    4. Sends images + query to a VLM.
+    5. Returns the VLM's generated summary/answer.
+    """
+    clear_gpu()
+    data = request.get_json()
+    
+    try:
+        query = data.get('query')
+        user_id = int(data.get('user_id'))
+        chat_history_id = int(data.get('chat_history_id'))
+        top_k = int(data.get('top_k', 3))
+        # Distance threshold: 1.0 means include all results up to top_k.
+        # A smaller value (e.g., 0.5) is a stricter filter.
+        threshold = float(data.get('threshold', 0.3)) 
+    except Exception as e:
+        return jsonify({"error": f"Invalid data: {e}. 'user_id', 'chat_history_id', 'top_k', 'threshold' must be numbers."}), 400
+
+    if not query or not user_id or not chat_history_id:
+        return jsonify({"error": "Missing required fields: query, user_id, chat_history_id"}), 400
+
+    print(f"Searching NEW page images with query: {query}, user_id: {user_id}, chat_id: {chat_history_id}, top_k: {top_k}, threshold: {threshold}")
+
+    # 1. Search for similar pages
+    search_results = search_similar_pages(
+        query_text=query,
+        user_id=user_id,
+        chat_history_id=chat_history_id,
+        top_k=top_k,
+        threshold=threshold
+    )
+    
+    if not search_results:
+        print("No relevant pages found.")
+        return jsonify({"summary": "I could not find any relevant document pages for your query.", "search_results": []})
+
+    print(f"Found {len(search_results)} relevant pages. Sending to VLM...")
+
+    # 2. Process pages with VLM (fetches images, calls VLM)
+    vlm_summary = process_pages_with_vlm(
+        search_results=search_results,
+        original_query=query
+    )
+    
+    clear_gpu()
+    
+    # 3. Return the final answer
+    # return jsonify({
+    #     "summary": vlm_summary,
+    #     "search_results": search_results # Return metadata for debugging/UI
+    # })
+    return jsonify({"results": [vlm_summary]})
 
 
 # --- Helper for API responses ---
@@ -719,41 +1027,87 @@ def api_create_folder():
 @app.route('/detect_objects', methods=['POST'])
 def detect_objects_route():
     """
-    Performs zero-shot object detection using Grounding DINO.
+    Performs zero-shot object detection.
     
-    Expected JSON body:
-    {
-        "image_url": "http://example.com/image.jpg",
-        "text_labels": ["a dog", "a tree"],
-        "box_threshold": 0.4,
-        "text_threshold": 0.3
-    }
+    Handles two input types:
+    1. JSON body (Content-Type: application/json) with 'image_url' and 'text_labels'.
+    2. Multipart form data (Content-Type: multipart/form-data) with 'file' and 'text_labels'.
     """
-    clear_gpu() # Clear GPU memory before loading the large Grounding DINO model
+    clear_gpu()
     st = time.time()
     
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Request body must be JSON."}), 400
+    # --- 1. Initialize variables ---
+    image_url = None
+    image_bytes = None
+    
+    # --- 2. Determine input source (JSON vs. Form Data) ---
+    if request.content_type and 'application/json' in request.content_type:
+        # JSON Payload (for image URL)
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "JSON body is required for URL input."}), 400
+        
+        image_url = data.get('image_url')
+        text_labels_str = data.get('text_labels')
+        box_threshold = data.get('box_threshold', 0.4)
+        text_threshold = data.get('text_threshold', 0.3)
+        
+    elif request.files:
+        # Multipart Form Data (for image bytes/upload)
+        if 'file' not in request.files or request.files['file'].filename == '':
+            return jsonify({"error": "No 'file' provided in the form data."}), 400
+        
+        file = request.files['file']
+        image_bytes = file.read()
+        
+        # Get labels and thresholds from form fields
+        text_labels_str = request.form.get('text_labels')
+        box_threshold = request.form.get('box_threshold', 0.4)
+        text_threshold = request.form.get('text_threshold', 0.3)
+        
+    else:
+        return jsonify({"error": "Unsupported Content-Type or missing data. Use JSON (for URL) or Multipart Form (for file upload)."}), 400
 
-    image_url = data.get('image_url')
-    text_labels = data.get('text_labels')
-    box_threshold = data.get('box_threshold', 0.4)
-    text_threshold = data.get('text_threshold', 0.3)
+    # --- 3. Validate and Parse Labels ---
+    if not text_labels_str:
+        return jsonify({"error": "Missing 'text_labels' field."}), 400
 
-    if not image_url or not isinstance(text_labels, list) or not text_labels:
-        return jsonify({
-            "error": "Missing or invalid 'image_url' or 'text_labels' (must be a non-empty list of strings)."
-        }), 400
+    try:
+        # Assumes text_labels are a list/string that can be parsed (e.g., from a JSON list or a comma-separated string)
+        if isinstance(text_labels_str, list):
+            text_labels = [label.strip() for label in text_labels_str]
+        else: # Handle comma-separated string from form data
+            text_labels = [label.strip() for label in text_labels_str.split(',') if label.strip()]
+            
+        box_threshold = float(box_threshold)
+        text_threshold = float(text_threshold)
 
-    # Call the core detection logic from the imported module
-    detections, error_msg = detect_objects_from_url(
-        image_url=image_url,
-        text_labels=text_labels,
-        box_threshold=float(box_threshold),
-        text_threshold=float(text_threshold)
-    )
+    except Exception:
+        return jsonify({"error": "Invalid format for 'text_labels' or thresholds."}), 400
 
+    # --- 4. Run Detection based on Input Type ---
+    detections, error_msg = [], ""
+    
+    if image_url:
+        print(f"Running Grounding DINO on URL: {image_url}")
+        detections, error_msg = detect_objects_from_url(
+            image_url=image_url,
+            text_labels=text_labels,
+            box_threshold=box_threshold,
+            text_threshold=text_threshold
+        )
+    elif image_bytes:
+        print("Running Grounding DINO on uploaded image bytes.")
+        detections, error_msg = detect_objects_from_image_bytes(
+            image_bytes=image_bytes,
+            text_labels=text_labels,
+            box_threshold=box_threshold,
+            text_threshold=text_threshold
+        )
+    else:
+        return jsonify({"error": "Internal error: Could not determine image source."}), 500
+
+    # --- 5. Return Result ---
     if error_msg:
         return jsonify({"error": error_msg}), 500
 
@@ -813,18 +1167,18 @@ if __name__ == '__main__':
 
     
     # Configure quantization (new method)
-    bnb_config = BitsAndBytesConfig(
-        # load_in_8bit=True,              # or 
-        load_in_4bit=True,
-        llm_int8_threshold=6.0,
-    )
+    # bnb_config = BitsAndBytesConfig(
+    #     # load_in_8bit=True,              # or 
+    #     load_in_4bit=True,
+    #     llm_int8_threshold=6.0,
+    # )
 
 
 
     # embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L12-v2") # *** ***
     # embeddings = OpenAIEmbeddings(model="text-embedding-3-small") *** *** ***
     # embeddings = HuggingFaceEmbeddings(model_name="nomic-ai/nomic-embed-text-v2-moe")
-    embeddings = HuggingFaceEmbeddings(model_name="all-mpnet-base-v2") ## slowest and but efficient *** *** ***
+    # embeddings = HuggingFaceEmbeddings(model_name="all-mpnet-base-v2") ## slowest and but efficient *** *** ***
     # embeddings = HuggingFaceEmbeddings(model_name="google/embeddinggemma-300m")
 
     # embeddings = GemmaEmbeddings(model_name="google/embeddinggemma-300m", quantized=True)
@@ -834,31 +1188,32 @@ if __name__ == '__main__':
     # embeddings = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2") ## fastest and efficient *** ***
     # embeddings = HuggingFaceEmbeddings(model_name="paraphrase-MiniLM-L12-v2") ## faster and more efficient *** *** *
     # vector_store = InMemoryVectorStore(embeddings)
-    image_c= 1
-    img_size = 28
-    model_ckp = "./TextToImage/model/checkpoint/DDPM_T0.pth"
-    model_CLIP = "./TextToImage/model/checkpoint/CLIP0.pth"
-    Text_dim = 512
-    n_class = 10
-    model = diffusion_model_No_VQVAE(
-                in_c=image_c, 
-                out_c=image_c,
-                img_size=img_size,
-                st_channel=64, 
-                channel_multi=[1, 2, 4], 
-                att_channel=64, 
-                embedding_time_dim=64, 
-                time_exp=256, 
-                num_head=4, 
-                d_model=32, 
-                num_resbox=2, 
-                allow_att=[True, True, True], 
-                concat_up_down=True, 
-                concat_all_resbox=True, 
-                load_model_path=model_ckp,
-                load_CLIP_path=model_CLIP,
-                Text_dim=Text_dim,
-                n_class=n_class
 
-            )
+    # image_c= 1
+    # img_size = 28
+    # model_ckp = "./TextToImage/model/checkpoint/DDPM_T0.pth"
+    # model_CLIP = "./TextToImage/model/checkpoint/CLIP0.pth"
+    # Text_dim = 512
+    # n_class = 10
+    # model = diffusion_model_No_VQVAE(
+    #             in_c=image_c, 
+    #             out_c=image_c,
+    #             img_size=img_size,
+    #             st_channel=64, 
+    #             channel_multi=[1, 2, 4], 
+    #             att_channel=64, 
+    #             embedding_time_dim=64, 
+    #             time_exp=256, 
+    #             num_head=4, 
+    #             d_model=32, 
+    #             num_resbox=2, 
+    #             allow_att=[True, True, True], 
+    #             concat_up_down=True, 
+    #             concat_all_resbox=True, 
+    #             load_model_path=model_ckp,
+    #             load_CLIP_path=model_CLIP,
+    #             Text_dim=Text_dim,
+    #             n_class=n_class
+
+    #         )
     app.run(host='0.0.0.0', port=5000, debug=True)

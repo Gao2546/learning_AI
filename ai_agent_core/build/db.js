@@ -1,26 +1,35 @@
 import pkg from 'pg';
 import dotenv from 'dotenv';
-import fs from 'fs/promises'; // Use fs/promises for async/await
-import path from 'path';
-import { fileURLToPath } from 'url';
+import * as Minio from 'minio'; // Import MinIO client
 // Load environment variables from .env file
 dotenv.config();
 const { Pool } = pkg;
 console.log(process.env.DATABASE_URL);
-// Use the DATABASE_URL environment variable (loaded from .env or provided by Docker)
+// Use the DATABASE_URL environment variable
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
 });
+// --- MinIO Client Setup ---
+const minioClient = new Minio.Client({
+    endPoint: process.env.MINIO_ENDPOINT || 'localhost',
+    port: parseInt(process.env.MINIO_PORT || '9000', 10),
+    useSSL: process.env.MINIO_USE_SSL === 'true',
+    accessKey: process.env.MINIO_ACCESS_KEY || '',
+    secretKey: process.env.MINIO_SECRET_KEY || '',
+});
+const minioBucketName = process.env.MINIO_BUCKET || 'uploads';
+// --- Database Table Creation Queries (Updated) ---
 const createUsersTableQuery = `
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(255) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255),
+    email VARCHAR(255) UNIQUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     is_active BOOLEAN NOT NULL DEFAULT FALSE,
     current_chat_id INTEGER,
-    role VARCHAR(10) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin'))
+    role VARCHAR(10) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+    is_guest BOOLEAN DEFAULT FALSE
 );
 `;
 const createChatHistoryTableQuery = `
@@ -37,6 +46,29 @@ CREATE TABLE IF NOT EXISTS chat_history (
         ON DELETE CASCADE
 );
 `;
+// UPDATED: Replaced file_data BYTEA with object_name TEXT
+const createUploadedFilesTableQuery = `
+CREATE TABLE IF NOT EXISTS uploaded_files (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    chat_history_id INTEGER NOT NULL,
+    file_name TEXT NOT NULL,
+    object_name TEXT UNIQUE NOT NULL, -- Stores the unique key in MinIO
+    mime_type VARCHAR(255),
+    file_size_bytes BIGINT,
+    uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_file_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_file_chat
+        FOREIGN KEY (chat_history_id)
+        REFERENCES chat_history(id)
+        ON DELETE CASCADE
+);
+`;
 const createDocumentEmbeddingsTableQuery = `
 CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -44,21 +76,55 @@ CREATE TABLE IF NOT EXISTS document_embeddings (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     chat_history_id INTEGER NOT NULL,
-    file_name TEXT,
+    uploaded_file_id INTEGER NOT NULL,
     extracted_text TEXT,
-    embedding VECTOR(384),
+    embedding VECTOR(1024),
+    page_number INTEGER DEFAULT -1, -- <<< NEW/UPDATED COLUMN
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
     CONSTRAINT fk_doc_user
         FOREIGN KEY (user_id)
         REFERENCES users(id)
         ON DELETE CASCADE,
+
     CONSTRAINT fk_doc_chat
         FOREIGN KEY (chat_history_id)
         REFERENCES chat_history(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_doc_file
+        FOREIGN KEY (uploaded_file_id)
+        REFERENCES uploaded_files(id)
         ON DELETE CASCADE
 );
 `;
-// Then after both are created, run this if you really want the reference:
+// --- NEW TABLE FOR IMAGE EMBEDDINGS ---
+const createDocumentPageEmbeddingsTableQuery = `
+CREATE TABLE IF NOT EXISTS document_page_embeddings (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    chat_history_id INTEGER NOT NULL,
+    uploaded_file_id INTEGER NOT NULL,
+    page_number INTEGER NOT NULL,
+    embedding VECTOR(256), -- CLIP model vector size
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_page_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_page_chat
+        FOREIGN KEY (chat_history_id)
+        REFERENCES chat_history(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_page_file
+        FOREIGN KEY (uploaded_file_id)
+        REFERENCES uploaded_files(id)
+        ON DELETE CASCADE
+);
+`;
 const alterUsersTableQuery = `
 DO $$
 BEGIN
@@ -74,6 +140,8 @@ BEGIN
 END
 $$;
 `;
+// Note: Guest support columns are now integrated into the main createUsersTableQuery
+// to simplify initialization. This block is no longer strictly necessary if starting fresh.
 const alterGuestSupportQuery = `
 ALTER TABLE users
   ALTER COLUMN password DROP NOT NULL,
@@ -90,39 +158,182 @@ BEGIN
 END
 $$;
 `;
-async function createTable() {
+/**
+ * Ensures the MinIO bucket specified in the environment variables exists.
+ * Creates it if it does not.
+ */
+async function ensureMinIOBucketExists() {
+    try {
+        const bucketExists = await minioClient.bucketExists(minioBucketName);
+        if (!bucketExists) {
+            await minioClient.makeBucket(minioBucketName);
+            console.log(`MinIO: Bucket '${minioBucketName}' created.`);
+        }
+        else {
+            console.log(`MinIO: Bucket '${minioBucketName}' already exists.`);
+        }
+    }
+    catch (error) {
+        console.error(`Error ensuring MinIO bucket '${minioBucketName}' exists:`, error);
+        throw error;
+    }
+}
+async function initializeDatabase() {
     try {
         await pool.query(createUsersTableQuery);
         console.log('DB: Users table created or already exists');
         await pool.query(createChatHistoryTableQuery);
         console.log('DB: Chat history table created or already exists');
+        await pool.query(createUploadedFilesTableQuery); // Using updated query
+        console.log('DB: Uploaded files table created or already exists');
         await pool.query(createDocumentEmbeddingsTableQuery);
-        console.log('DB: Document embeddings table created or already exists');
+        console.log('DB: Document embeddings table created or already exists (w/ page_number)');
+        // --- ADD NEW TABLE INITIALIZATION ---
+        await pool.query(createDocumentPageEmbeddingsTableQuery);
+        console.log('DB: Document page embeddings table created or already exists');
         await pool.query(alterUsersTableQuery);
         console.log('DB: Foreign key added to users table');
-        await pool.query(alterGuestSupportQuery);
-        console.log('DB: Guest support columns added or already exist');
     }
     catch (error) {
         console.error('Error creating tables:', error);
     }
 }
-await createTable();
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-// Define the base upload folder
-const uploadFolder = path.join(__dirname, '..', 'user_files');
-async function ensureUploadFolderExists() {
+// --- Initialize services on startup ---
+await initializeDatabase();
+await ensureMinIOBucketExists();
+// --- MinIO File Operation Functions ---
+/**
+ * Uploads a file to MinIO and creates a corresponding record in the database.
+ * @returns An object containing the database ID and the MinIO object name of the uploaded file record.
+ */
+async function uploadFile(userId, chatId, fileName, fileBuffer, mimeType, fileSize) {
+    // Generate a unique object name to prevent collisions
+    const objectName = `user_${userId}/chat_${chatId}/${Date.now()}-${fileName}`;
     try {
-        await fs.access(uploadFolder); // check if folder exists
-        console.log('Upload folder already exists.');
+        // 1. Upload to MinIO
+        // Provide the file size as the fourth argument and metadata as the fifth to satisfy the MinIO types.
+        await minioClient.putObject(minioBucketName, objectName, fileBuffer, fileSize, {
+            'Content-Type': mimeType,
+        });
+        console.log(`MinIO: File '${objectName}' uploaded successfully.`);
+        // 2. Insert record into PostgreSQL
+        const query = `
+      INSERT INTO uploaded_files (user_id, chat_history_id, file_name, object_name, mime_type, file_size_bytes)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id;
+    `;
+        const values = [userId, chatId, fileName, objectName, mimeType, fileSize];
+        const result = await pool.query(query, values);
+        // ⭐ RETURN BOTH THE ID AND THE OBJECT NAME
+        return {
+            id: result.rows[0].id,
+            objectName: objectName
+        };
     }
     catch (error) {
-        await fs.mkdir(uploadFolder, { recursive: true });
-        console.log('Upload folder created.');
+        console.error('Error during file upload process:', error);
+        // Attempt to clean up MinIO object if DB insert fails
+        try {
+            await minioClient.removeObject(minioBucketName, objectName);
+        }
+        catch (cleanupError) {
+            console.error(`Failed to clean up MinIO object '${objectName}' after DB error:`, cleanupError);
+        }
+        throw error;
     }
 }
-await ensureUploadFolderExists();
+/**
+ * Retrieves a file stream from MinIO based on its database ID.
+ * @returns A readable stream of the file data.
+ */
+async function getFile(fileId) {
+    const query = 'SELECT object_name FROM uploaded_files WHERE id = $1';
+    const result = await pool.query(query, [fileId]);
+    if (result.rows.length === 0) {
+        throw new Error(`File with ID ${fileId} not found in database.`);
+    }
+    const objectName = result.rows[0].object_name;
+    try {
+        const stream = await minioClient.getObject(minioBucketName, objectName);
+        console.log(`MinIO: Retrieving file stream for '${objectName}'.`);
+        return stream;
+    }
+    catch (error) {
+        console.error(`Error getting file '${objectName}' from MinIO:`, error);
+        throw error;
+    }
+}
+/**
+ * Retrieves a file stream from MinIO based on its object name.
+ * @param {string} objectName The unique identifier for the object in MinIO.
+ * @returns {Promise<NodeJS.ReadableStream>} A readable stream of the file data.
+ */
+async function getFileByObjectName(objectName) {
+    try {
+        const stream = await minioClient.getObject(minioBucketName, objectName);
+        console.log(`MinIO: Retrieving file stream for object '${objectName}'.`);
+        return stream;
+    }
+    catch (error) {
+        console.error(`Error getting file object '${objectName}' from MinIO:`, error);
+        throw error;
+    }
+}
+// =================================================================================
+// ⭐ NEW FUNCTION ADDED HERE ⭐
+// =================================================================================
+/**
+ * Retrieves file metadata from the database using its MinIO object name.
+ * @param {string} objectName The unique identifier for the object in MinIO.
+ * @returns {Promise<{file_name: string, mime_type: string} | undefined>} File metadata or undefined if not found.
+ */
+async function getFileInfoByObjectName(objectName) {
+    const query = 'SELECT file_name, mime_type FROM uploaded_files WHERE object_name = $1';
+    try {
+        const result = await pool.query(query, [objectName]);
+        return result.rows[0];
+    }
+    catch (error) {
+        console.error('Error getting file info by object name:', error);
+        throw error;
+    }
+}
+/**
+ * Deletes a file from MinIO and its record from the database.
+ * The `ON DELETE CASCADE` will handle related embeddings.
+ */
+async function deleteFile(fileId) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        // 1. Get the object name from the database before deleting the record
+        const selectQuery = 'SELECT object_name FROM uploaded_files WHERE id = $1';
+        const result = await client.query(selectQuery, [fileId]);
+        if (result.rows.length === 0) {
+            console.warn(`File with ID ${fileId} not found. No deletion needed.`);
+            await client.query('ROLLBACK');
+            return;
+        }
+        const objectName = result.rows[0].object_name;
+        // 2. Delete the record from PostgreSQL (CASCADE will propagate)
+        const deleteQuery = 'DELETE FROM uploaded_files WHERE id = $1';
+        await client.query(deleteQuery, [fileId]);
+        console.log(`DB: Deleted record for file ID ${fileId}.`);
+        // 3. Delete the object from MinIO
+        await minioClient.removeObject(minioBucketName, objectName);
+        console.log(`MinIO: Deleted object '${objectName}'.`);
+        await client.query('COMMIT');
+    }
+    catch (error) {
+        await client.query('ROLLBACK');
+        console.error(`Error deleting file ${fileId}:`, error);
+        throw error;
+    }
+    finally {
+        client.release();
+    }
+}
+// --- User and Chat Functions (Original + Updated) ---
 async function createUser(username, passwordHash, email) {
     const query = 'INSERT INTO users (username, password, email) VALUES ($1, $2, $3) RETURNING id, username, email';
     const values = [username, passwordHash, email];
@@ -212,7 +423,7 @@ async function storeChatHistory(chatId, message) {
     }
 }
 async function listChatHistory(userId) {
-    const query = 'SELECT id, timestamp FROM chat_history WHERE user_id = $1 ORDER BY timestamp ASC'; //ASC DESC
+    const query = 'SELECT id, timestamp FROM chat_history WHERE user_id = $1 ORDER BY timestamp ASC';
     const values = [userId];
     try {
         const result = await pool.query(query, values);
@@ -224,7 +435,7 @@ async function listChatHistory(userId) {
     }
 }
 async function readChatHistory(chatId) {
-    const query = 'SELECT message, timestamp, chat_mode, chat_model FROM chat_history WHERE id = $1'; // Added chat_mode
+    const query = 'SELECT message, timestamp, chat_mode, chat_model FROM chat_history WHERE id = $1';
     const values = [chatId];
     try {
         const result = await pool.query(query, values);
@@ -235,16 +446,34 @@ async function readChatHistory(chatId) {
         throw error;
     }
 }
+/**
+ * UPDATED: Deletes chat history and all associated files from MinIO.
+ */
 async function deleteChatHistory(chatId) {
-    const query = 'DELETE FROM chat_history WHERE id = $1';
-    const values = [chatId];
+    const client = await pool.connect();
     try {
-        await pool.query(query, values);
+        await client.query('BEGIN');
+        // 1. Get all object names for the given chat ID before deleting
+        const res = await client.query('SELECT object_name FROM uploaded_files WHERE chat_history_id = $1', [chatId]);
+        const objectNames = res.rows.map(row => row.object_name);
+        // 2. Delete objects from MinIO
+        if (objectNames.length > 0) {
+            await minioClient.removeObjects(minioBucketName, objectNames);
+            console.log(`MinIO: Deleted ${objectNames.length} objects for chat ${chatId}.`);
+        }
+        // 3. Delete the chat history from the DB. `ON DELETE CASCADE` handles cleanup
+        // of `uploaded_files` and `document_embeddings` table records.
+        await client.query('DELETE FROM chat_history WHERE id = $1', [chatId]);
         console.log(`DB: Chat history ${chatId} deleted`);
+        await client.query('COMMIT');
     }
     catch (error) {
+        await client.query('ROLLBACK');
         console.error('Error deleting chat history:', error);
         throw error;
+    }
+    finally {
+        client.release();
     }
 }
 async function setChatMode(chatId, chatMode) {
@@ -264,7 +493,7 @@ async function getChatMode(chatId) {
     const values = [chatId];
     try {
         const result = await pool.query(query, values);
-        return result.rows[0]?.chat_mode ?? null; // Return chat_mode or null if not found/set
+        return result.rows[0]?.chat_mode ?? null;
     }
     catch (error) {
         console.error('Error getting chat mode:', error);
@@ -288,7 +517,7 @@ async function getChatModel(chatId) {
     const values = [chatId];
     try {
         const result = await pool.query(query, values);
-        return result.rows[0]?.chat_mode ?? null; // Return chat_mode or null if not found/set
+        return result.rows[0]?.chat_model ?? null;
     }
     catch (error) {
         console.error('Error getting chat model:', error);
@@ -341,18 +570,26 @@ async function getCurrentChatId(userId) {
         throw error;
     }
 }
+/**
+ * UPDATED: Deletes a user, their chat history, and all their files from MinIO.
+ */
 async function deleteUserAndHistory(userId) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        // Set current_chat_id to NULL for this user
-        await client.query('UPDATE users SET current_chat_id = NULL WHERE id = $1', [userId]);
-        // Delete all chat history for this user
-        await client.query('DELETE FROM chat_history WHERE user_id = $1', [userId]);
-        // Delete the user
+        // 1. Get all object names for the user's files before deleting from DB
+        const res = await client.query('SELECT object_name FROM uploaded_files WHERE user_id = $1', [userId]);
+        const objectNames = res.rows.map(row => row.object_name);
+        // 2. Delete user's files from MinIO
+        if (objectNames.length > 0) {
+            await minioClient.removeObjects(minioBucketName, objectNames);
+            console.log(`MinIO: Deleted ${objectNames.length} objects for user ${userId}.`);
+        }
+        // 3. Delete the user from the DB. `ON DELETE CASCADE` handles cleanup of
+        // `chat_history`, `uploaded_files`, and `document_embeddings`.
         await client.query('DELETE FROM users WHERE id = $1', [userId]);
+        console.log(`DB: User ${userId} and their history/files deleted`);
         await client.query('COMMIT');
-        console.log(`DB: User ${userId} and their chat history deleted`);
     }
     catch (error) {
         await client.query('ROLLBACK');
@@ -363,27 +600,26 @@ async function deleteUserAndHistory(userId) {
         client.release();
     }
 }
+/**
+ * Iterates through inactive guest users and deletes them one by one.
+ */
 async function deleteInactiveGuestUsersAndChats() {
     const client = await pool.connect();
     try {
-        await client.query('BEGIN');
-        // Find all guest users who are inactive
+        // Find all inactive guest users
         const res = await client.query('SELECT id FROM users WHERE is_guest = TRUE AND is_active = FALSE');
         const userIds = res.rows.map(row => row.id);
-        for (const userId of userIds) {
-            // Set current_chat_id to NULL to avoid FK constraint issues
-            await client.query('UPDATE users SET current_chat_id = NULL WHERE id = $1', [userId]);
-            // Delete all chat history for this user
-            await client.query('DELETE FROM chat_history WHERE user_id = $1', [userId]);
-            // Delete the user
-            await client.query('DELETE FROM users WHERE id = $1', [userId]);
+        if (userIds.length > 0) {
+            console.log(`DB: Found ${userIds.length} inactive guest users to delete.`);
+            for (const userId of userIds) {
+                // Use the comprehensive delete function
+                await deleteUserAndHistory(userId);
+            }
+            console.log('DB: Finished deleting inactive guest users.');
         }
-        await client.query('COMMIT');
-        console.log(`DB: Deleted ${userIds.length} inactive guest users and their chat history`);
     }
     catch (error) {
-        await client.query('ROLLBACK');
-        console.error('Error deleting inactive guest users and chats:', error);
+        console.error('Error during inactive guest user cleanup:', error);
         throw error;
     }
     finally {
@@ -414,173 +650,41 @@ async function setUserRole(userId, role) {
         throw error;
     }
 }
+/**
+ * Iterates through ALL guest users and deletes them.
+ */
 async function deleteAllGuestUsersAndChats() {
     const client = await pool.connect();
     try {
-        await client.query('BEGIN');
-        // Find all guest users
         const res = await client.query('SELECT id FROM users WHERE is_guest = TRUE');
         const userIds = res.rows.map(row => row.id);
-        for (const userId of userIds) {
-            // Set current_chat_id to NULL to avoid FK constraint issues
-            await client.query('UPDATE users SET current_chat_id = NULL WHERE id = $1', [userId]);
-            // Delete all chat history for this user
-            await client.query('DELETE FROM chat_history WHERE user_id = $1', [userId]);
-            // Delete the user
-            await client.query('DELETE FROM users WHERE id = $1', [userId]);
+        if (userIds.length > 0) {
+            console.log(`DB: Found ${userIds.length} guest users to delete.`);
+            for (const userId of userIds) {
+                await deleteUserAndHistory(userId);
+            }
+            console.log('DB: Finished deleting all guest users.');
         }
-        await client.query('COMMIT');
-        console.log(`DB: Deleted ${userIds.length} guest users and their chat history`);
     }
     catch (error) {
-        await client.query('ROLLBACK');
-        console.error('Error deleting all guest users and chats:', error);
+        console.error('Error deleting all guest users:', error);
         throw error;
     }
     finally {
         client.release();
     }
 }
-await deleteAllGuestUsersAndChats();
-await deleteOrphanedUserFolders();
-async function createUserFolder(userId) {
-    const userFolderPath = path.join(uploadFolder, `user_${userId}`);
-    try {
-        // Ensure the base upload folder exists (e.g., 'user_files')
-        await fs.mkdir(uploadFolder, { recursive: true });
-        console.log(`Ensured base upload folder exists: ${uploadFolder}`);
-        // Create the specific user folder
-        await fs.mkdir(userFolderPath, { recursive: true });
-        console.log(`User folder created or already exists: ${userFolderPath}`);
-        return userFolderPath;
-    }
-    catch (error) {
-        console.error(`Error creating user folder for user ID ${userId}:`, error);
-        throw error; // Re-throw the error for the caller to handle
-    }
-}
-async function createChatFolder(userId, chatId) {
-    const userFolderPath = path.join(uploadFolder, `user_${userId}`);
-    const chatFolderPath = path.join(userFolderPath, `chat_${chatId}`);
-    try {
-        // Ensure the base upload folder exists (e.g., 'user_files')
-        await fs.mkdir(uploadFolder, { recursive: true });
-        console.log(`Ensured base upload folder exists: ${uploadFolder}`);
-        // Ensure the specific user folder exists
-        await fs.mkdir(userFolderPath, { recursive: true });
-        console.log(`Ensured user folder exists: ${userFolderPath}`);
-        // Create the specific chat folder
-        await fs.mkdir(chatFolderPath, { recursive: true });
-        console.log(`Chat folder created or already exists: ${chatFolderPath}`);
-        return chatFolderPath;
-    }
-    catch (error) {
-        console.error(`Error creating chat folder for user ID ${userId}, chat ID ${chatId}:`, error);
-        throw error; // Re-throw the error for the caller to handle
-    }
-}
-async function deleteChatFolder(userId, chatId) {
-    const userFolderPath = path.join(uploadFolder, `user_${userId}`);
-    const chatFolderPath = path.join(userFolderPath, `chat_${chatId}`);
-    try {
-        await fs.access(chatFolderPath); // Check if the folder exists
-        await fs.rm(chatFolderPath, { recursive: true, force: true }); // Delete the folder and its contents
-        console.log(`Chat folder deleted: ${chatFolderPath}`);
-    }
-    catch (error) {
-        if (error.code === 'ENOENT') {
-            console.warn(`Chat folder not found, no action needed: ${chatFolderPath}`);
-        }
-        else {
-            console.error(`Error deleting chat folder for user ID ${userId}, chat ID ${chatId}:`, error);
-            throw error; // Re-throw other errors for upstream handling
-        }
-    }
-}
-async function deleteUserFolder(userId) {
-    const userFolderPath = path.join(uploadFolder, `user_${userId}`);
-    try {
-        await fs.access(userFolderPath); // Check if the folder exists
-        await fs.rm(userFolderPath, { recursive: true, force: true }); // Delete the folder and all its contents
-        console.log(`User folder deleted: ${userFolderPath}`);
-    }
-    catch (error) {
-        if (error.code === 'ENOENT') {
-            console.warn(`User folder not found, no action needed: ${userFolderPath}`);
-        }
-        else {
-            console.error(`Error deleting user folder for user ID ${userId}:`, error);
-            throw error; // Re-throw other errors for upstream handling
-        }
-    }
-}
-async function getAllUserIdsFromDatabase() {
-    try {
-        const query = 'SELECT id FROM users';
-        const result = await pool.query(query);
-        return result.rows.map(row => row.id);
-    }
-    catch (error) {
-        console.error('Error fetching all user IDs from database:', error);
-        throw error;
-    }
-}
-/**
- * Deletes user folders in the 'user_files' directory that do not
- * correspond to an existing user ID in the database.
- * This helps in cleaning up orphaned folders.
- */
-async function deleteOrphanedUserFolders() {
-    try {
-        // 1. Get all user IDs from the database
-        const dbUserIds = new Set(await getAllUserIdsFromDatabase());
-        console.log('Database user IDs:', Array.from(dbUserIds));
-        // 2. Read the contents of the base upload folder
-        // let folderContents: string[] = [];
-        let folderContents;
-        try {
-            folderContents = await fs.readdir(uploadFolder, { withFileTypes: true });
-        }
-        catch (error) {
-            if (error.code === 'ENOENT') {
-                console.log(`Base upload folder not found: ${uploadFolder}. No orphaned folders to delete.`);
-                return; // No folder to check, so nothing to delete
-            }
-            throw error;
-        }
-        // 3. Filter for directories that start with 'user_' and extract their IDs
-        const fileSystemUserFolders = folderContents
-            .filter(dirent => dirent.isDirectory() && dirent.name.startsWith('user_'))
-            .map(dirent => {
-            const userIdStr = dirent.name.replace('user_', '');
-            return parseInt(userIdStr, 10);
-        })
-            .filter(userId => !isNaN(userId)); // Ensure the parsed ID is a valid number
-        console.log('File system user folder IDs:', fileSystemUserFolders);
-        // 4. Identify orphaned folders (folders whose IDs are not in the database)
-        const orphanedFolderIds = fileSystemUserFolders.filter(fsId => !dbUserIds.has(fsId));
-        if (orphanedFolderIds.length === 0) {
-            console.log('No orphaned user folders found.');
-            return;
-        }
-        console.log('Orphaned user folder IDs to delete:', orphanedFolderIds);
-        // 5. Delete the orphaned folders
-        for (const userId of orphanedFolderIds) {
-            const folderToDeletePath = path.join(uploadFolder, `user_${userId}`);
-            try {
-                await fs.rm(folderToDeletePath, { recursive: true, force: true });
-                console.log(`Successfully deleted orphaned user folder: ${folderToDeletePath}`);
-            }
-            catch (deleteError) {
-                console.error(`Failed to delete orphaned user folder ${folderToDeletePath}:`, deleteError);
-            }
-        }
-        console.log('Completed cleaning up orphaned user folders.');
-    }
-    catch (error) {
-        console.error('Error in deleteOrphanedUserFolders:', error);
-        throw error;
-    }
-}
-export { createUser, createGuestUser, getUserByUsername, getUserByUserId, getUserByEmail, pool as default, newChatHistory, storeChatHistory, listChatHistory, readChatHistory, deleteChatHistory, setUserActiveStatus, getUserActiveStatus, setCurrentChatId, getCurrentChatId, deleteUserAndHistory, deleteInactiveGuestUsersAndChats, setChatMode, getChatMode, setChatModel, getChatModel, getUserRole, setUserRole, deleteAllGuestUsersAndChats, // Added export for the new function
-createUserFolder, createChatFolder, deleteChatFolder, deleteUserFolder, deleteOrphanedUserFolders, };
+// These startup cleanup functions can be run if needed.
+// await deleteAllGuestUsersAndChats();
+// --- EXPORTS ---
+export { 
+// User Functions
+createUser, createGuestUser, getUserByUsername, getUserByUserId, getUserByEmail, setUserActiveStatus, getUserActiveStatus, getUserRole, setUserRole, 
+// Chat Functions
+pool as default, newChatHistory, storeChatHistory, listChatHistory, readChatHistory, deleteChatHistory, setCurrentChatId, getCurrentChatId, setChatMode, getChatMode, setChatModel, getChatModel, 
+// File Functions (New)
+uploadFile, getFile, getFileByObjectName, // <-- Added new function here
+getFileInfoByObjectName, // <-- Added new function here
+deleteFile, 
+// Deletion and Cleanup Functions
+deleteUserAndHistory, deleteInactiveGuestUsersAndChats, deleteAllGuestUsersAndChats, };

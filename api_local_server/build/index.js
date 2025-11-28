@@ -12,7 +12,8 @@ const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const child_process_1 = require("child_process");
 const os_1 = __importDefault(require("os"));
-const systeminformation_1 = __importDefault(require("systeminformation")); // npm install systeminformation
+const systeminformation_1 = __importDefault(require("systeminformation"));
+const screenshot_desktop_1 = __importDefault(require("screenshot-desktop"));
 dotenv_1.default.config();
 const APP_SERVER_URL = process.env.APP_SERVER || 'http://localhost:3000';
 console.log(APP_SERVER_URL);
@@ -393,6 +394,24 @@ app.post('/files/browse', (req, res) => {
     }
     catch (err) {
         return _apiResponse(res, null, err.message, 500);
+    }
+});
+app.get('/system/screenshot', async (req, res) => {
+    console.log('Received request to take a screenshot...');
+    try {
+        // Call screenshot() without a filename to get the image as a buffer
+        const imgBuffer = await (0, screenshot_desktop_1.default)();
+        console.log(imgBuffer);
+        console.log(imgBuffer.length);
+        // Set the proper content type for the response
+        res.set('Content-Type', 'image/png');
+        // Send the image buffer back to the client
+        res.send(imgBuffer);
+        console.log('Screenshot sent successfully!');
+    }
+    catch (err) {
+        console.error('An error occurred:', err);
+        res.status(500).send({ error: 'Failed to take screenshot' });
     }
 });
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
