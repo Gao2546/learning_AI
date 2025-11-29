@@ -50,6 +50,7 @@ from utils.util import (
     save_vector_to_db,
     search_similar_documents_by_chat,
     model as embeddings,
+    get_db_connection,
 
     # --- NEW IMPORTS FOR DUAL-METHOD RAG ---
     upload_file_to_minio_and_db,
@@ -60,6 +61,7 @@ from utils.util import (
     process_pages_with_vlm
 )
 
+conn = get_db_connection()
 
 TEXT_FILE_EXTENSIONS = ['.txt', '.pdf', '.docx', '.pptx', '.odt', '.rtf']
 
@@ -507,6 +509,7 @@ def process():
     print(f"Processing {len(files)} files with mode: '{processing_mode}'")
     
     processed_files = []
+    n_pages = 0
     
     for file in files:
         filename = file.filename
@@ -714,7 +717,7 @@ def search_similar_api_unified():
     data = request.get_json()
     
     try:
-        query = data.get('query')
+        queryT = data.get('query')
         user_id = int(data.get('user_id'))
         chat_history_id = int(data.get('chat_history_id'))
         
@@ -727,29 +730,59 @@ def search_similar_api_unified():
     except Exception as e:
         return jsonify({"error": f"Invalid data: {e}. 'user_id', 'chat_history_id', 'top_k' must be numbers."}), 400
 
-    if not query or not user_id or not chat_history_id:
+    if not queryT or not user_id or not chat_history_id:
         return jsonify({"error": "Missing required fields: query, user_id, chat_history_id"}), 400
 
-    print(f"Running UNIFIED search with query: {query}, user_id: {user_id}, chat_id: {chat_history_id}")
+    print(f"Running UNIFIED search with query: {queryT}, user_id: {user_id}, chat_id: {chat_history_id}")
+    legacy_results = []
+    page_search_results = []
 
-    # --- 1. LEGACY Text Search ---
-    print(f"  - Searching legacy text (top_k={top_k_text})...")
-    legacy_results = search_similar_documents_by_chat(
-        query_text=query,
-        user_id=user_id,
-        chat_history_id=chat_history_id,
-        top_k=top_k_text
-    )
-    
-    # --- 2. NEW Page Image Search ---
-    print(f"  - Searching new page images (top_k={top_k_pages}, threshold={threshold})...")
-    page_search_results = search_similar_pages(
-        query_text=query,
-        user_id=user_id,
-        chat_history_id=chat_history_id,
-        top_k=top_k_pages,
-        threshold=threshold
-    )
+    cur = conn.cursor()
+    query = """
+        SELECT 
+            *
+        FROM document_embeddings
+        WHERE user_id = %s 
+          AND chat_history_id = %s
+    """
+
+    cur.execute(query, (user_id, chat_history_id))
+    results = cur.fetchall() # This is the raw list of tuples
+    cur.close()
+
+    if results:
+        # --- 1. LEGACY Text Search ---
+        print(f"  - Searching legacy text (top_k={top_k_text})...")
+        legacy_results = search_similar_documents_by_chat(
+            query_text=queryT,
+            user_id=user_id,
+            chat_history_id=chat_history_id,
+            top_k=top_k_text
+        )
+
+    cur = conn.cursor()
+    query = """
+        SELECT 
+            *
+        FROM document_page_embeddings
+        WHERE user_id = %s 
+          AND chat_history_id = %s
+    """
+
+    cur.execute(query, (user_id, chat_history_id))
+    results = cur.fetchall() # This is the raw list of tuples
+    cur.close()
+
+    if results:
+        # --- 2. NEW Page Image Search ---
+        print(f"  - Searching new page images (top_k={top_k_pages}, threshold={threshold})...")
+        page_search_results = search_similar_pages(
+            query_text=queryT,
+            user_id=user_id,
+            chat_history_id=chat_history_id,
+            top_k=top_k_pages,
+            threshold=threshold
+        )
     
     # --- 3. VLM Processing (ถ้าเจอหน้าเอกสารและเปิดใช้งาน) ---
     vlm_summary = None
@@ -767,6 +800,9 @@ def search_similar_api_unified():
         vlm_summary = "VLM summary was not requested."
         
     clear_gpu()
+
+    if legacy_results == [] and vlm_summary == None:
+        return jsonify({"results": [""]})
     
     # --- 4. Return Combined Results ---
     # ส่งคืนผลลัพธ์ทั้งหมดใน JSON เดียว

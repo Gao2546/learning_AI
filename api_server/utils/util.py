@@ -209,13 +209,14 @@ def get_file_from_minio(object_name: str) -> Optional[bytes]:
             response.close()
             response.release_conn()
 
-def convert_pdf_page_to_image(pdf_bytes: bytes, page_number_0_indexed: int) -> Optional[bytes]:
+def convert_pdf_page_to_image(pdf_bytes: bytes, page_number_0_indexed: int, dpi: int = 100) -> Optional[bytes]:
     """
     Extracts a single page from a PDF as a high-quality PNG image.
     
     Args:
         pdf_bytes: The byte content of the entire PDF.
         page_number_0_indexed: The page to extract (0 for page 1, 1 for page 2, etc.)
+        dpi: The resolution in dots per inch for the output image.
     """
     try:
         pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -228,7 +229,7 @@ def convert_pdf_page_to_image(pdf_bytes: bytes, page_number_0_indexed: int) -> O
         
         # Render page to a pixmap (image)
         # Use high DPI (e.g., 200) for good quality
-        pix = page.get_pixmap(dpi=100) 
+        pix = page.get_pixmap(dpi=dpi) 
         
         # Convert pixmap to PNG bytes
         img_bytes = pix.tobytes("png")
@@ -751,6 +752,18 @@ def generate_vlm_pipeline_options(mode: str = 'local', **kwargs) -> VlmPipelineO
 #         print("📝 Returning final markdown with inline image descriptions.")
 #         return full_content
 
+def open_utf8_file(file) -> str:
+    """
+    Opens a UTF-8 encoded text file and returns its content as a string.
+    """
+    try:
+        with io.TextIOWrapper(file, encoding='utf-8') as f:
+            content = f.read()
+        return content
+    except Exception as e:
+        print(f"❌ Error reading UTF-8 file: {e}")
+        return ""
+
 
 # ==============================================================================
 #  LEGACY: EXTRACTOR FUNCTIONS (Unchanged, they call extract_and_process_content)
@@ -766,7 +779,7 @@ def extract_image_text(file_storage, option: str = 'describe') -> str:
 
 def extract_txt_file(file, option: str = 'describe', mode: str = 'vlm_remote') -> str:
     """Extracts content from a .txt file. Can describe (default) or summarize."""
-    return extract_and_process_content(file, option, pipeline_mode=mode, with_images=True)
+    return open_utf8_file(file)
 
 def extract_docx_text(file, option: str = 'describe', mode: str = 'vlm_remote') -> str:
     """Extracts content from a .docx file. Can describe (default) or summarize."""
@@ -941,7 +954,7 @@ def extract_and_process_content(file_storage, option: str = 'describe', pipeline
             print(f"PDF has {page_count} pages.")
             
             for page_num_0_idx in range(page_count):
-                page_image_bytes = convert_pdf_page_to_image(file_bytes, page_num_0_idx)
+                page_image_bytes = convert_pdf_page_to_image(file_bytes, page_num_0_idx, dpi=200)
                 if page_image_bytes:
                     image_bytes_list.append(page_image_bytes)
                 else:
@@ -965,31 +978,35 @@ def extract_and_process_content(file_storage, option: str = 'describe', pipeline
         # --- ORIGINAL OCR/TEXT EXTRACTION LOGIC (Simplified) ---
         try:
             doc_stream = DocumentStream(name=file_storage.filename, stream=io.BytesIO(file_bytes))
-            print("Downloading RapidOCR models")
-            download_path = snapshot_download(repo_id="RapidAI/RapidOCR")
-            det_model_path = os.path.join(download_path, "onnx", "PP-OCRv5", "det", "ch_PP-OCRv5_server_det.onnx")
-            rec_model_path = os.path.join(download_path, "onnx", "PP-OCRv5", "rec", "ch_PP-OCRv5_rec_server_infer.onnx")
-            cls_model_path = os.path.join(download_path, "onnx", "PP-OCRv4", "cls", "ch_ppocr_mobile_v2.0_cls_infer.onnx")
+            # print("Downloading RapidOCR models")
+            # download_path = snapshot_download(repo_id="RapidAI/RapidOCR")
+            # det_model_path = os.path.join(download_path, "onnx", "PP-OCRv5", "det", "ch_PP-OCRv5_server_det.onnx")
+            # rec_model_path = os.path.join(download_path, "onnx", "PP-OCRv5", "rec", "ch_PP-OCRv5_rec_server_infer.onnx")
+            # cls_model_path = os.path.join(download_path, "onnx", "PP-OCRv4", "cls", "ch_ppocr_mobile_v2.0_cls_infer.onnx")
             
-            ocr_options = RapidOcrOptions(
-                det_model_path=det_model_path, rec_model_path=rec_model_path, cls_model_path=cls_model_path
-            )
-            pipeline_options = PdfPipelineOptions()
-            pipeline_options.do_ocr = True
-            pipeline_options.do_table_structure = True
-            pipeline_options.table_structure_options.do_cell_matching = True
-            pipeline_options.ocr_options = ocr_options
+            # ocr_options = RapidOcrOptions(
+            #     det_model_path=det_model_path, rec_model_path=rec_model_path, cls_model_path=cls_model_path
+            # )
+            # pipeline_options = PdfPipelineOptions()
+            # pipeline_options.do_ocr = True
+            # pipeline_options.do_table_structure = True
+            # pipeline_options.table_structure_options.do_cell_matching = True
+            # pipeline_options.ocr_options = ocr_options
+
+            # pipeline_options_word = WordPipelineOptions()
+            # pipeline_options_powerpoint = PowerPointPipelineOptions()
+            # pipeline_options_excel = ExcelPipelineOptions()
             
             # Use a generic converter for fallback
             converter = DocumentConverter(
-                format_options={
-                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
-                    InputFormat.DOCX: PdfFormatOption(pipeline_options=pipeline_options), 
-                    InputFormat.PPTX: PdfFormatOption(pipeline_options=pipeline_options),
-                    InputFormat.XLSX: PdfFormatOption(pipeline_options=pipeline_options),
-                    InputFormat.XLS: PdfFormatOption(pipeline_options=pipeline_options),
-                    InputFormat.TXT: PdfFormatOption(pipeline_options=pipeline_options),
-                }
+                # format_options={
+                #     InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
+                #     InputFormat.DOCX: PdfFormatOption(pipeline_options=pipeline_options_word), 
+                #     InputFormat.PPTX: PdfFormatOption(pipeline_options=pipeline_options_powerpoint),
+                #     InputFormat.XLSX: PdfFormatOption(pipeline_options=pipeline_options_excel),
+                #     # InputFormat.XLS: PdfFormatOption(pipeline_options=pipeline_options),
+                #     # InputFormat.TXT: PdfFormatOption(pipeline_options=pipeline_options),
+                # }
             )
             
             result = converter.convert(doc_stream)
@@ -1422,9 +1439,28 @@ def get_clip_embedding(
     api_url = "https://api.jina.ai/v1/embeddings"
     
     input_data = []
+    task_type = ""
+    # create_search_prompt = f"Help me to create prompt for use to search page by text from this task or question add more detail to explain the document page. \n\n task or question : {text} \n\n Give me only new prompt no additional text."
+    create_search_prompt = f"""
+Act as a document search engine. 
+Based on the user's query below, generate a detailed paragraph describing the content, specific keywords, and technical terminology likely to appear on a document page that answers this query. 
+Do not answer the question directly; only describe the page content.
+
+User Query: {text}
+
+Output only the descriptive paragraph. No introductory text.
+"""
     if text:
         print("Requesting Jina v4 embedding (Type: Text)...")
-        input_data.append({"text": text})
+        search_text = DeepInfraInference(
+            prompt=create_search_prompt,
+            # system_prompt=system_prompt,
+            # image_bytes_list=image_bytes_list,
+            model_name="Qwen/Qwen3-235B-A22B-Instruct-2507" #'x-ai/grok-4-fast'#"Qwen/Qwen2.5-VL-32B-Instruct" # Use a strong VLM
+        )
+        print(f"Search prompt: {search_text}")
+        input_data.append({"text": search_text})
+        task_type = "retrieval.query"
     
     elif image_bytes_list:
         print(f"Requesting Jina v4 embedding (Type: {len(image_bytes_list)} Images)...")
@@ -1432,10 +1468,11 @@ def get_clip_embedding(
             # Jina API accepts a raw base64 string for the image
             base64_img = base64.b64encode(img_bytes).decode('utf-8')
             input_data.append({"image": base64_img})
+            task_type = "retrieval.passage"
 
     payload = {
         "model": model_name,
-        "task": "text-matching", # Use "text-matching" as shown in the API example for similarity
+        "task": task_type, # Use "text-matching" as shown in the API example for similarity
         "input": input_data
     }
 
@@ -1455,7 +1492,7 @@ def get_clip_embedding(
                     print(len(chunk))
                     chunk_payload = {
                         "model": model_name,
-                        "task": "text-matching",
+                        "task": task_type,
                         "input": chunk,
                         # "dimensions": 256,
                     }
@@ -1909,9 +1946,11 @@ def search_similar_pages(query_text: str, user_id: int, chat_history_id: int, to
                 'distance': original_distance, # The original L2 distance
                 'normalized_distance': normalized_distance # The new [0,1] score
             })
+        
+        print(processed_results)
 
         # Now, filter based on the *new* normalized threshold
-        final_normalized_threshold = 0.5
+        final_normalized_threshold = 1.0
         final_filtered_results = [
             item for item in processed_results 
             if item['normalized_distance'] <= final_normalized_threshold
@@ -2304,7 +2343,7 @@ Checkpoint# 1: อ่านค่าสถานะจาก Dip-switch เพ�
 Based on the following {len(image_bytes_list)} document pages:
 {reference_text}
 
-Please extract data for use to answer the question:
+Please extract data to markdown (keep all original data ignore not match content) for use to answer the question:
 "{original_query}"
 
 Provide your response in Markdown format, following the tagging guidelines provided in the system prompt.
@@ -2313,8 +2352,8 @@ Provide your response in Markdown format, following the tagging guidelines provi
     # Use OpenRouterInference, which now accepts a list of images
     # vlm_response = OpenRouterInference(
     vlm_response = DeepInfraInference(
-        prompt=system_prompt,
-        # system_prompt=system_prompt,
+        prompt=prompt,
+        system_prompt=system_prompt,
         image_bytes_list=image_bytes_list,
         model_name="Qwen/Qwen2.5-VL-32B-Instruct" #'x-ai/grok-4-fast'#"Qwen/Qwen2.5-VL-32B-Instruct" # Use a strong VLM
     )

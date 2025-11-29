@@ -82,7 +82,7 @@ thinking {
 #newChatButton {
     margin-bottom: 15px;
     padding: 10px 15px;
-    background-color: #007acc; /* Modern blue accent */
+    background-color: #0a8276; /* Modern blue accent */
     color: #fff;
     border: none;
     border-radius: 8px; /* Rounded corners */
@@ -98,7 +98,7 @@ thinking {
 }
 
 #newChatButton:hover {
-    background-color: #005fa3; /* Darker blue on hover */
+    background-color: #086b61; /* Darker blue on hover */
     transform: scale(1.02);
     overflow-x: hidden;
 }
@@ -147,7 +147,7 @@ thinking {
 
 #modeSelector:focus {
     outline: none;
-    border-color: #007acc; /* Highlight border on focus */
+    border-color: #0a8276; /* Highlight border on focus */
 }
 
 #modeSelector option {
@@ -194,7 +194,7 @@ thinking {
 
 #modelSelector:focus {
     outline: none;
-    border-color: #007acc;
+    border-color: #0a8276;
 }
 
 #modelSelector option {
@@ -278,7 +278,7 @@ thinking {
 }
 
 #toggleSidebarButton:hover {
-    color: #007acc; /* Highlight on hover */
+    color: #0a8276; /* Highlight on hover */
 }
 
 .fas.fa-bars{
@@ -400,7 +400,7 @@ thinking {
 
 #sendButton {
     padding: 0 20px; /* Adjust padding */
-    background-color: #007acc; /* Match new chat button */
+    background-color: #0a8276; /* Match new chat button */
     color: #fff;
     border: none;
     border-radius: 0 18px 18px 0; /* Rounded corners */
@@ -416,12 +416,12 @@ thinking {
     justify-content: center;
     transition: background-color 0.2s ease, transform 0.1s ease;
     box-sizing: border-box;
-    border: 1px solid #007acc; /* Match border style */
+    border: 1px solid #0a8276; /* Match border style */
     border-left: none; /* Remove left border */
 }
 
 #sendButton:hover {
-    background-color: #005fa3;
+    background-color: #086b61;
     transform: scale(1.05);
 }
 
@@ -431,7 +431,7 @@ thinking {
 
 #stopButton {
     padding: 0 20px; /* Adjust padding */
-    background-color: #007acc; /* Match new chat button */
+    background-color: #0a8276; /* Match new chat button */
     color: #fff;
     border: none;
     border-radius: 0 18px 18px 0; /* Rounded corners */
@@ -447,12 +447,12 @@ thinking {
     justify-content: center;
     transition: background-color 0.2s ease, transform 0.1s ease;
     box-sizing: border-box;
-    border: 1px solid #007acc; /* Match border style */
+    border: 1px solid #0a8276; /* Match border style */
     border-left: none; /* Remove left border */
 }
 
 #stopButton:hover {
-    background-color: #005fa3;
+    background-color: #086b61;
     transform: scale(1.05);
 }
 
@@ -571,7 +571,7 @@ strong {
     top: 15px;
     right: 15px;
     z-index: 1000; */
-    background-color: #007acc;
+    background-color: #0a8276;
     color: #fff;
     padding: 8px 16px;
     border-radius: 8px;
@@ -584,7 +584,7 @@ strong {
 }
 
 .login-button:hover {
-    background-color: #005fa3;
+    background-color: #086b61;
     transform: scale(1.02);
 }
 
@@ -637,7 +637,7 @@ strong {
 }
 
 .chat-item.active {
-    background-color: #007acc; /* Accent color for active */
+    background-color: #0a8276; /* Accent color for active */
     color: #fff;
     font-weight: 600;
     transform: scale(1.02);
@@ -737,7 +737,7 @@ strong {
 
 #changeDirButton:hover {
     background-color: #444;
-    border-color: #007acc;
+    border-color: #0a8276;
     box-shadow: 0 2px 5px rgba(0, 122, 204, 0.2);
 }
 
@@ -768,7 +768,7 @@ strong {
 
 #fileDialogButton:hover {
     background-color: #444;
-    border-color: #007acc;
+    border-color: #0a8276;
     box-shadow: 0 2px 5px rgba(0, 122, 204, 0.2);
 }
 
@@ -802,7 +802,7 @@ strong {
 
 .file-input-label:hover {
     background-color: #444;
-    border-color: #007acc;
+    border-color: #0a8276;
     box-shadow: 0 2px 5px rgba(0, 122, 204, 0.2);
 }
 
@@ -878,7 +878,7 @@ strong {
   display: inline-block; /* Allows for setting width, padding, etc. */
   padding: 10px 20px;
   cursor: pointer; /* Indicates it's clickable */
-  background-color: #007bff; /* Example background color */
+  background-color: #0a8276; /* Example background color */
   color: white; /* Example text color */
   border: none; /* Remove default border */
   border-radius: 5px; /* Slightly rounded corners */
@@ -890,11 +890,11 @@ strong {
 }
 
 .custom-file-upload:hover {
-  background-color: #0056b3; /* Darker shade on hover */
+  background-color: #08756a; /* Darker shade on hover */
 }
 
 .custom-file-upload:active {
-  background-color: #004085; /* Even darker on active/click */
+  background-color: #0a8276; /* Even darker on active/click */
 }
 
 /* If you want to show a "file selected" message or similar,
@@ -1036,7 +1036,7 @@ strong {
     font-size: 1rem;
     font-weight: 600;
     color: white;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    background: linear-gradient(135deg, #075f56, #0a8797);
     border: none;
     border-radius: 999px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);

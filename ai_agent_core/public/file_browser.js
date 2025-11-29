@@ -67,7 +67,7 @@ function createFileBrowserModal() {
     }
     .file-browser-header {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 20px; background-color: #007acc; color: white;
+      padding: 10px 20px; background-color: #0a8276; color: white;
       border-radius: 8px 8px 0 0;
     }
     .file-browser-header h3 { margin: 0; font-weight: 600; }
@@ -85,7 +85,7 @@ function createFileBrowserModal() {
       border-radius: 8px; background-color: #3c3c3c; color: #e0e0e0;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    .file-browser-path input:focus { outline: none; border-color: #007acc; }
+    .file-browser-path input:focus { outline: none; border-color: #0a8276; }
     .file-browser-nav { padding: 10px 20px; display: flex; align-items: center; gap: 10px; }
     .file-browser-nav button {
       padding: 8px 15px; background-color: #3c3c3c;
@@ -107,7 +107,7 @@ function createFileBrowserModal() {
     }
     .file-browser-search:focus {
         outline: none;
-        border-color: #007acc;
+        border-color: #0a8276;
     }
     .file-browser-list {
       flex-grow: 1; overflow-y: auto; padding: 10px 20px;
@@ -126,7 +126,7 @@ function createFileBrowserModal() {
       transition: background-color 0.2s ease, transform 0.1s ease;
     }
     .file-item:hover { background-color: #3a3a3a; transform: scale(1.01); }
-    .file-item.selected { background-color: #007acc; color: white; }
+    .file-item.selected { background-color: #0a8276; color: white; }
     .file-icon { margin-right: 10px; width: 20px; text-align: center; }
     .file-name { flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .file-size { margin-left: 10px; color: #b0b0b0; font-size: 0.9em; }
@@ -140,7 +140,7 @@ function createFileBrowserModal() {
       cursor: pointer; font-weight: 600;
       transition: background-color 0.2s ease, transform 0.1s ease;
     }
-    #selectBtn { background-color: #007acc; color: white; }
+    #selectBtn { background-color: #0a8276; color: white; }
     #selectBtn:hover { background-color: #005fa3; transform: scale(1.02); }
     #selectBtn:active { transform: scale(0.98); }
     #selectBtn:disabled { background-color: #555; cursor: not-allowed; transform: none; }

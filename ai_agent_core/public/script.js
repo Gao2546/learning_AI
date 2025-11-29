@@ -309,11 +309,46 @@ const fileInput = document.getElementById('fileInput');
 const selectedFilesDiv = document.getElementById('selectedFiles');
 const fileDialogButton = document.getElementById('fileDialogButton');
 const changeDirButton = document.getElementById('changeDirButton');
+
+// 1. Create a global DataTransfer object to hold the accumulated files
+const dt = new DataTransfer();
+
 fileInput.addEventListener('change', function() {
+    // 2. Iterate through the NEWLY selected files
+    for (let i = 0; i < this.files.length; i++) {
+        const file = this.files[i];
+        
+        // 3. Prevent duplicates: Check if file already exists in our stored list
+        let isDuplicate = false;
+        for (let j = 0; j < dt.items.length; j++) {
+            if (dt.items[j].getAsFile().name === file.name && 
+                dt.items[j].getAsFile().size === file.size) {
+                isDuplicate = true;
+                break;
+            }
+        }
+
+        // Only add if it's not a duplicate
+        if (!isDuplicate) {
+            dt.items.add(file);
+        }
+    }
+
+    // 4. Update the actual input to include ALL files (old + new)
+    this.files = dt.files;
+
+    // 5. Update the Visual Display
+    updateFileList();
+});
+
+function updateFileList() {
     selectedFilesDiv.innerHTML = '';
-    if (this.files.length > 0) {
+    
+    if (dt.files.length > 0) {
         selectedFilesDiv.style.display = 'flex';
-        for (let file of this.files) {
+        
+        for (let i = 0; i < dt.files.length; i++) {
+            const file = dt.files[i];
             const fileItem = document.createElement('div');
             fileItem.textContent = file.name;
             fileItem.setAttribute('data-file-name', file.name);
@@ -328,34 +363,31 @@ fileInput.addEventListener('change', function() {
     } else {
         selectedFilesDiv.style.display = 'none';
     }
-});
+}
 
 // Function to remove a file from the selection
 function removeFile(fileName) {
-    const fileItems = selectedFilesDiv.querySelectorAll('div');
-    fileItems.forEach(item => {
-        if (item.getAttribute('data-file-name') === fileName) {
-            item.remove();
-        }
-    });
+    // 1. Create a temporary DataTransfer to filter out the removed file
+    const newDt = new DataTransfer();
     
-    // Update the file input to reflect the removal
-    const dt = new DataTransfer();
-    const files = fileInput.files;
-    
-    for (let i = 0; i < files.length; i++) {
-        if (files[i].name !== fileName) {
-            dt.items.add(files[i]);
+    // 2. Loop through existing global files and copy all EXCEPT the one to remove
+    for (let i = 0; i < dt.files.length; i++) {
+        if (dt.files[i].name !== fileName) {
+            newDt.items.add(dt.files[i]);
         }
     }
     
+    // 3. Clear the global dt and refill it with the filtered list
+    dt.items.clear();
+    for(let i = 0; i < newDt.files.length; i++){
+        dt.items.add(newDt.files[i]);
+    }
+
+    // 4. Update the input and the UI
     fileInput.files = dt.files;
-    
-    // Hide the container if no files left
-    if (fileInput.files.length === 0) {
-        selectedFilesDiv.style.display = 'none';
-    }
+    updateFileList();
 }
+
 window.addEventListener('beforeunload', async (event) => {
     // event.preventDefault(); // Some browsers require this
     // alert('Are you sure you want to leave?');
@@ -1706,7 +1738,7 @@ function createDirectoryBrowserModal() {
         }
         .file-browser-header {
             display: flex; justify-content: space-between; align-items: center;
-            padding: 10px 20px; background-color: #007acc; color: white;
+            padding: 10px 20px; background-color: #0a8276; color: white;
             border-radius: 8px 8px 0 0;
         }
         .file-browser-header h3 { margin: 0; font-weight: 600; }
@@ -1724,7 +1756,7 @@ function createDirectoryBrowserModal() {
             border-radius: 8px; background-color: #3c3c3c; color: #e0e0e0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        .file-browser-path input:focus { outline: none; border-color: #007acc; }
+        .file-browser-path input:focus { outline: none; border-color: #0a8276; }
         .file-browser-nav { padding: 10px 20px; display: flex; align-items: center; gap: 10px; }
         .file-browser-nav button {
             padding: 8px 15px; background-color: #3c3c3c;
@@ -1746,7 +1778,7 @@ function createDirectoryBrowserModal() {
         }
         .file-browser-search:focus {
             outline: none;
-            border-color: #007acc;
+            border-color: #0a8276;
         }
         .file-browser-list {
             flex-grow: 1; overflow-y: auto; padding: 10px 20px;
@@ -1765,7 +1797,7 @@ function createDirectoryBrowserModal() {
             transition: background-color 0.2s ease, transform 0.1s ease;
         }
         .file-item:hover { background-color: #3a3a3a; transform: scale(1.01); }
-        .file-item.selected { background-color: #007acc; color: white; }
+        .file-item.selected { background-color: #0a8276; color: white; }
         .file-icon { margin-right: 10px; width: 20px; text-align: center; }
         .file-name { flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .file-size { margin-left: 10px; color: #b0b0b0; font-size: 0.9em; }
@@ -1779,7 +1811,7 @@ function createDirectoryBrowserModal() {
             cursor: pointer; font-weight: 600;
             transition: background-color 0.2s ease, transform 0.1s ease;
         }
-        #changeBtn { background-color: #007acc; color: white; }
+        #changeBtn { background-color: #0a8276; color: white; }
         #changeBtn:hover { background-color: #005fa3; transform: scale(1.02); }
         #changeBtn:active { transform: scale(0.98); }
         #changeBtn:disabled { background-color: #555; cursor: not-allowed; transform: none; }

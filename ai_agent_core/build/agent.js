@@ -256,7 +256,7 @@ router.post('/message', async (req, res) => {
                     top_k: 20,
                     top_k_pages: 5,
                     top_k_text: 5,
-                    threshold: 8.0
+                    threshold: 2.0
                 }),
                 signal: controller.signal,
             });
