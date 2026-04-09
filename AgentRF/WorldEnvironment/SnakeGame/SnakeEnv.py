@@ -339,15 +339,18 @@ class envSnake:
         disaf = abs(self.x - self.snack_x) + abs(self.y - self.snack_y)
 
         # การให้รางวัลพื้นฐาน
-        if disbf > disaf:
-            self.reward = 1
-        else:
-            self.reward = -1
+        # if disbf > disaf:
+        #     self.reward = 0.1
+        # else:
+        #     self.reward = -0.1
+
+        self.reward = -0.01 # ให้รางวัลติดลบเล็กน้อยทุกก้าวเพื่อกระตุ้นให้หาทางออกเร็วขึ้น
+        self.reward += (disbf - disaf) * 0.01 # ให้รางวัลตามการลดระยะทาง (ถ้าเข้าใกล้จะได้รางวัลบวก ถ้าไกลขึ้นจะได้รางวัลลบ)
 
         # เช็คชนกำแพง
         if self.x >= self.grid_w or self.x < 0 or self.y >= self.grid_h or self.y < 0:
             self.terminated = True
-            self.reward = -5
+            self.reward = -10
             return self.get_env(), self.reward, self.terminated, self.truncated, self.score, self.info
 
         snake_head = [self.x, self.y]
@@ -355,7 +358,7 @@ class envSnake:
         # เช็คชนตัวเอง
         if snake_head in self.snake_list:
             self.terminated = True
-            self.reward = -5
+            self.reward = -10
             return self.get_env(), self.reward, self.terminated, self.truncated, self.score, self.info
 
         self.snake_list.append(snake_head)
@@ -363,7 +366,7 @@ class envSnake:
         # จัดการการกินอาหาร
         if self.x == self.snack_x and self.y == self.snack_y:
             self.snake_length += 1
-            self.reward = 5
+            self.reward = 10
             self.score += 1
             self.count_step = 0 # รีเซ็ตตัวนับเมื่อกินได้
             self.max_steps += 10 # เพิ่มเวลาให้อยู่รอดได้นานขึ้นเมื่องูยาวขึ้น
