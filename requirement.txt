@@ -51,3 +51,5 @@ tqdm
 
 # Game
 pygame
+
+tensorboard
