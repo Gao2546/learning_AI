@@ -16,7 +16,10 @@ if __name__ == '__main__':
     # Agent.training_loop()
     
     # 2. Initialize your Agent
-    agent = PPOAgent()
+    agent = PPOAgent(config_path="config.json", config_name="default")  # Adjust config_name as needed
     
     # 3. Start the training
-    agent.training()
+    agent.training(checkpoint_filename="best_model.pth")  # You can specify a different checkpoint name if desired
+
+    # 4. Start the evaluation (if needed)
+    # agent.test(total_episodes=100, checkpoint_name="best_model.pth")

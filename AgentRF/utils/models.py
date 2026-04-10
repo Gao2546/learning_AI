@@ -1,3 +1,5 @@
+import json
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -814,10 +816,10 @@ import multiprocessing as mp
 from torch.utils.tensorboard import SummaryWriter
 
 # --- 1. MULTIPROCESSING WORKER ---
-def worker(remote, parent_remote, env_class):
+def worker(remote, parent_remote, env_class, render_mode):
     """Runs a single environment in a separate CPU process."""
     parent_remote.close()
-    env = env_class()
+    env = env_class(render_mode=render_mode)
     
     try:
         while True:
@@ -845,11 +847,11 @@ def worker(remote, parent_remote, env_class):
 
 class VecEnv:
     """Manages multiple environments concurrently."""
-    def __init__(self, env_class, num_envs):
+    def __init__(self, env_class, num_envs, render_mode=False):
         self.num_envs = num_envs
         self.remotes, self.work_remotes = zip(*[mp.Pipe() for _ in range(num_envs)])
         self.processes = [
-            mp.Process(target=worker, args=(work_remote, remote, env_class))
+            mp.Process(target=worker, args=(work_remote, remote, env_class, render_mode))
             for work_remote, remote in zip(self.work_remotes, self.remotes)
         ]
         for p in self.processes:
@@ -879,38 +881,50 @@ class VecEnv:
 
 
 class PPOAgent:
-    def __init__(self):
+    def __init__(self, config_path="config.json", config_name="default"):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        # --- Hyperparameters ---
-        self.learning_rate = 3e-4
-        self.discount = 0.99
-        self.gae_lambda = 0.95    # Actually used now
-        self.epsilon = 0.2        # Clip range
-        self.entropy_coef = 0.01  # Encourage exploration
-        self.vf_coef = 0.5        # Value function loss coefficient
-        self.max_grad_norm = 0.5  # Gradient clipping
+        # 1. Load the JSON configuration
+        with open(config_path, 'r') as file:
+            all_configs = json.load(file)
+            
+        if config_name not in all_configs:
+            raise ValueError(f"Config '{config_name}' not found in {config_path}")
+            
+        config = all_configs[config_name]
 
-        env = envSnake()
+        # 2. Assign Hyperparameters from config
+        self.learning_rate = config["learning_rate"]
+        self.discount = config["discount"]
+        self.gae_lambda = config["gae_lambda"]
+        self.epsilon = config["epsilon"]
+        self.entropy_coef = config["entropy_coef"]
+        self.vf_coef = config["vf_coef"]
+        self.max_grad_norm = config["max_grad_norm"]
+
+        # Network architecture
+        self.share_hidden_dim = config["share_hidden_dim"]
+        self.kernel_size = config["kernel_size"]
+        self.action_hidden_dim = config["action_hidden_dim"]
+        self.critic_hidden_dim = config["critic_hidden_dim"]
+
+        # PPO Training parameters
+        self.num_steps = config["num_steps"]
+        self.batch_size = config["batch_size"]
+        self.num_actors = config["num_actors"]
+        self.epochs = config["epochs"]
+        self.iteration = config["iteration"]
+
+        # 3. Dynamic Environment Variables (Kept in code)
+        self.render_mode = config["render_mode"]  # e.g., "rgb_array" or "human"
+        env = envSnake(render_mode=False)  # Initialize a temporary environment to get dimensions
         obs_shape = env.observation_space
         n_actions = math.prod(env.action_space)
         env.close()
 
         self.input_dim = obs_shape
-        self.share_hidden_dim = [8, 16, 32, 64]
-        self.kernel_size = [3, 3, 3, 3]
-        self.action_hidden_dim = 32
-        self.critic_hidden_dim = 32
         self.action_dim = n_actions
         self.critic_dim = 1
-        
-        # In standard concurrent PPO, we use fixed 'num_steps' per iteration
-        # instead of waiting for episodes to finish.
-        self.num_steps = 2048 # Number of steps to run per actor per iteration
-        self.batch_size = 512 # Batch size for PPO updates (must be <= num_steps * num_actors)
-        self.num_actors = 16 # Number of concurrent environments (actors)
-        self.epochs = 10 # Number of epochs to update the policy per iteration
-        self.iteration = 100000 # Total number of training iterations (not episodes)
         
         # Initialize Actor-Critic (assuming you have this class)
         # self.actor_critic = ActorCritic2D(self.input_dim, self.share_hidden_dim, self.kernel_size, self.action_hidden_dim, self.critic_hidden_dim, self.action_dim, self.critic_dim).to(device=self.device)
@@ -919,7 +933,7 @@ class PPOAgent:
         self.optimizer = torch.optim.Adam(self.actor_critic.parameters(), lr=self.learning_rate)
         
         # 1. Initialize Concurrent Environments
-        self.envs = VecEnv(envSnake, self.num_actors)
+        self.envs = VecEnv(envSnake, self.num_actors, self.render_mode)
         
         # 2. Tensorboard Writer
         import time
@@ -927,7 +941,7 @@ class PPOAgent:
         self.writer = SummaryWriter(log_dir=f"runs/{run_name}")
 
         # Add a directory for checkpoints
-        self.checkpoint_dir = "checkpoints"
+        self.checkpoint_dir = config["checkpoint_dir"]
         os.makedirs(self.checkpoint_dir, exist_ok=True)
         self.best_score = -float('inf')
 
@@ -951,7 +965,7 @@ class PPOAgent:
         if os.path.isfile(filepath):
             print(f"Loading checkpoint '{filepath}'...")
             # Load to CPU first to avoid CUDA memory spikes, then move to device
-            checkpoint = torch.load(filepath, map_location=self.device)
+            checkpoint = torch.load(filepath, map_location=self.device, weights_only=False)
             
             self.actor_critic.load_state_dict(checkpoint['actor_critic_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -984,10 +998,14 @@ class PPOAgent:
         returns = advantages + values
         return advantages, returns
 
-    def training(self):
+    def training(self, checkpoint_filename="best_model.pth"):
         # --- OPTIONAL: Load previous checkpoint before starting ---
-        # start_it = self.load_checkpoint("latest_model.pth")
-        start_it = 0 # Use this if starting fresh
+        try:
+            start_it = self.load_checkpoint(checkpoint_filename)
+        except Exception as e:
+            print(f"Error loading checkpoint: {e}")
+            start_it = 0
+        # start_it = 0 # Use this if starting fresh
         
         # Initial reset of all environments
         obs = self.envs.reset() # Shape: [num_actors, H, W, C]
@@ -995,7 +1013,7 @@ class PPOAgent:
         for it in range(start_it, self.iteration):
             # --- 1. COLLECT DATA (CONCURRENTLY) ---
             # Pre-allocate memory on GPU for maximum speed
-            b_obs = torch.zeros((self.num_steps, self.num_actors, self.input_dim[0], self.input_dim[2], self.input_dim[1]), dtype=torch.float32).to(self.device)
+            b_obs = torch.zeros((self.num_steps, self.num_actors, self.input_dim[0], self.input_dim[1], self.input_dim[2]), dtype=torch.float32).to(self.device)
             b_actions = torch.zeros((self.num_steps, self.num_actors), dtype=torch.long).to(self.device)
             b_logprobs = torch.zeros((self.num_steps, self.num_actors), dtype=torch.float32).to(self.device)
             b_rewards = torch.zeros((self.num_steps, self.num_actors), dtype=torch.float32).to(self.device)
@@ -1131,14 +1149,86 @@ class PPOAgent:
             # 1. Save the best model
             if avg_score > self.best_score and len(episode_scores) > 0:
                 self.best_score = avg_score
-                self.save_checkpoint(it, filename="best_model.pth")
+                self.save_checkpoint(it, filename=f"best_model.pth")
                 print(f"*** New Best Score: {self.best_score:.2f}! Saved best_model.pth ***")
             
             # 2. Save a regular checkpoint every 100 iterations (adjust as needed)
-            save_interval = 100
+            save_interval = 10
             if (it + 1) % save_interval == 0:
                 self.save_checkpoint(it, filename=f"latest_model.pth") # Overwrites to save disk space
                 # Or use filename=f"model_iter_{it+1}.pth" to keep ALL checkpoints
 
         self.envs.close()
         self.writer.close()
+    
+    def test(self, total_episodes=100, checkpoint_name="best_model.pth"):
+        """
+        Tests the agent across multiple concurrent environments.
+        
+        Args:
+            total_episodes (int): How many total episodes to play across all actors.
+            checkpoint_name (str): The name of the weights file to load from self.checkpoint_dir.
+        """
+        # 1. Load the best saved model
+        self.load_checkpoint(checkpoint_name)
+        
+        # Set the network to evaluation mode
+        self.actor_critic.eval()
+        
+        # 2. Reset the concurrent environments
+        obs = self.envs.reset()
+        
+        completed_episodes = 0
+        all_scores = []
+        
+        print(f"--- Starting Evaluation: {total_episodes} episodes using {self.num_actors} actors ---")
+        
+        # Disable gradient calculations for testing
+        with torch.no_grad():
+            while completed_episodes < total_episodes:
+                # Prepare observation tensor [B, H, W, C] -> [B, C, H, W]
+                obs_tensor = torch.tensor(obs, dtype=torch.float32).to(self.device)
+                obs_tensor = obs_tensor.permute(0, 3, 1, 2)
+                
+                # Get action logits from the network
+                action_logits, _ = self.actor_critic(obs_tensor)
+                
+                # --- EXPLOITATION: Choose the best action deterministically ---
+                # Instead of dist.sample(), we use argmax to get the highest probability action
+                actions = torch.argmax(action_logits, dim=-1)
+                
+                # Move to CPU and step environments
+                cpu_actions = actions.cpu().numpy()
+                next_obs, rewards, dones, scores = self.envs.step(cpu_actions)
+                
+                # Track completed episodes
+                for idx, d in enumerate(dones):
+                    if d:
+                        completed_episodes += 1
+                        all_scores.append(scores[idx])
+                        print(f"Episode {completed_episodes}/{total_episodes} | Actor {idx} Score: {scores[idx]}")
+                        
+                        # Stop exactly when we hit the required number of episodes
+                        if completed_episodes >= total_episodes:
+                            break
+                            
+                obs = next_obs
+
+        # 3. Print Final Statistics
+        avg_score = np.mean(all_scores)
+        max_score = np.max(all_scores)
+        min_score = np.min(all_scores)
+        
+        print("\n" + "="*30)
+        print("      EVALUATION RESULTS      ")
+        print("="*30)
+        print(f"Total Episodes Played : {len(all_scores)}")
+        print(f"Average Score         : {avg_score:.2f}")
+        print(f"Maximum Score         : {max_score:.2f}")
+        print(f"Minimum Score         : {min_score:.2f}")
+        print("="*30)
+        
+        # Return to train mode just in case you want to continue training later
+        self.actor_critic.train()
+        
+        return all_scores

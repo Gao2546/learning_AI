@@ -260,11 +260,11 @@ class envSnake:
         self.grid_w = self.width // self.block_size
         self.grid_h = self.height // self.block_size
         
-        self.object = 3
-        self.objectD = {"background": 0, "snake": 1, "snack": 2}
+        self.object = 4  # เพิ่มเป็น 4 object
+        self.objectD = {"background": 0, "snake_body": 1, "snack": 2, "snake_head": 3}
         
         self.action_space = [4]
-        self.observation_space = [self.object, self.grid_w, self.grid_h]
+        self.observation_space = [self.object, self.grid_h, self.grid_w]
         self.info = "Snake Game Environment"
 
         # --- PyGame Setup (ทำเฉพาะตอนต้องการดูภาพ) ---
@@ -280,7 +280,7 @@ class envSnake:
     def reset(self):
         self.count_step = 0
         # ยืดหยุ่นเวลาขึ้นอยู่กับความยาวงู
-        self.max_steps = 1000
+        self.max_steps = 2048
         
         self.reward = 0
         self.score = 0
@@ -319,7 +319,7 @@ class envSnake:
         # การกันงูเดินถอยหลัง
         if self.direction is not None and action == opposites.get(self.direction):
             # หักคะแนนรุนแรงและจบเกม
-            self.reward = -1 
+            self.reward = -2
             self.terminated = True
             return self.get_env(), self.reward, self.terminated, self.truncated, self.score, self.info
 
@@ -339,18 +339,17 @@ class envSnake:
         disaf = abs(self.x - self.snack_x) + abs(self.y - self.snack_y)
 
         # การให้รางวัลพื้นฐาน
-        # if disbf > disaf:
-        #     self.reward = 0.1
-        # else:
-        #     self.reward = -0.1
+        if disbf > disaf:
+            self.reward = 0.03
+        else:
+            self.reward = -0.05
 
-        self.reward = -0.01 # ให้รางวัลติดลบเล็กน้อยทุกก้าวเพื่อกระตุ้นให้หาทางออกเร็วขึ้น
-        self.reward += (disbf - disaf) * 0.01 # ให้รางวัลตามการลดระยะทาง (ถ้าเข้าใกล้จะได้รางวัลบวก ถ้าไกลขึ้นจะได้รางวัลลบ)
+        # self.reward = -0.01 # ให้รางวัลติดลบเล็กน้อยทุกก้าวเพื่อกระตุ้นให้หาทางออกเร็วขึ้น
 
         # เช็คชนกำแพง
         if self.x >= self.grid_w or self.x < 0 or self.y >= self.grid_h or self.y < 0:
             self.terminated = True
-            self.reward = -10
+            self.reward = -2
             return self.get_env(), self.reward, self.terminated, self.truncated, self.score, self.info
 
         snake_head = [self.x, self.y]
@@ -358,7 +357,7 @@ class envSnake:
         # เช็คชนตัวเอง
         if snake_head in self.snake_list:
             self.terminated = True
-            self.reward = -10
+            self.reward = -2
             return self.get_env(), self.reward, self.terminated, self.truncated, self.score, self.info
 
         self.snake_list.append(snake_head)
@@ -366,7 +365,7 @@ class envSnake:
         # จัดการการกินอาหาร
         if self.x == self.snack_x and self.y == self.snack_y:
             self.snake_length += 1
-            self.reward = 10
+            self.reward = 1 # ให้รางวัลมากขึ้นเมื่อกินได้
             self.score += 1
             self.count_step = 0 # รีเซ็ตตัวนับเมื่อกินได้
             self.max_steps += 10 # เพิ่มเวลาให้อยู่รอดได้นานขึ้นเมื่องูยาวขึ้น
@@ -393,10 +392,15 @@ class envSnake:
         obs[self.snack_y, self.snack_x, self.objectD["background"]] = 0.0
         
         # ใส่ Snake
-        for x, y in self.snake_list:
-            obs[y, x, self.objectD["snake"]] = 1.0
+        for i, (x, y) in enumerate(self.snake_list):
+            if i == len(self.snake_list) - 1: 
+                # ตำแหน่งสุดท้ายใน list คือ "หัว"
+                obs[y, x, self.objectD["snake_head"]] = 1.0
+            else:
+                # ที่เหลือคือ "ตัว"
+                obs[y, x, self.objectD["snake_body"]] = 1.0
             obs[y, x, self.objectD["background"]] = 0.0
-            
+
         return obs
 
     def _render_frame(self):
