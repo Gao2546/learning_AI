@@ -281,7 +281,7 @@ class envSnake:
         self.count_step = 0
         # ยืดหยุ่นเวลาขึ้นอยู่กับความยาวงู
         self.max_steps = 2048
-        self.bias_step =  32# ป้องกันงูเดินวน
+        self.bias_step =  128# จุดเริ่มต้นของการให้รางวัลติดลบเพื่อกระตุ้นให้หาทางออกเร็วขึ้น
         
         self.reward = 0
         self.score = 0
@@ -344,7 +344,7 @@ class envSnake:
 
         # การให้รางวัลพื้นฐาน
         if disbf > disaf:
-            self.reward = 0.05
+            self.reward = 0.03
         else:
             self.reward = -0.05
 
@@ -361,7 +361,7 @@ class envSnake:
         # เช็คชนตัวเอง
         if snake_head in self.snake_list:
             self.terminated = True
-            self.reward = -2
+            self.reward = -4
             return self.get_env(), self.reward, self.terminated, self.truncated, self.score, self.info
 
         self.snake_list.append(snake_head)
