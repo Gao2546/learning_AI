@@ -314,7 +314,7 @@ class envSnake:
         if self.count_step >= self.max_steps:
             self.truncated = True
         
-        if self.count_step >= self.bias_step:
+        if self.count_step % self.bias_step == 0 and self.count_step > 0:
             self.reward -= 0.1  # extra penalty for looping too long
 
         LEFT, RIGHT, UP, DOWN = 0, 1, 2, 3
