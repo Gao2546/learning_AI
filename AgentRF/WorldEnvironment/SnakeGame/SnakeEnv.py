@@ -281,6 +281,7 @@ class envSnake:
         self.count_step = 0
         # ยืดหยุ่นเวลาขึ้นอยู่กับความยาวงู
         self.max_steps = 2048
+        self.bias_step =  32# ป้องกันงูเดินวน
         
         self.reward = 0
         self.score = 0
@@ -312,6 +313,9 @@ class envSnake:
     def step(self, action):
         if self.count_step >= self.max_steps:
             self.truncated = True
+        
+        if self.count_step >= self.bias_step:
+            self.reward -= 0.1  # extra penalty for looping too long
 
         LEFT, RIGHT, UP, DOWN = 0, 1, 2, 3
         opposites = {LEFT: RIGHT, RIGHT: LEFT, UP: DOWN, DOWN: UP}
@@ -340,7 +344,7 @@ class envSnake:
 
         # การให้รางวัลพื้นฐาน
         if disbf > disaf:
-            self.reward = 0.03
+            self.reward = 0.05
         else:
             self.reward = -0.05
 
