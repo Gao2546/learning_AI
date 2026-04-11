@@ -233,9 +233,11 @@ class ActorCriticAttention2D(nn.Module):
         # 5. Actor and Critic Heads
         # We will use Global Average Pooling after attention, so input is just `self.embed_dim`
         self.actor_layer = nn.Linear(self.embed_dim, actor_hidden_dim)
+        self.actor_hidden = nn.Linear(actor_hidden_dim, actor_hidden_dim) # Optional extra hidden layer for the actor
         self.actor_output = nn.Linear(actor_hidden_dim, actor_dim) # Outputs 4 actions
         
         self.critic_layer = nn.Linear(self.embed_dim, critic_hidden_dim)
+        self.critic_hidden = nn.Linear(critic_hidden_dim, critic_hidden_dim) # Optional extra hidden layer for the critic
         self.critic_output = nn.Linear(critic_hidden_dim, critic_dim)
 
     def forward(self, x):
@@ -265,10 +267,14 @@ class ActorCriticAttention2D(nn.Module):
         # 6. Actor Head (Policy - 4 Actions)
         x_action = self.actor_layer(x)
         x_action = self.relu(x_action)
+        x_action = self.actor_hidden(x_action) # Optional extra hidden layer
+        x_action = self.relu(x_action)
         x_action = self.actor_output(x_action) # Raw logits for Up, Down, Left, Right
 
         # 7. Critic Head (Value)
         x_value = self.critic_layer(x)
+        x_value = self.relu(x_value)
+        x_value = self.critic_hidden(x_value) # Optional extra hidden layer
         x_value = self.relu(x_value)
         x_value = self.critic_output(x_value)
 
