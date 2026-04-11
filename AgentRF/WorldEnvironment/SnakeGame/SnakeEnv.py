@@ -369,7 +369,7 @@ class envSnake:
         # จัดการการกินอาหาร
         if self.x == self.snack_x and self.y == self.snack_y:
             self.snake_length += 1
-            self.reward = 1 # ให้รางวัลมากขึ้นเมื่อกินได้
+            self.reward = 5 # ให้รางวัลมากขึ้นเมื่อกินได้
             self.score += 1
             self.count_step = 0 # รีเซ็ตตัวนับเมื่อกินได้
             self.max_steps += 10 # เพิ่มเวลาให้อยู่รอดได้นานขึ้นเมื่องูยาวขึ้น
