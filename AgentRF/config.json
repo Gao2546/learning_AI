@@ -1,6 +1,6 @@
 {
   "default": {
-    "learning_rate": 0.0001,
+    "learning_rate": 0.0003,
     "discount": 0.99,
     "gae_lambda": 0.95,
     "epsilon": 0.2,
@@ -21,7 +21,7 @@
     "render_mode": false
   },
   "default2": {
-    "learning_rate": 0.0001,
+    "learning_rate": 0.0003,
     "discount": 0.99,
     "gae_lambda": 0.95,
     "epsilon": 0.2,
