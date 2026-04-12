@@ -325,7 +325,7 @@ class envSnake:
             # หักคะแนนรุนแรงและจบเกม
             self.reward = -2
             self.terminated = True
-            print("Game Over: Snake tried to reverse direction.")
+            # print("Game Over: Snake tried to reverse direction.")
             return self.get_env(), self.reward, self.terminated, self.truncated, self.score, self.info
 
         dx, dy = 0, 0
@@ -355,7 +355,7 @@ class envSnake:
         if self.x >= self.grid_w or self.x < 0 or self.y >= self.grid_h or self.y < 0:
             self.terminated = True
             self.reward = -2
-            print("Game Over: Snake collided with wall.")
+            # print("Game Over: Snake collided with wall.")
             return self.get_env(), self.reward, self.terminated, self.truncated, self.score, self.info
 
         snake_head = [self.x, self.y]
@@ -364,7 +364,7 @@ class envSnake:
         if snake_head in self.snake_list:
             self.terminated = True
             self.reward = -2
-            print("Game Over: Snake collided with itself.")
+            # print("Game Over: Snake collided with itself.")
             return self.get_env(), self.reward, self.terminated, self.truncated, self.score, self.info
 
         self.snake_list.append(snake_head)
