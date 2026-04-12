@@ -1236,7 +1236,7 @@ class PPOAgent:
                             break
                             
                 obs = next_obs
-                time.sleep(0.1)
+                # time.sleep(0.1)
 
         # 3. Print Final Statistics
         avg_score = np.mean(all_scores)
