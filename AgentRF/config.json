@@ -1,6 +1,6 @@
 {
   "default": {
-    "learning_rate": 0.0003,
+    "learning_rate": 0.0005,
     "discount": 0.99,
     "gae_lambda": 0.95,
     "epsilon": 0.2,
@@ -13,12 +13,12 @@
     "critic_hidden_dim": 16,
     "num_steps": 2048,
     "batch_size": 512,
-    "num_actors": 16,
+    "num_actors": 1,
     "epochs": 10,
     "iteration": 1024,
     "warmup_iterations": 10,
-    "checkpoint_dir": "checkpoint_run1",
-    "render_mode": false
+    "checkpoint_dir": "checkpoint_run3",
+    "render_mode": true
   },
   "default2": {
     "learning_rate": 0.0003,
