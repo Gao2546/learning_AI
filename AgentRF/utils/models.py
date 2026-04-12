@@ -1151,7 +1151,7 @@ class PPOAgent:
                     "Act": f"{np.mean(epoch_loss_clip):.3f}",
                     "Val": f"{np.mean(epoch_loss_value):.3f}",
                     "Ent": f"{np.mean(epoch_entropy):.3f}",
-                    "Score": f"{avg_score:.1f}",
+                    "Score": f"{avg_score:.3f}",
                     "Max Score": f"{max_score:.1f}"
                 })
             
