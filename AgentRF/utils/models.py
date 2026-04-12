@@ -1033,8 +1033,21 @@ class PPOAgent:
         
         for it in range(start_it, self.iteration):
             current_lr = self.update_learning_rate(it)
+            
+            # --- 🌟 เพิ่มเงื่อนไขปรับขนาด num_steps กลางอากาศ 🌟 ---
+            # ตัวอย่าง: เมื่อเทรนผ่านไปครึ่งทาง ให้เบิ้ล num_steps เป็น 2 เท่า (จาก 2048 -> 4096)
+            if it == (self.iteration // 5):
+                self.num_steps = 4096
+                # ทางเลือกเพิ่มเติม: ถ้ากลัว PPO อัปเดตช้าลง อาจจะเพิ่ม batch_size ตามไปด้วย
+                self.batch_size = 1024 
+                print(f"\n🔥 [Phase 2] อัปเกรดความจำ! เพิ่ม num_steps เป็น {self.num_steps} และ Batch เป็น {self.batch_size} ในรอบที่ {it}\n")
+            
+            # (ถ้าอยากแบ่งเป็น 3 Phase ก็เพิ่มเงื่อนไข elif it == ... ได้เลย)
+            # -----------------------------------------------------
+
             # --- 1. COLLECT DATA (CONCURRENTLY) ---
             # Pre-allocate memory on GPU for maximum speed
+            # ตอนนี้ถ้า self.num_steps เปลี่ยน Buffer จะถูกจองพื้นที่กว้างขึ้นโดยอัตโนมัติ!
             b_obs = torch.zeros((self.num_steps, self.num_actors, self.input_dim[0], self.input_dim[1], self.input_dim[2]), dtype=torch.float32).to(self.device)
             b_actions = torch.zeros((self.num_steps, self.num_actors), dtype=torch.long).to(self.device)
             b_logprobs = torch.zeros((self.num_steps, self.num_actors), dtype=torch.float32).to(self.device)
