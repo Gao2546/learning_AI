@@ -323,7 +323,7 @@ class envSnake:
         # การกันงูเดินถอยหลัง
         if self.direction is not None and action == opposites.get(self.direction):
             # หักคะแนนรุนแรงและจบเกม
-            self.reward = -1
+            self.reward = -2
             self.terminated = True
             print("Game Over: Snake tried to reverse direction.")
             return self.get_env(), self.reward, self.terminated, self.truncated, self.score, self.info
@@ -354,7 +354,7 @@ class envSnake:
         # เช็คชนกำแพง
         if self.x >= self.grid_w or self.x < 0 or self.y >= self.grid_h or self.y < 0:
             self.terminated = True
-            self.reward = -1
+            self.reward = -2
             print("Game Over: Snake collided with wall.")
             return self.get_env(), self.reward, self.terminated, self.truncated, self.score, self.info
 
@@ -363,7 +363,7 @@ class envSnake:
         # เช็คชนตัวเอง
         if snake_head in self.snake_list:
             self.terminated = True
-            self.reward = -1
+            self.reward = -2
             print("Game Over: Snake collided with itself.")
             return self.get_env(), self.reward, self.terminated, self.truncated, self.score, self.info
 
@@ -372,7 +372,7 @@ class envSnake:
         # จัดการการกินอาหาร
         if self.x == self.snack_x and self.y == self.snack_y:
             self.snake_length += 1
-            self.reward = 1 # ให้รางวัลมากขึ้นเมื่อกินได้
+            self.reward = 1 # ให้รางวัลมากขึ้นเมื่อกินได้ คะแนนติดลบต้องมากว่าติดบวกประมาณ 2 เท่า
             self.score += 1
             self.count_step = 0 # รีเซ็ตตัวนับเมื่อกินได้
             self.max_steps += 10 # เพิ่มเวลาให้อยู่รอดได้นานขึ้นเมื่องูยาวขึ้น
