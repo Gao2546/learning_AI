@@ -1247,7 +1247,7 @@ class PPOAgent:
         print("      EVALUATION RESULTS      ")
         print("="*30)
         print(f"Total Episodes Played : {len(all_scores)}")
-        print(f"Average Score         : {avg_score:.2f}")
+        print(f"Average Score         : {avg_score:.3f}")
         print(f"Maximum Score         : {max_score:.2f}")
         print(f"Minimum Score         : {min_score:.2f}")
         print("="*30)
