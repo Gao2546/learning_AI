@@ -915,6 +915,7 @@ class PPOAgent:
         self.num_actors = config["num_actors"]
         self.epochs = config["epochs"]
         self.iteration = config["iteration"]
+        self.warmup_iterations = config.get("warmup_iterations", int(self.iteration * 0.1))
 
         # 3. Dynamic Environment Variables (Kept in code)
         self.render_mode = config["render_mode"]  # e.g., "rgb_array" or "human"
@@ -945,6 +946,25 @@ class PPOAgent:
         self.checkpoint_dir = config["checkpoint_dir"]
         os.makedirs(self.checkpoint_dir, exist_ok=True)
         self.best_score = -float('inf')
+
+    def update_learning_rate(self, current_iter):
+        """Calculates and applies the learning rate based on warmup and linear decay."""
+        if current_iter < self.warmup_iterations:
+            # Linear Warmup: Ramp up from near 0 to base learning_rate
+            lr_mult = (current_iter + 1) / max(1, self.warmup_iterations)
+        else:
+            # Linear Decay: Ramp down from base learning_rate to 0
+            decay_total_iters = self.iteration - self.warmup_iterations
+            elapsed_decay_iters = current_iter - self.warmup_iterations
+            lr_mult = max(0.0, 1.0 - (elapsed_decay_iters / max(1, decay_total_iters)))
+        
+        current_lr = self.learning_rate * lr_mult
+        
+        # Apply to optimizer
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = current_lr
+            
+        return current_lr
 
     def save_checkpoint(self, iteration, filename="ppo_checkpoint.pth"):
         filepath = os.path.join(self.checkpoint_dir, filename)
@@ -1012,6 +1032,7 @@ class PPOAgent:
         obs = self.envs.reset() # Shape: [num_actors, H, W, C]
         
         for it in range(start_it, self.iteration):
+            current_lr = self.update_learning_rate(it)
             # --- 1. COLLECT DATA (CONCURRENTLY) ---
             # Pre-allocate memory on GPU for maximum speed
             b_obs = torch.zeros((self.num_steps, self.num_actors, self.input_dim[0], self.input_dim[1], self.input_dim[2]), dtype=torch.float32).to(self.device)
@@ -1145,6 +1166,7 @@ class PPOAgent:
             if len(episode_scores) > 0:
                 self.writer.add_scalar("Performance/Average_Score", avg_score, it)
                 self.writer.add_scalar("Performance/Max_Score", max_score, it)
+            self.writer.add_scalar("Hyperparameters/Learning_Rate", current_lr, it)
 
             # --- CHECKPOINT SAVING ---
             # 1. Save the best model
