@@ -344,12 +344,12 @@ class envSnake:
         disaf = abs(self.x - self.snack_x) + abs(self.y - self.snack_y)
 
         # การให้รางวัลพื้นฐาน
-        # if disbf > disaf:
-        #     self.reward = 0.03
-        # else:
-        #     self.reward = -0.05
+        if disbf > disaf:
+            self.reward = 0.03
+        else:
+            self.reward = -0.05
 
-        self.reward = -0.01 # ให้รางวัลติดลบเล็กน้อยทุกก้าวเพื่อกระตุ้นให้หาทางออกเร็วขึ้น
+        # self.reward = -0.01 # ให้รางวัลติดลบเล็กน้อยทุกก้าวเพื่อกระตุ้นให้หาทางออกเร็วขึ้น
 
         # เช็คชนกำแพง
         if self.x >= self.grid_w or self.x < 0 or self.y >= self.grid_h or self.y < 0:

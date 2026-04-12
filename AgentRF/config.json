@@ -1,6 +1,6 @@
 {
   "default": {
-    "learning_rate": 0.0005,
+    "learning_rate": 0.0001,
     "discount": 0.99,
     "gae_lambda": 0.95,
     "epsilon": 0.2,
@@ -16,7 +16,29 @@
     "num_actors": 16,
     "epochs": 10,
     "iteration": 1024,
+    "warmup_iterations": 10,
     "checkpoint_dir": "checkpoint_run1",
+    "render_mode": false
+  },
+  "default2": {
+    "learning_rate": 0.0001,
+    "discount": 0.99,
+    "gae_lambda": 0.95,
+    "epsilon": 0.2,
+    "entropy_coef": 0.01,
+    "vf_coef": 0.5,
+    "max_grad_norm": 0.5,
+    "share_hidden_dim": [8, 16],
+    "kernel_size": [3, 3],
+    "action_hidden_dim": 8,
+    "critic_hidden_dim": 8,
+    "num_steps": 2048,
+    "batch_size": 512,
+    "num_actors": 16,
+    "epochs": 10,
+    "iteration": 1024,
+    "warmup_iterations": 10,
+    "checkpoint_dir": "checkpoint_run3",
     "render_mode": false
   },
   "quick_test": {
@@ -36,6 +58,7 @@
     "num_actors": 4,
     "epochs": 4,
     "iteration": 100,
+    "warmup_iterations": 10,
     "checkpoint_dir": "checkpoints",
     "render_mode": false
   },
@@ -56,6 +79,7 @@
     "num_actors": 32,
     "epochs": 10,
     "iteration": 500000,
+    "warmup_iterations": 10,
     "checkpoint_dir": "checkpoints",
     "render_mode": false
   }
