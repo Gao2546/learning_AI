@@ -315,7 +315,7 @@ class envSnake:
             self.truncated = True
         
         if self.count_step % self.bias_step == 0 and self.count_step > 0:
-            self.reward -= 0.1  # extra penalty for looping too long
+            self.reward -= 0.01  # extra penalty for looping too long
 
         LEFT, RIGHT, UP, DOWN = 0, 1, 2, 3
         opposites = {LEFT: RIGHT, RIGHT: LEFT, UP: DOWN, DOWN: UP}
@@ -349,7 +349,7 @@ class envSnake:
         # else:
         #     self.reward = -0.05
 
-        self.reward = -0.01 # ให้รางวัลติดลบเล็กน้อยทุกก้าวเพื่อกระตุ้นให้หาทางออกเร็วขึ้น
+        self.reward = -0.001 # ให้รางวัลติดลบเล็กน้อยทุกก้าวเพื่อกระตุ้นให้หาทางออกเร็วขึ้น
 
         # เช็คชนกำแพง
         if self.x >= self.grid_w or self.x < 0 or self.y >= self.grid_h or self.y < 0:

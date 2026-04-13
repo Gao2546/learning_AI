@@ -1189,7 +1189,7 @@ class PPOAgent:
                 print(f"*** New Best Score: {self.best_score:.2f}! Saved best_model.pth ***")
             
             # 2. Save a regular checkpoint every 100 iterations (adjust as needed)
-            save_interval = 10
+            save_interval = 2
             if (it + 1) % save_interval == 0:
                 self.save_checkpoint(it, filename=f"latest_model.pth") # Overwrites to save disk space
                 # Or use filename=f"model_iter_{it+1}.pth" to keep ALL checkpoints
@@ -1249,7 +1249,7 @@ class PPOAgent:
                             break
                             
                 obs = next_obs
-                # time.sleep(0.1)
+                # time.sleep(0.05)
 
         # 3. Print Final Statistics
         avg_score = np.mean(all_scores)
