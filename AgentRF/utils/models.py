@@ -1269,3 +1269,459 @@ class PPOAgent:
         self.actor_critic.train()
         
         return all_scores
+    
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.distributions as distributions
+import numpy as np
+import tqdm
+import math
+import multiprocessing as mp
+from torch.utils.tensorboard import SummaryWriter
+import json
+import os
+import time
+
+# --- 1. MULTIPROCESSING WORKER ---
+def worker(remote, parent_remote, env_class, render_mode):
+    """Runs a single environment in a separate CPU process."""
+    parent_remote.close()
+    env = env_class(render_mode=render_mode)
+    
+    try:
+        while True:
+            cmd, data = remote.recv()
+            if cmd == 'step':
+                # Unpack your custom envSnake return signature
+                next_obs, reward, term, trunc, score, _ = env.step(data)
+                done = term or trunc
+                
+                # CRITICAL: Auto-reset the environment if it dies
+                if done:
+                    next_obs, _ = env.reset()
+                    
+                remote.send((next_obs, reward, done, score))
+            elif cmd == 'reset':
+                obs, _ = env.reset()
+                remote.send(obs)
+            elif cmd == 'close':
+                remote.close()
+                break
+    except KeyboardInterrupt:
+        pass
+    finally:
+        env.close()
+
+class VecEnv:
+    """Manages multiple environments concurrently."""
+    def __init__(self, env_class, num_envs, render_mode=False):
+        self.num_envs = num_envs
+        self.remotes, self.work_remotes = zip(*[mp.Pipe() for _ in range(num_envs)])
+        self.processes = [
+            mp.Process(target=worker, args=(work_remote, remote, env_class, render_mode))
+            for work_remote, remote in zip(self.work_remotes, self.remotes)
+        ]
+        for p in self.processes:
+            p.daemon = True # Ensure processes die if main script dies
+            p.start()
+        for remote in self.work_remotes:
+            remote.close()
+
+    def step(self, actions):
+        for remote, action in zip(self.remotes, actions):
+            remote.send(('step', action))
+        results = [remote.recv() for remote in self.remotes]
+        obs, rews, dones, scores = zip(*results)
+        return np.stack(obs), np.stack(rews), np.stack(dones), np.stack(scores)
+
+    def reset(self):
+        for remote in self.remotes:
+            remote.send(('reset', None))
+        obs = [remote.recv() for remote in self.remotes]
+        return np.stack(obs)
+
+    def close(self):
+        for remote in self.remotes:
+            remote.send(('close', None))
+        for p in self.processes:
+            p.join()
+
+
+class PPOAgentWeighted:
+    def __init__(self, config_path="config.json", config_name="default"):
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        # 1. Load the JSON configuration
+        with open(config_path, 'r') as file:
+            all_configs = json.load(file)
+            
+        if config_name not in all_configs:
+            raise ValueError(f"Config '{config_name}' not found in {config_path}")
+            
+        config = all_configs[config_name]
+
+        # 2. Assign Hyperparameters from config
+        self.learning_rate = config["learning_rate"]
+        self.discount = config["discount"]
+        self.gae_lambda = config["gae_lambda"]
+        self.epsilon = config["epsilon"]
+        self.entropy_coef = config["entropy_coef"]
+        self.vf_coef = config["vf_coef"]
+        self.max_grad_norm = config["max_grad_norm"]
+
+        # Network architecture
+        self.share_hidden_dim = config["share_hidden_dim"]
+        self.kernel_size = config["kernel_size"]
+        self.action_hidden_dim = config["action_hidden_dim"]
+        self.critic_hidden_dim = config["critic_hidden_dim"]
+
+        # PPO Training parameters
+        self.num_steps = config["num_steps"]
+        self.batch_size = config["batch_size"]
+        self.num_actors = config["num_actors"]
+        self.epochs = config["epochs"]
+        self.iteration = config["iteration"]
+        self.warmup_iterations = config.get("warmup_iterations", int(self.iteration * 0.1))
+
+        # 3. Dynamic Environment Variables (Kept in code)
+        self.render_mode = config["render_mode"]  # e.g., "rgb_array" or "human"
+        env = envSnake(render_mode=False)  # Initialize a temporary environment to get dimensions
+        obs_shape = env.observation_space
+        n_actions = math.prod(env.action_space)
+        env.close()
+
+        self.input_dim = obs_shape
+        self.action_dim = n_actions
+        self.critic_dim = 1
+        
+        # Initialize Actor-Critic (assuming you have this class)
+        # self.actor_critic = ActorCritic2D(self.input_dim, self.share_hidden_dim, self.kernel_size, self.action_hidden_dim, self.critic_hidden_dim, self.action_dim, self.critic_dim).to(device=self.device)
+        self.actor_critic = ActorCriticAttention2D(input_dim=self.input_dim, share_hidden_dim=self.share_hidden_dim, kernel_size=self.kernel_size, actor_hidden_dim=self.action_hidden_dim, critic_hidden_dim=self.critic_hidden_dim, actor_dim=self.action_dim, critic_dim=self.critic_dim).to(device=self.device)
+        # self.actor_critic = ActorCritic(self.input_dim, self.share_hidden_dim, self.action_hidden_dim, self.critic_hidden_dim, self.action_dim, self.critic_dim).to(device=self.device)
+        self.optimizer = torch.optim.Adam(self.actor_critic.parameters(), lr=self.learning_rate)
+        
+        # 1. Initialize Concurrent Environments
+        self.envs = VecEnv(envSnake, self.num_actors, self.render_mode)
+        
+        # 2. Tensorboard Writer
+        run_name = f"PPO_Snake_{int(time.time())}"
+        self.writer = SummaryWriter(log_dir=f"runs/{run_name}")
+
+        # Add a directory for checkpoints
+        self.checkpoint_dir = config["checkpoint_dir"]
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+        self.best_score = -float('inf')
+
+    def update_learning_rate(self, current_iter):
+        """Calculates and applies the learning rate based on warmup and linear decay."""
+        if current_iter < self.warmup_iterations:
+            # Linear Warmup: Ramp up from near 0 to base learning_rate
+            lr_mult = (current_iter + 1) / max(1, self.warmup_iterations)
+        else:
+            # Linear Decay: Ramp down from base learning_rate to 0
+            decay_total_iters = self.iteration - self.warmup_iterations
+            elapsed_decay_iters = current_iter - self.warmup_iterations
+            lr_mult = max(0.0, 1.0 - (elapsed_decay_iters / max(1, decay_total_iters)))
+        
+        current_lr = self.learning_rate * lr_mult
+        
+        # Apply to optimizer
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = current_lr
+            
+        return current_lr
+
+    def save_checkpoint(self, iteration, filename="ppo_checkpoint.pth"):
+        filepath = os.path.join(self.checkpoint_dir, filename)
+        
+        # Create a dictionary containing everything needed to resume
+        checkpoint = {
+            'iteration': iteration,
+            'actor_critic_state_dict': self.actor_critic.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'best_score': self.best_score
+        }
+        
+        torch.save(checkpoint, filepath)
+
+    def load_checkpoint(self, filename="ppo_checkpoint.pth"):
+        filepath = os.path.join(self.checkpoint_dir, filename)
+        
+        if os.path.isfile(filepath):
+            print(f"Loading checkpoint '{filepath}'...")
+            # Load to CPU first to avoid CUDA memory spikes, then move to device
+            checkpoint = torch.load(filepath, map_location=self.device, weights_only=False)
+            
+            self.actor_critic.load_state_dict(checkpoint['actor_critic_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            self.best_score = checkpoint.get('best_score', -float('inf'))
+            start_iteration = checkpoint.get('iteration', 0) + 1
+            
+            print(f"Loaded successfully. Resuming from iteration {start_iteration}.")
+            return start_iteration
+        else:
+            print(f"No checkpoint found at '{filepath}'. Starting from scratch.")
+            return 0
+
+    def compute_gae(self, rewards, values, dones, next_value, next_done):
+        """Updated GAE to handle [Step, Actor] batched tensors."""
+        advantages = torch.zeros_like(rewards).to(self.device)
+        last_gae_lam = 0
+        
+        for t in reversed(range(self.num_steps)):
+            if t == self.num_steps - 1:
+                next_non_terminal = 1.0 - next_done
+                next_val = next_value
+            else:
+                next_non_terminal = 1.0 - dones[t + 1]
+                next_val = values[t + 1]
+                
+            delta = rewards[t] + self.discount * next_val * next_non_terminal - values[t]
+            last_gae_lam = delta + self.discount * self.gae_lambda * next_non_terminal * last_gae_lam
+            advantages[t] = last_gae_lam
+            
+        returns = advantages + values
+        return advantages, returns
+
+    def training(self, checkpoint_filename="best_model.pth"):
+        try:
+            start_it = self.load_checkpoint(checkpoint_filename)
+        except Exception as e:
+            print(f"Error loading checkpoint: {e}")
+            start_it = 0
+        
+        # Initial reset of all environments
+        obs = self.envs.reset() # Shape: [num_actors, H, W, C]
+        
+        for it in range(start_it, self.iteration):
+            current_lr = self.update_learning_rate(it)
+            
+            # --- ปรับขนาด num_steps กลางอากาศ ---
+            if it == (self.iteration // 5):
+                self.num_steps = 4096
+                self.batch_size = 1024 
+                print(f"\n🔥 [Phase 2] อัปเกรดความจำ! เพิ่ม num_steps เป็น {self.num_steps} และ Batch เป็น {self.batch_size} ในรอบที่ {it}\n")
+            
+            # --- 1. COLLECT DATA (CONCURRENTLY) ---
+            b_obs = torch.zeros((self.num_steps, self.num_actors, self.input_dim[0], self.input_dim[1], self.input_dim[2]), dtype=torch.float32).to(self.device)
+            b_actions = torch.zeros((self.num_steps, self.num_actors), dtype=torch.long).to(self.device)
+            b_logprobs = torch.zeros((self.num_steps, self.num_actors), dtype=torch.float32).to(self.device)
+            b_rewards = torch.zeros((self.num_steps, self.num_actors), dtype=torch.float32).to(self.device)
+            b_dones = torch.zeros((self.num_steps, self.num_actors), dtype=torch.float32).to(self.device)
+            b_values = torch.zeros((self.num_steps, self.num_actors), dtype=torch.float32).to(self.device)
+            
+            # 🟢 Tensor สำหรับเก็บ Weight ของแต่ละ Step และตัวแปรนับจำนวน Step ปัจจุบัน
+            b_step_weights = torch.zeros((self.num_steps, self.num_actors), dtype=torch.float32).to(self.device)
+            current_ep_lengths = np.zeros(self.num_actors, dtype=np.float32)
+            
+            episode_scores = []
+
+            for step in range(self.num_steps):
+                # 🟢 นับจำนวน Step เพิ่มไป 1 และบันทึกค่าน้ำหนัก
+                current_ep_lengths += 1
+                b_step_weights[step] = torch.tensor(current_ep_lengths, dtype=torch.float32).to(self.device)
+
+                # Convert obs to tensor, move to GPU, and permute for PyTorch image format (B, C, H, W)
+                obs_tensor = torch.tensor(obs, dtype=torch.float32).to(self.device)
+                obs_tensor = obs_tensor.permute(0, 3, 1, 2) 
+                
+                with torch.no_grad():
+                    action_logits, value = self.actor_critic(obs_tensor)
+                    dist = distributions.Categorical(logits=action_logits)
+                    action = dist.sample()
+                    log_prob = dist.log_prob(action)
+
+                # Send actions back to CPU and step environments concurrently
+                cpu_actions = action.cpu().numpy()
+                next_obs, rewards, dones, scores = self.envs.step(cpu_actions)
+
+                # Track scores for finished episodes
+                for idx, d in enumerate(dones):
+                    if d:
+                        episode_scores.append(scores[idx])
+                        # 🟢 ถ้างูตาย ให้รีเซ็ตจำนวน Step กลับเป็น 0
+                        current_ep_lengths[idx] = 0
+
+                # Store data
+                b_obs[step] = obs_tensor 
+                b_actions[step] = action
+                b_logprobs[step] = log_prob
+                b_rewards[step] = torch.tensor(rewards, dtype=torch.float32).to(self.device)
+                b_dones[step] = torch.tensor(dones, dtype=torch.float32).to(self.device)
+                b_values[step] = value.squeeze(-1)
+
+                obs = next_obs
+
+            # --- 2. CALCULATE GAE ---
+            with torch.no_grad():
+                next_obs_tensor = torch.tensor(obs, dtype=torch.float32).to(self.device).permute(0, 3, 1, 2)
+                _, next_value = self.actor_critic(next_obs_tensor)
+                next_value = next_value.squeeze(-1)
+                next_done = torch.tensor(dones, dtype=torch.float32).to(self.device)
+                
+            advantages, returns = self.compute_gae(b_rewards, b_values, b_dones, next_value, next_done)
+
+            # Flatten the batch
+            b_obs_flat = b_obs.reshape((-1, *self.input_dim))
+            b_actions_flat = b_actions.reshape(-1)
+            b_logprobs_flat = b_logprobs.reshape(-1)
+            b_advantages_flat = advantages.reshape(-1)
+            b_returns_flat = returns.reshape(-1)
+            
+            # 🟢 Flatten Weight + Smooth ด้วย Sqrt + Normalize
+            b_weights_flat = b_step_weights.reshape(-1)
+            b_weights_flat = torch.sqrt(b_weights_flat)
+            b_weights_flat = b_weights_flat / (b_weights_flat.mean() + 1e-8)
+            
+            # Normalize advantages
+            b_advantages_flat = (b_advantages_flat - b_advantages_flat.mean()) / (b_advantages_flat.std() + 1e-8)
+
+            # --- 3. OPTIMIZE ---
+            dataset_size = len(b_obs_flat)
+            indices = np.arange(dataset_size)
+            
+            pbar = tqdm.tqdm(range(self.epochs))
+            for epoch in pbar:
+                np.random.shuffle(indices)
+                
+                epoch_loss_clip, epoch_loss_value, epoch_entropy = [], [], []
+                
+                for start in range(0, dataset_size, self.batch_size):
+                    end = start + self.batch_size
+                    mb_inds = indices[start:end]
+                    
+                    mb_obs = b_obs_flat[mb_inds]
+                    mb_actions = b_actions_flat[mb_inds]
+                    mb_old_log_probs = b_logprobs_flat[mb_inds]
+                    mb_advantages = b_advantages_flat[mb_inds]
+                    mb_returns = b_returns_flat[mb_inds]
+                    
+                    # 🟢 ดึง Weight เฉพาะของ Mini-batch ออกมา
+                    mb_weights = b_weights_flat[mb_inds]
+                    
+                    # Evaluate Taken Actions
+                    action_logits, mb_values = self.actor_critic(mb_obs)
+                    dist = distributions.Categorical(logits=action_logits)
+                    
+                    new_log_probs = dist.log_prob(mb_actions)
+                    
+                    # 🟢 คำนวณ Entropy แบบคูณ Weight
+                    entropy = dist.entropy()
+                    weighted_entropy = (entropy * mb_weights).mean()
+                    
+                    # Loss Calculation
+                    ratio = torch.exp(new_log_probs - mb_old_log_probs)
+                    surr1 = ratio * mb_advantages
+                    surr2 = torch.clamp(ratio, 1.0 - self.epsilon, 1.0 + self.epsilon) * mb_advantages
+                    
+                    # 🟢 คำนวณ Actor Loss และ Value Loss แบบคูณ Weight
+                    actor_loss = -(torch.min(surr1, surr2) * mb_weights).mean()
+                    
+                    unreduced_value_loss = F.mse_loss(mb_values.squeeze(-1), mb_returns, reduction='none')
+                    value_loss = (unreduced_value_loss * mb_weights).mean()
+                    
+                    loss = actor_loss + (self.vf_coef * value_loss) - (self.entropy_coef * weighted_entropy)
+                    
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.max_grad_norm)
+                    self.optimizer.step()
+                    
+                    epoch_loss_clip.append(actor_loss.item())
+                    epoch_loss_value.append(value_loss.item())
+                    # บันทึกค่า Entropy ธรรมดาเพื่อแสดงผล (แบบไม่คูณ Weight ให้งงตอนดู Tensorboard)
+                    epoch_entropy.append(entropy.mean().item())
+
+                # Update tqdm metrics
+                avg_score = np.mean(episode_scores) if len(episode_scores) > 0 else 0
+                max_score = np.max(episode_scores) if len(episode_scores) > 0 else 0
+                
+                pbar.set_description(f"Iteration: {it+1}/{self.iteration}")
+                pbar.set_postfix({
+                    "Act": f"{np.mean(epoch_loss_clip):.3f}",
+                    "Val": f"{np.mean(epoch_loss_value):.3f}",
+                    "Ent": f"{np.mean(epoch_entropy):.3f}",
+                    "Score": f"{avg_score:.3f}",
+                    "Max Score": f"{max_score:.1f}"
+                })
+            
+            avg_score = np.mean(episode_scores) if len(episode_scores) > 0 else 0
+
+            # --- 4. TENSORBOARD LOGGING ---
+            self.writer.add_scalar("Loss/Actor", np.mean(epoch_loss_clip), it)
+            self.writer.add_scalar("Loss/Value", np.mean(epoch_loss_value), it)
+            self.writer.add_scalar("Loss/Entropy", np.mean(epoch_entropy), it)
+            self.writer.add_scalar("Performance/Average_Return", b_returns_flat.mean().item(), it)
+            if len(episode_scores) > 0:
+                self.writer.add_scalar("Performance/Average_Score", avg_score, it)
+                self.writer.add_scalar("Performance/Max_Score", max_score, it)
+            self.writer.add_scalar("Hyperparameters/Learning_Rate", current_lr, it)
+
+            # --- CHECKPOINT SAVING ---
+            if avg_score > self.best_score and len(episode_scores) > 0:
+                self.best_score = avg_score
+                self.save_checkpoint(it, filename=f"best_model.pth")
+                print(f"*** New Best Score: {self.best_score:.2f}! Saved best_model.pth ***")
+            
+            save_interval = 2
+            if (it + 1) % save_interval == 0:
+                self.save_checkpoint(it, filename=f"latest_model.pth")
+
+        self.envs.close()
+        self.writer.close()
+    
+    def test(self, total_episodes=100, checkpoint_name="best_model.pth"):
+        """
+        Tests the agent across multiple concurrent environments.
+        """
+        self.load_checkpoint(checkpoint_name)
+        self.actor_critic.eval()
+        
+        obs = self.envs.reset()
+        
+        completed_episodes = 0
+        all_scores = []
+        
+        print(f"--- Starting Evaluation: {total_episodes} episodes using {self.num_actors} actors ---")
+        
+        with torch.no_grad():
+            while completed_episodes < total_episodes:
+                obs_tensor = torch.tensor(obs, dtype=torch.float32).to(self.device)
+                obs_tensor = obs_tensor.permute(0, 3, 1, 2)
+                
+                action_logits, _ = self.actor_critic(obs_tensor)
+                actions = torch.argmax(action_logits, dim=-1)
+                
+                cpu_actions = actions.cpu().numpy()
+                next_obs, rewards, dones, scores = self.envs.step(cpu_actions)
+                
+                for idx, d in enumerate(dones):
+                    if d:
+                        completed_episodes += 1
+                        all_scores.append(scores[idx])
+                        print(f"Episode {completed_episodes}/{total_episodes} | Actor {idx} Score: {scores[idx]}")
+                        
+                        if completed_episodes >= total_episodes:
+                            break
+                            
+                obs = next_obs
+                time.sleep(0.05)
+
+        avg_score = np.mean(all_scores)
+        max_score = np.max(all_scores)
+        min_score = np.min(all_scores)
+        
+        print("\n" + "="*30)
+        print("      EVALUATION RESULTS      ")
+        print("="*30)
+        print(f"Total Episodes Played : {len(all_scores)}")
+        print(f"Average Score         : {avg_score:.3f}")
+        print(f"Maximum Score         : {max_score:.2f}")
+        print(f"Minimum Score         : {min_score:.2f}")
+        print("="*30)
+        
+        self.actor_critic.train()
+        
+        return all_scores
